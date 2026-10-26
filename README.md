@@ -5,12 +5,15 @@
 Sourcebook lets you point a portable **Catalog** at existing folders, browse everything immediately, generate previews, and selectively enrich resources with metadata — without requiring a proprietary managed library.
 
 **Platforms:** Windows + Android; same product and feature set, responsive layout only.  
-**Status:** Planning for V0.1. No executable prototype has been implemented yet.
+**Status:** Planning through V1.0. No executable prototype has been implemented yet. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
 
 ## Start here
 
-- [Sourcebook V0.1 MEGA Plan](docs/PLAN_V0.1.md) — authoritative working product specification, UX principles, architecture proposal, milestones, acceptance tests.
-- [Core decisions](logs/decisions/0001-product-identity.md) — user-confirmed direction vs engineering proposals.
+- [**Sourcebook ULTRA Roadmap to V1.0**](docs/ROADMAP_V1_ULTRA.md) — current master roadmap, release train V0.0–V1.0, acceptance criteria.
+- [PWA architecture & feasibility](docs/PWA_ARCHITECTURE.md) — Chrome directory access, mobile share/copy limits, storage design and M0 tests.
+- [UX / quality standard](docs/UX_QUALITY_STANDARD.md) — Soft Precision design language, polish rubric and interaction contracts.
+- [Original V0.1 MEGA Plan](docs/PLAN_V0.1.md) — preserved historical initial plan; native-wrapper proposals superseded by PWA-first decision.
+- [Core product decisions](logs/decisions/0001-product-identity.md) and [PWA-first decision](logs/decisions/0002-pwa-first.md).
 
 ## Product principles
 
@@ -25,15 +28,19 @@ Sourcebook lets you point a portable **Catalog** at existing folders, browse eve
 
 ## Implementation plan
 
-Begin at [M0: feasibility spike](docs/PLAN_V0.1.md#16-roadmap--incremental-milestones): prove a real desktop/Android folder-access build **before** building elaborate UI. Then ship vertical slices with tests.
+Begin at [V0.0: PWA feasibility](docs/ROADMAP_V1_ULTRA.md#27--v00-pwa--filesystem-technical-spike): prove Chrome folder-access and *.sb persistence on desktop and Android **before** building elaborate UI. Then ship vertical slices with tests.
 
-- M0 — native platform + filesystem feasibility
-- M1 — polished gallery/browser
-- M2 — catalog, IDs and metadata
-- M3 — tags, smart queries and saved views
-- M4 — capture, drop and file management
-- M5 — optimization, accessibility and release
-- M6 — stretch only after M0–M5 are stable
+- V0.0 — PWA filesystem proof (Chrome Windows + Android)
+- V0.1 — beautiful visual explorer
+- V0.2 — portable catalogs and IDs
+- V0.3 — nested tags, properties and collections
+- V0.4 — smart folders, search and saved views
+- V0.5 — imports, URL/clipboard/mobile capture
+- V0.6 — safe file operations
+- V0.7 — rich media previews
+- V0.8 — power and interaction refinement
+- V0.9 — resilience, QA and performance
+- V1.0 — polished daily-driver release
 
 ## Inspirations
 
