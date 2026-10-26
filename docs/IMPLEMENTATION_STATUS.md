@@ -1,0 +1,50 @@
+# Sourcebook implementation status
+
+**Date:** 2026-10-26  
+**Build:** V0.0 initial real PWA prototype  
+**Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
+
+## Delivered
+
+- Browser-based static PWA: HTML/CSS/JavaScript ES modules, manifest, service worker cache; no backend/build dependency.
+- Native Chrome directory picker for creating and opening portable Name.sb/ catalogs anywhere the user grants write access.
+- Catalog configuration persisted to catalog.json and source list to sources.json.
+- Device-specific directory handles persisted in IndexedDB (reconnect when permission expires).
+- Real source folder enumeration and nested-folder navigation, breadcrumbs and source switching.
+- Responsive gallery/list UI, image lazy previews, adjustable thumbnail density, selection and optional inspector.
+- Quick look: image, browser-embedded PDF, video and plain text/Markdown/code; file-type fallback.
+- Metadata: save notes + comma-separated tags in resources/<code><sequence>.json; sequence recorded in catalog.json.
+- Catalog-aware terminal filename tokens [ab967][c5]; call FileSystemHandle.move for a safe single-file rename only if supported, otherwise metadata-only path binding.
+- Basic current-folder filename search, file picker import with collision-resistant copy, new folder action.
+- Light/dark using operating system preferences; keyboard Space quick look, Backspace parent, Ctrl/Cmd+K search.
+- Automated Node syntax checks and ID parsing tests in GitHub Actions: **passed** on 2026-10-26.
+
+## Blocker
+
+GitHub Actions **verify** job is passing. **Deploy** job failed in actions/configure-pages@v5; GitHub Pages likely needs enabling for this newly created repository.
+
+**User action:** Repository → Settings → Pages → Build and deployment → Source = **GitHub Actions**. Re-run the latest workflow or push a subsequent commit. Do not claim the hosted app is live until deployment succeeds.
+
+## Not done / do not overclaim
+
+- No successful hosted PWA deployment or actual Windows/Android device acceptance test yet.
+- Current metadata editor uses free-text tags only; nested tag taxonomy is not implemented.
+- No catalog-wide index/search, smart folders, collections, custom typed properties, saved views or keyboard command palette.
+- No PDF first-page *gallery thumbnails*: PDF opens in browser quick look instead.
+- No native Android incoming share-target or browser extension.
+- No reliable browser-general move, trash/recycle bin or watchers. PWA file-manager limitations remain.
+- No simultaneous-offline-editor ID conflict reconciliation; **avoid editing the same synced catalog concurrently for now**.
+- Gallery has an initial 150-resource render cap + Show more, not proper virtualization yet.
+- File import copies into the current granted folder only; an advanced destination selector is not built.
+- Browser IndexedDB handle persistence may be lost after site storage reset; remap folders through Open Catalog.
+- UI interaction/accessibility/performance remains initial prototype, not V1 quality.
+
+## Next engineering milestone
+
+1. Enable GitHub Pages and verify hosted installability, offline shell and file picker.
+2. Test user-granted Syncthing directory on Pixel 8 and desktop Chrome; record versions and results.
+3. Fix actual device/runtime regressions; do not assume Chrome's FileSystemHandle.move works on arbitrary external files.
+4. Make reference tags first-class entities and add collection persistence.
+5. Improve progressive gallery rendering and safe metadata handling.
+
+The current master plan is [ROADMAP_V1_ULTRA.md](ROADMAP_V1_ULTRA.md); technical details are in [PWA_ARCHITECTURE.md](PWA_ARCHITECTURE.md).
