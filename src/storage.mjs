@@ -1,0 +1,8 @@
+const dbName='sourcebook-device-v1';
+function db(){return new Promise((ok,bad)=>{const r=indexedDB.open(dbName,1);r.onupgradeneeded=()=>r.result.createObjectStore('settings');r.onsuccess=()=>ok(r.result);r.onerror=()=>bad(r.error);});}
+export async function getLocal(key){const d=await db();return new Promise((ok,bad)=>{const r=d.transaction('settings').objectStore('settings').get(key);r.onsuccess=()=>{d.close();ok(r.result||null);};r.onerror=()=>bad(r.error);});}
+export async function setLocal(key,value){const d=await db();return new Promise((ok,bad)=>{const tx=d.transaction('settings','readwrite');tx.objectStore('settings').put(value,key);tx.oncomplete=()=>{d.close();ok();};tx.onerror=()=>bad(tx.error);});}
+export async function readJson(dir,name,otherwise=null){try{return JSON.parse(await (await (await dir.getFileHandle(name)).getFile()).text());}catch(e){if(e.name==='NotFoundError')return otherwise;throw e;}}
+export async function writeJson(dir,name,value){const h=await dir.getFileHandle(name,{create:true});const w=await h.createWritable();try{await w.write(JSON.stringify(value,null,2)+'\n');await w.close();}catch(e){try{await w.abort();}catch{}throw e;}}
+export async function nested(root,parts){let d=root;for(const part of parts)d=await d.getDirectoryHandle(part);return d;}
+export async function authorized(h,mode='read'){try{if(await h.queryPermission({mode})==='granted')return true;return await h.requestPermission({mode})==='granted';}catch{return false;}}
