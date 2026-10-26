@@ -1,0 +1,915 @@
+# SOURCEBOOK — ULTRA MEGA ROADMAP TO V1
+
+> **A local-first, installable, absurdly smooth, beautifully minimal visual file explorer and reference manager.**  
+> **Status:** Strategic implementation roadmap (not a shipped feature claim)  
+> **Created:** 2026-10-26  
+> **Scope:** V0.1 → V1.0 · Windows Chrome + Android Chrome · PWA-first, no required backend/native shell  
+> **Reference DNA:** Eagle.cool × refern.app × File Pilot  
+> **Short form:** Existing files. Beautiful previews. Portable catalogs. Delightful organization.
+
+## 00 — Executive product promise
+
+**Sourcebook makes ordinary folders feel like a beautifully curated, searchable, visual library — without taking the files hostage.**
+
+Point at a folder; see it immediately. Choose to make a resource richer with tags, typed properties, collections and previews. Keep originals in place. Store each independent catalog wherever you wish as a portable *.sb directory; access that catalog on desktop or Android using the same installed PWA.
+
+**At V1 a typical person can:** install in Chrome; create a catalog; grant one or more source folders; browse 10,000+ mixed files as effortlessly as a photo library; preview images, PDF, SVG, video and web references; tag in bulk; filter, search and save smart folders; arrange collections; drop/import/copy/move resources; capture URLs and shared files; switch between catalogs; take data offline; recover safely from sync/permission conflicts.
+
+**Qualitative V1 bar:** it should be a *joy* to use, not merely a feature checklist. Discoverable without tutorials, powerful without persistent UI clutter, fast without flashy animation, and trustworthy when operating on irreplaceable user files.
+
+### 00.1 Inspiration mapping
+
+| Reference | Steal the good idea | Avoid |
+|---|---|---|
+| Eagle.cool | Immediate visual satisfaction, beautifully legible gallery, collection gestures, quick look, rich previews, efficient tagging | Proprietary mandatory import/copy flow; feature bloat |
+| refern.app | Existing-folder indexing, rich metadata, powerful reference organisation, smart queries | Trying to replicate every specialized mode and canvas upfront |
+| File Pilot | Fast navigation, tabs, compact breadcrumbs, keyboard interaction, high-quality contextual menus | UI overengineering and desktop-only interaction assumptions |
+
+Do not copy layouts, brand assets or proprietary implementation. Use them as *quality benchmarks*.
+
+### 00.2 The four product pillars
+
+1. **Browse** — native-feeling folders + visually excellent files.
+2. **Collect** — instant references from files, links, drops, clipboard and Android share.
+3. **Enrich** — catalog-aware identity, custom properties, tags, previews, annotations.
+4. **Rediscover** — search, saved views, smart folders and collections.
+
+A fifth cross-cutting pillar underpins all four: **reliability and polished speed.**
+
+## 01 — Product boundary
+
+### Sourcebook IS
+- A file explorer for granted source folders.
+- A visual catalog for local resources and URLs.
+- A metadata layer that does not assume ownership of external files.
+- A portable document-like catalog **folder** located anywhere.
+- A full-featured Chrome PWA on Windows and Android.
+- Offline-capable once the app shell and files are available locally.
+
+### Sourcebook IS NOT
+- A cloud service, Syncthing replacement, subscription or mandatory account.
+- Notebook (thinking/journaling/freeform pages).
+- Objectbook (general authored-object database).
+- An all-purpose operating-system file manager with access outside user-granted folders.
+- A server-based web crawler or universal webpage screenshot service.
+- A 3D CAD application or full editor in V1.
+
+## 02 — Non-negotiable product decisions
+
+**Accepted in conversation:**
+- One app on Windows and Android, same main features and near-identical interaction system.
+- PWA-first; Chrome is the primary browser target. No mandatory native wrapper, local server or cloud backend.
+- Catalog = any folder named Name.sb containing data and previews; can live anywhere.
+- Catalog points at any number of user-granted source folders, including overlapping sources.
+- Different catalogs can annotate the *same* physical file independently.
+- Objectified file naming convention: Name[ab967][c5].pdf = catalog ab, sequence 967; catalog c, sequence 5. New catalog appends its own trailing token; keep others.
+- Catalog prefix is user-set and persisted. Resource numbering is sequential *within the catalog*.
+- Nonobjectified filesystem entries still appear in browsing, and opening a folder never auto-renames files.
+- Folder browsing, custom properties, nested tags, smart folders, saved views, previews and destination-selectable imports are essential.
+- Experience is minimal, beautiful, exceptionally smooth.
+
+**Engineering proposals, subject to M0 validation:**
+- Vite + TypeScript + React.
+- File System Access API on supported Chrome; indexed browser handles saved in IndexedDB; cached local search index in IndexedDB/OPFS.
+- Syncable JSON records in *.sb as source of truth; cached thumbnails shareable in previews/ as desired.
+- Service worker + web manifest + Web Share Target; fallback clipboard/file picker because Android incoming file shares currently show regression risk.
+- No special OS filesystem watch/trash promises; use polling/revalidation, app-managed recovery path when possible, and explicit destructive warnings.
+
+## 03 — The vibe: “Soft Precision”
+
+Design for a feeling: opening Sourcebook should feel like entering a beautifully curated **work surface**, not a dashboard.
+
+- Almost no chrome; the thumbnails and files are the hero.
+- Neutral gray surfaces, refined dark and light modes, subtle accent only for focus/selection.
+- Lucide outlines, stable stroke weight, no competing icon libraries.
+- Spacious when possible, denser when required; adjustable with a single slider.
+- Typography over borders; use whitespace, alignment, subtle contrast to create hierarchy.
+- Motion has purpose, is short (roughly 100–180 ms), and never blocks interaction.
+- Every clickable control has immediate feedback, clear focus and understandable affordance.
+- Fixed cards/aspect-ratio placeholders avoid gallery jumping during thumbnail arrivals.
+- Hover-only actions always have an accessible touch and keyboard equivalent.
+- Sidebars and inspectors are optional; content gets maximum room.
+- No decorative badges, gradients, heavy glow, perpetual skeleton shimmer or enormous title headers.
+- Dark mode must style viewer canvases, scrollbar, dialogs and image surround — not just chrome.
+
+**Anti-goal:** 40 floating toolbars, seven competing navigation models, or a settings page as complex as Blender.
+
+## 04 — Core mental model
+
+**Catalog** — portable Name.sb folder: settings, catalog code, sources, resources, metadata, tags, collections, smart queries, views, previews.  
+**Source** — a logical mounted user-granted filesystem folder; separate mapping to actual local folder handle per browser/device.  
+**Resource** — a file, folder or URL, present as a browse entry even before objectification.  
+**Objectification** — attaching durable catalog-specific ID and metadata; compatible writable files may be renamed with a bracketed suffix.  
+**Physical folder** — real directory where files exist; moving into it may mutate filesystem.  
+**Tag** — hierarchical label associated with resources; no physical move.  
+**Collection** — manual membership independent of file paths.  
+**Smart folder** — named dynamic filter/query; no copied items.  
+**View** — saved presentation (gallery/list/table), sort, group, density, visible fields and optional scope/filter.  
+**Preview** — derivative asset, regenerable; metadata survives even when preview is missing.
+
+**Invariant:** Source files and their actual path operations are distinguishable from catalog-only metadata operations.
+
+## 05 — First 60 seconds (onboarding test)
+
+1. User visits HTTPS app, chooses Install, opens standalone PWA.
+2. Landing: **Open Catalog** / **New Catalog** / recent catalogs. Nothing else visually dominant.
+3. User creates Research.sb in a selected writable parent folder; chooses suggested catalog code e.g. ab.
+4. User adds a source folder via Chrome directory picker, grants read (and write only when needed).
+5. File names appear *before* thumbnails complete, with calm layout and progressive preview loading.
+6. User resizes gallery thumbnails; opens a preview; adds a tag to a reference.
+7. Metadata writes to Research.sb and, if user permits rename-on-objectify, file becomes Figure[ab1].jpg.
+8. A saved smart folder can now display that tagged resource.
+
+**UX target:** novice obtains value without learning the words “objectification,” “schema” or “query language.”
+
+## 06 — Three everyday stories
+
+### The researcher
+Open a folder with papers, images and simulation outputs. Preview quickly. Tag selected items by theme, compare metadata in list/table, save smart view “high-value PDFs.” Use underlying files without moving them.
+
+### The reference collector
+Share URL or image from Android, choose catalog, optionally choose physical destination for a copy. Later open same catalog on Windows, find it via cover/tag/source, collect into a gallery.
+
+### The file organizer
+Open several source directories, navigate with tabs/breadcrumbs, use keyboard/drag, rename/copy/move safely, create real folders, add virtual collections without altering physical organisation.
+
+## 07 — Product screens and hierarchy
+
+1. **Catalog launcher:** Open/New/Recent. No account, feed or marketing.
+2. **Browser:** one app shell with sidebar, top path/command bar, gallery/list/table surface, optional inspector.
+3. **Quick Look:** large immediate media/document view, navigation between selection, minimal floating actions.
+4. **Properties inspector:** resource preview + inline property editor, tags, notes, file details, operations.
+5. **Search/command palette:** fast jump to resources, commands, locations and saved searches.
+6. **Collection management:** virtual grouping with drag add/remove and optional custom ordering.
+7. **Settings:** catalogs, sources, storage, theme, preview/cache, objectification, shortcuts, privacy, recovery.
+8. **Import chooser:** link vs copy vs move, exact target folder, tags, single quick-save default.
+9. **Problems/recovery panel:** missing folder, denied permission, duplicates, sync conflicts, corrupted preview, failed operation.
+10. **File metadata/schema editor:** compact, discoverable custom property definitions.
+
+Avoid “home dashboards” at V1 unless they actually save the user work.
+
+## 08 — Interaction specification: browser
+
+### 08.1 Sidebar
+- Catalog picker at top; compact current name.
+- Sources with expandable folders; collections; nested tags; smart folders; pinned locations.
+- Section collapse, reorder and optional favorites.
+- Desktop resizable; narrow-screen sheet/drawer; same information architecture.
+- Drag onto physical folder = file operation confirmation; onto tag/collection = metadata operation.
+- Optional sidebar tabs/rail for switching views rather than an always-present extra panel.
+
+### 08.2 Main toolbar
+Breadcrumbs with click-to-jump, back/forward; title/path; global search; sort/filter/group; view switch; density slider; add/import; inspector toggle. Trim into overflow on small widths, retaining same commands.
+
+### 08.3 Items
+- Gallery: adaptive cards, variable density, fixed aspect ratio or masonry (user choice), ellipsis filename, quiet file-type treatment, subtle selection.
+- List: small thumbnail/icon, name, type, size, date, tags.
+- Table: configurable columns and widths, typed properties, sorting, keyboard arrows, optional spreadsheet-like bulk edit.
+- Folder: icon/collage cover, name, count optionally lazy.
+- URL: domain + metadata cover rather than pretending URL is a local file.
+- Search results show source/path context and missing/offline status.
+
+### 08.4 Navigation
+- Single click/tap select. Double click/Enter opens folder or quick look depending user preference; Space always Quick Look on keyboard.
+- Shift range, Ctrl/Cmd toggle, select-all, drag multi-selection; mobile long press then tap multi-select.
+- Forward/back restores scroll, selection and sort in previous location.
+- Tabs for multiple folders/collections/views and context “open in new tab.”
+- Scroll position persists when opening/closing quick look or inspector.
+- Explorer-like path handling but no desktop-only affordance essential to basic use.
+
+### 08.5 Menus & keyboard
+- Right-click/long-press contextual menu with concise sections; menu has no inaccessible actions.
+- Command palette Ctrl/Cmd+K; Escape closes topmost layer; / focuses search (configurable).
+- Rename F2, select all Ctrl/Cmd+A, copy/cut/paste, Delete safe delete action, Enter open, Space Quick Look, arrows focus/select, Back/Alt+Left navigate back.
+- User can customize shortcuts after initial stability.
+
+## 09 — Selection and bulk actions
+
+- Selections survive sorting/filtering only when coherent; show selection count and scope.
+- Fixed toolbar appears when multiple selected, with Tag, Add to collection, Rate, Copy/Move, Objectify, Preview/More.
+- One inspector can display common/mixed values across selection.
+- Assign same tag to 250 images without 250 modal prompts.
+- Progress, cancellation and recovery visible for physical operations; optimistic immediate UI only when rollback is possible.
+- Bulk rename has preview + conflict handling, never accidental loss of catalog tokens.
+
+## 10 — Objectification and filename identity
+
+### Canonical examples
+~~~text
+Facade Study.pdf                 # visible, not yet objectified
+Facade Study[ab967].pdf          # catalog ab object ID 967
+Facade Study[ab967][c5].pdf      # also catalog c object ID 5
+Timber[ab968]/                  # folder identity when allowed
+~~~
+
+**Parsing**
+- Split name and extension carefully; dotfiles and multi-dot filenames tested.
+- Recognize only catalog codes known to this installation or files matching validated terminal token grammar. Do not strip arbitrary bracket text.
+- Append token at final basename position, preserving any existing tokens of other catalogs.
+- If own token already exists, reuse identity. Multiple own tokens = error, not silently choose one.
+- Display clean filename in app by default; full raw name exposed in inspector and rename.
+- Catalog code immutable; verify collision when another catalog shares sources.
+- Original files untouched unless explicit metadata/objectification action uses configured safe policy.
+
+**Allocation**
+- Each catalog stores next-sequence advisory value; commit allocation with write verification.
+- Two devices offline may select the same integer. Because Syncthing is not an allocator, detect duplicates on later scan and protect both records/files.
+- V1 must offer deterministic collision repair with preview, choice of retained ID and safe filename/metadata remapping. Never silently merge two distinct objects.
+- No user-facing global UUID in filenames; internal sync record identity/version markers are permitted for integrity.
+- No forced renaming of filename-sensitive resources (CAD linked assets, HTML dependencies, video project media). Provide metadata-only binding and warn about move portability.
+- File duplicate handling: moving preserves identity; copying into same catalog prompts whether to treat as new resource / preserve external catalog tokens.
+- Safe rename/move workflows must preserve all catalog suffixes, and log before/after paths for possible recovery.
+
+**PWA operation constraint**
+Chrome's File System Access API does not promise a universal atomic rename/move for arbitrary external files/folders. Probe runtime capability; otherwise a copy-verify-delete sequence can be destructive and should not be advertised as atomic. Support staging, digest/size verification, abort/rollback where practicable, and flag unsupported cases. Refuse unsafe large/directory moves rather than risk data.
+
+## 11 — Catalog directory format (versioned)
+
+Illustrative **proposed** Name.sb directory:
+
+~~~text
+Research.sb/
+  catalog.json                 # schema version, stable catalog identity/code, settings
+  sources.json                 # logical sources and relative roots, no global device paths
+  properties.json              # typed property definitions
+  tags.json                    # hierarchy; stable tag IDs
+  collections.json             # manual collection definitions
+  smart-folders.json           # query definitions
+  views.json                   # named presentation definitions
+  resources/
+    ab1.json                   # per-resource records: sync-friendly, versioned
+    ab2.json
+    ...
+  previews/
+    ab1-sm.webp
+    ab1-lg.webp
+    ...
+~~~
+
+**Device-private data** lives in IndexedDB/OPFS within the PWA origin, not inside synced Name.sb: granted FileSystemDirectoryHandles (where serializable), source-ID-to-handle map, search index, pending operations, local preview caches, recently-opened locations, UI panel sizes. Installed PWA + website of different origins have *different* browser storage; deployment origin is stable.
+
+**Catalog source of truth** is the portable Name.sb JSON files; IndexedDB index is disposable. The *.sb directory must remain ordinary Syncthing-friendly files. Never require sync of an open SQLite DB. Every metadata write must be recoverable after a crash, partial write or Syncthing conflict.
+
+### Example record
+~~~json
+{
+  "formatVersion": 1,
+  "catalogCode": "ab",
+  "resourceId": "ab967",
+  "kind": "file",
+  "sourceId": "src-research",
+  "relativePath": "facades/Facade Study[ab967].pdf",
+  "fingerprint": {"size": 2713451, "mtime": 1793056000000},
+  "title": "Facade Study",
+  "tags": ["tag-timber", "tag-envelope"],
+  "properties": {"rating": 4, "year": 2024},
+  "notes": "",
+  "revision": 3
+}
+~~~
+
+URLs use same resource store and catalog-assigned record IDs, but without embedded filesystem filename tokens. URL record has source URL, metadata/cover, optional cached screenshot. For readability, catalog uses resources/ab967.json; avoid separate unrelated URL subsystem.
+
+### Recovery rules
+- Versioned schemas with migration + backup.
+- Atomic-ish writes: write temporary record, verify and replace only when supported; never trust OS rename atomicity from browser for external files.
+- Preserve Syncthing conflict copies and surface reconciliation.
+- Local index rebuild from records and source scan.
+- Catalog file backups/export before schema migrations.
+- Safe state when catalog becomes read-only; browse and present non-destructive actions.
+
+## 12 — Local handles and cross-device portability
+
+- No absolute Windows paths in synced records.
+- Store logical source ID and relative location, then resolve using a **per-device folder grant**.
+- Save handles in IndexedDB as allowed; prompt to re-grant when permission has expired.
+- On Android, picker capabilities, provider latency and available folders depend on Chrome + Android file provider. Test *actual Syncthing output folder* on Pixel 8.
+- A catalog may point to a source not synchronized to current device: show metadata and cached previews, mark source offline/disconnected.
+- Reconnect maps logical source to a new local directory. Never delete metadata because source is temporarily unavailable.
+- Browser storage may be evicted; *.sb retains truth. Re-granting selected directory must restore catalog.
+
+## 13 — File operations policy (PWA-compatible)
+
+| Operation | V1 promise | PWA-specific considerations |
+|---|---|---|
+| Browse/read | Required | User-granted directory handle; permission may need regrant |
+| Create file/folder | Required where writable | Handle APIs + validation |
+| Import/copy | Required | Stream/chunk when possible, verify destination before completion |
+| Rename | Best-effort with safe fallback | External move() not universally available; copy-verify-remove not blindly atomic |
+| Move | Same as rename, with explicit target | Directory moves/high-risk structures need feasibility gate |
+| Delete | Controlled deletion only | OS Recycle Bin/Trash not guaranteed from PWA; present exact irreversible action |
+| Open/reveal externally | Feature-detect | Native “open with default app” and reveal path may be unavailable; use browser preview/download |
+| Watch changes | Incremental refresh/poll | No guaranteed universally available filesystem observer |
+| File association | Desktop supported scenario | Android may need share/menu flow; no universal file handler claim |
+| URL fetch/screenshots | Limited by browser web security | CORS prevents arbitrary metadata requests; extension or opt-in service later |
+
+**Trust rule:** It is better to honestly disable a risky operation than to expose a seemingly functional button that can destroy a source file.
+
+## 14 — Import and capture: a single coherent model
+
+### Input channels
+- Drag physical files, folders or images into app.
+- Paste file/image/URL from clipboard.
+- “Add existing folder” to scan in place.
+- “Choose files” button from device picker.
+- Installed PWA Android share target for shared text/URLs and files when reliable.
+- Optional Chrome extension for one-click webpage/image selection in later milestone.
+- Open URL directly as a catalog bookmark; optional save a local downloaded copy.
+
+### One capture flow
+1. Input arrives; quick preview/chip appears.
+2. Choose Catalog (recent default).
+3. Choose **Reference in place / Copy into / Move into / Bookmark URL** depending type and permission.
+4. When physical file is written, choose exact destination folder; remembered last choice for speed.
+5. Optional tags/collection; save instantly; notification “Added to X” with Undo where supported.
+
+**Quick capture**: one-tap/one-click after defaults set; extended drawer when choices matter.
+
+**Android note:** Chrome Web Share Target is the intended path for links and files. A documented Chrome 153 regression in September 2026 loses shared file payloads in some installed PWAs. Release testing must verify device/browser; provide robust fallback via clipboard paste / file picker until fixed. Never promise unsupported Android system share reliability. For text/URL, test separately.
+
+### Web metadata
+- Saving URL succeeds instantly using original URL/domain/title placeholder.
+- Optional favicon, OG image, document title where safe/available.
+- Arbitrary cross-origin HTML metadata cannot be fetched reliably from the PWA due to CORS. Browser extension can capture metadata of current tab; optional server only if explicitly added with privacy policy later.
+- Full-page screenshots require browser extension, user-supplied image or an explicitly optional backend; not a core PWA-only guarantee.
+
+## 15 — Preview pipeline
+
+**Never gate navigation on thumbnail completion.** A background queue generates and caches progressive small/large previews.
+
+| Type | Essential viewer/thumbnail | Enrichment |
+|---|---|---|
+| JPG/PNG/WebP/GIF/AVIF | decode, orientation-aware thumbnail, zoom | EXIF and color palette where accessible |
+| SVG | safe image rendering, scalable quick-look | dimensions, background controls |
+| PDF | first page cover and page navigation (PDF.js or equivalent) | page count/text extract if performant |
+| MP4/WebM | video element, frame extraction when supported | duration |
+| TXT/MD/code | text excerpt / file icon, basic reading | syntax, line count optional |
+| URL | domain card + available metadata image | extension-captured title/favicon/cover |
+| Folders | icon/collage, item count computed lazily | curated cover option |
+| Unsupported | clean extension icon and file metadata | custom cover attach option |
+
+Controls: fit/fill, viewer background light/dark/checker, rotate/zoom/pan for images, fullscreen, next/previous, open raw/download. Preview worker concurrency limited to keep scrolling fluid; visibility-based priority; last-viewed/next-neighbour prefetch; cache invalidation on file change.
+
+Failures have fallback cover and a non-intrusive retry, never infinite spinner or app crash.
+
+## 16 — Properties, tags, collections, smart folders and views
+
+### Properties
+Defaults: display name, notes, status/objectified, file type, path, source, tags, rating, creation/modified dates, dimensions/pages/duration, size, source URL. Custom types: text, multiline, number, checkbox, date, URL, single/multi-select, color; relations beyond resources are unnecessary in V1.
+
+Inline inspector editing, single/bulk edit, quick add from gallery context. Track schema migrations; don't silently destroy values if a type changes.
+
+### Nested tags
+- Infinite practical hierarchy (subject to UI virtualization), color optionally inherited.
+- New, rename, reorder, reparent, merge, remove.
+- Search a tag and descendants with predictable toggle.
+- Assign via typing, contextual multi-select, drag onto tag in sidebar.
+- When tags renamed, resource references remain stable through tag IDs.
+
+### Collections
+- Named manually curated sets, no physical copy, can include URLs + files across sources.
+- Single item may belong to many collections; optional custom order, cover, description.
+- Drag into/out of collection; bulk add; keyboard-first picker.
+- Catalog can nest collections visually later, independent of physical folder hierarchy.
+
+### Smart folders
+- Saved filter/query returning live results.
+- Query predicates: name/type/path/source, tag/descendant, property values, date/size/rating, missing/offline, objectified, URL domain.
+- AND/OR groups, match-any/match-all, preview result count, saved query rename and order.
+- Present filter chips in browser; no separate “database query” UI for simple cases.
+
+### Views
+- Gallery (adaptive uniform + optional masonry), list, table; saved sort, group, hidden columns, card aspect ratio and density.
+- View is presentation, smart folder is selection. A named saved view may contain both as a convenience but internals remain distinct.
+- Multiple views of same resource set; default saved per catalog and location.
+- Gallery can group by tag, type, source, date and custom select property.
+- Filters visible and quickly clearable.
+
+## 17 — Search / command layer
+
+**Two scopes that must not be confused:**
+- Search resources by name/path/tags/notes/URL/properties.
+- Command palette for navigation and actions.
+
+Fast search with suggestions, fuzzy basename matches, keyboard selection, filters and saved searches. Results across catalog with source context; optionally scope to current folder/tree. Search offline missing-source records too, marking originals unavailable.
+
+Initial index in memory/IndexedDB; don't reread 50k files on each keystroke. Update incrementally when source refreshes, records change or a sync conflict is resolved.
+
+V1 “spotlight” overlay: type a few letters to jump to folder, file, smart folder, tag or command.
+
+## 18 — Android is a full first-class client
+
+**Do not build a separate mobile capture-only product.** Same catalog model, gallery, list/table, inspector, tag editor, query builder and operations.
+
+Adaptive rules:
+- At wide viewport: sidebar + main content + optional inspector.
+- At narrow viewport: main gallery fills screen, collapsible navigation drawer, inspector as sheet/fullscreen, toolbar with visible critical actions.
+- Long press = context/multi-select; pinch zoom density optional; swipe back respects navigation history and PWA gestures.
+- Tap targets ~44px or larger where appropriate; keep dense cards without tiny controls.
+- Use pointer/keyboard detection, not device-type assumptions (Pixel 8 may connect to external monitor/mouse).
+- All desktop actions have accessible touch paths and vice versa.
+- No hover-only features.
+- Screen rotation, small widths, virtual keyboard, soft navigation, Android sharing must be tested.
+- Direct user-granted folders may be slower on some Android providers; progressive UI and cancellation necessary.
+
+## 19 — Responsiveness, performance and memory budgets
+
+These are **targets subject to benchmark on reference devices**, not guaranteed capabilities.
+
+| Measure | Initial target |
+|---|---|
+| Installed app warm startup | first interactive shell <= 1s desktop / <= 2s Pixel 8 |
+| Open indexed directory | responsive frame within ~100ms; item fill progressive |
+| Cached preview quick look | usually <= 150ms |
+| Tag click / selection | immediate next frame, optimistic save |
+| Search in 20k resource index | typical <= 100ms |
+| Scroll | aim 60fps in 10k+ item galleries |
+| Large catalog | 50k resource stress scenario, virtualized, no DOM explosion |
+| Indexing | incremental, progress visible, does not monopolize main thread |
+| Background preview | cancellable, bounded, never stalls user input |
+| Offline startup | usable local shell + connected local source if permission available |
+
+Measure p50/p95, long tasks, frame drops, input latency, memory pressure, thumbnail decode time, cache footprint, cold/warm visits. Write benchmark fixtures and record real test hardware/browser versions.
+
+**Techniques:** virtual list/grid, IntersectionObserver prioritization, offscreen bitmap where supported, decode worker, progressive scanning, batched state writes, IndexedDB indexes, dedicated thumbnail worker(s), LRU cache, cancellation tokens, stable DOM keys, ResizeObserver only where useful, skeleton slots that preserve dimensions, no re-render of every visible card on one selection change.
+
+## 20 — UI micro-interactions / polish backlog
+
+- Preview cards fade in once, gently, without shifting position.
+- On selection: subtle edge/tint, count display, toolbar becomes available with no jank.
+- On rename: filename edit focuses basename but never accidentally selects token/extension unless explicitly requested.
+- Tags add/remove via fast autocomplete chip editor without modal.
+- Breadcrumbs respond immediately; right click context menu at cursor, within viewport, dismiss naturally.
+- Slider zoom of gallery density should smoothly reflow while preserving approximate scroll anchor.
+- Inspector edits save automatically with unobtrusive saved/failed state.
+- Scroll and keyboard position preserved between preview, inspector and browser.
+- Drop targets show exact outcome (“Copy 3 files to Materials/”), not a generic highlighted box.
+- Persistent sidebar width, view mode and theme; no sudden reset after PWA update.
+- Tooltips appear only after short delay; accessibility labels even when icon-only.
+- Notification toast is quiet, actionable, dismissible, never blocks content.
+- Animations respect reduced motion. No overlay traps when Android Back pressed.
+- Offline/missing source badges are precise but visually restrained.
+- No giant modal for common action with one obvious default.
+- Always use exact destructive vocabulary: “Delete permanently” rather than “Move to trash” if Recycle Bin is unavailable.
+- Use hidden/raw ID suffix presentation consistently in list, gallery, quick look, inspector and renaming.
+
+## 21 — Information architecture and persistence
+
+### Catalog-level
+Name/code, source definitions, resource records, custom property schema, tags, collections, smart-folder definitions, saved views, catalog-level preferences.
+
+### Device-level
+Handles to chosen catalog and source folders, granted permissions, local mapping, transient operation log, local index and cache, recent catalogs, panel sizes and UI settings. Stored in IndexedDB/OPFS.
+
+### Resource-level
+ID, source identifier, current relative path/URL, optional fingerprint, preview revision, metadata fields, note, tags, collection IDs, timestamp/revision information.
+
+### Privacy
+No mandatory telemetry, upload, external indexing, account or tracking. URL metadata fetching obeys origin/CORS limits; no covert proxy. Opening remote URLs may make network requests as expected; mark optional external services clearly if ever introduced.
+
+## 22 — Sync, offline, concurrency
+
+The PWA is **not** a sync engine. Syncthing may replicate the chosen *.sb folder and selected source folders separately.
+
+- Catalog JSON source of truth can be re-read after external file changes.
+- Filesystem refresh on focus, folder reopen, explicit refresh, and optional interval (power-conscious).
+- Do not rely on live cross-device file watchers in the browser.
+- Any partial write or sync conflict is recoverable. Keep conflicted copies until explicitly reconciled.
+- Per-resource JSON limits blast radius of concurrent edits but does not magically merge them.
+- Catalog counter conflicts are possible offline. Reconcile IDs without losing external file or metadata; users see a Problems panel with clear repair guidance.
+- Metadata updates have revision markers; reject unverified overwrite if an external edit has occurred.
+- Imported files and catalog metadata may sync at different times; show waiting/offline until file arrives.
+- Previews are disposable; catalog records are not.
+- On source-remapping failure, preserve records and cached previews rather than deleting metadata.
+
+**Release standard:** A realistic offline Windows+Android conflict test must demonstrate no silent data loss.
+
+## 23 — Safety, reliability and security
+
+- Never scan outside explicitly granted root. Respect sensitive directory restrictions.
+- Treat SVG/PDF/HTML, untrusted URIs, large images and malformed media as potentially hostile. Sanitized rendering or controlled trusted decoder.
+- Reject path traversal, URL schemes that execute code, invalid file names; avoid infinite symlink traversal.
+- Confirm irreversible changes; file deletes are not silently sent to an OS trash that PWA cannot access.
+- Safe imports write to new destination or temp where feasible, verify byte size/digest and avoid silent overwrite.
+- Preview failures cannot crash whole app.
+- Backup/export and restore validated before V1.
+- Catalog migration includes recovery copy and version gate.
+- Service worker upgrades cannot interrupt an open data write.
+- Sensitive file content never automatically uploaded to any service.
+- IndexedDB/OPFS eviction yields graceful regrant/rebuild, not loss of portable catalog truth.
+
+## 24 — PWA technical architecture
+
+### Proposed stack
+- **Vite** build/tooling.
+- **TypeScript** for all core operations and view model.
+- **React** for UI (or similarly small framework if a spike proves superior).
+- **PWA manifest + service worker** for install/offline/app shell and share target.
+- **File System Access API** for user-granted file/folder handles.
+- **IndexedDB** for handles, local per-device index, operation journal, recent state.
+- **OPFS** for high-volume local cache only where it helps.
+- **Dedicated Web Workers** for indexing, searchable metadata, preview jobs.
+- **PDF.js** or suitable PDF renderer. No platform native shell required.
+- **Lucide** icons; custom CSS tokens for Soft Precision, no heavy opinionated UI kit.
+
+### Separation of responsibilities (not different applications)
+~~~text
+src/
+  app/             # lifecycle, navigation, PWA startup
+  browser/         # main gallery/list/table, tabs, inspector
+  catalog/         # format, metadata, migration, save/reload
+  identity/        # token parser, sequence allocator, dedupe
+  filesystem/      # handle picker, permissions, read, copy/move/trash policy
+  organization/    # tags, properties, collections, smart queries, views
+  capture/         # drag/drop, clipboard, share-target, URL
+  preview/         # adapters by MIME/type, cache, quick-look
+  search/          # local index, query execution, command search
+  platform/        # capability detection (not native wrapper)
+  ui/              # design tokens, primitive components, motion
+  workers/         # expensive background tasks
+  tests/           # e2e, fixtures, perf, conflicts
+public/
+  manifest.webmanifest
+  icons/
+  service-worker/
+docs/
+  ROADMAP_V1_ULTRA.md
+  PLAN_V0.1.md
+  PWA_ARCHITECTURE.md
+  UX_QUALITY_STANDARD.md
+logs/
+  decisions/
+  development/
+  ideas/
+~~~
+
+This is a *modular PWA*, not multiple separately integrated products. Do not prematurely split repositories/services.
+
+## 25 — Web capability feasibility matrix (Chrome-first)
+
+| Capability | Expected strategy | Status until tested |
+|---|---|---|
+| Select folder Windows Chrome | showDirectoryPicker | API documented; exercise in real build |
+| Select folder Android Chrome | showDirectoryPicker (Chrome 132+) | API documented; Pixel 8 + Syncthing folder test |
+| Save files into granted folders | createWritable via file handle | Permission and provider behavior test |
+| Persist catalog/source handles | IndexedDB handles + permission recheck | Session/reboot test |
+| Install app standalone | manifest + service worker | HTTPS GitHub Pages or another secure origin |
+| Offline app shell | service worker caching | Test version/update and reload |
+| URL share into installed Android PWA | Web Share Target | Test Chrome version + data variations |
+| File share into installed Android PWA | Web Share Target | Known Chrome 153-era regression; must provide fallback |
+| Open file from OS into PWA | manifest file_handlers | Desktop Chrome scenario, not core mobile path |
+| Arbitrary folder move/rename | capability detection, staged fallback | Not universally atomic; don't promise until proven |
+| Recycle Bin / OS Trash | No universal web API | Controlled delete + backups/recovery |
+| Real-time directory watching | feature detect FileSystemObserver; fallback refresh | Not a universal guaranteed API |
+| Arbitrary page fetch/OG/screenshot | Web security/CORS limited | Browser extension or user-provided data |
+| Background filesystem access | No permanent unrestricted background access | Foreground revalidation/index strategy |
+
+### Deployment
+- Initially GitHub Pages under stable HTTPS origin with correct base path, offline caching and manifest URLs; custom domain later only with origin migration plan.
+- When moving origin, previously granted handles/IndexedDB do not transfer automatically. Choose stable origin early.
+- Build/test service worker upgrades; cache bust and schema upgrades carefully. The app should update on launch/idle without wiping catalog references.
+- Browser-only fixture/demo mode without disk permissions for UI iteration; real catalog mode is explicit.
+- Chrome Windows desktop and Chrome Android are supported targets. Other browsers can receive read-only/demo fallback, but V1 feature parity is not promised outside the chosen scope.
+
+## 26 — Release train at a glance
+
+| Release | Product milestone | What becomes real |
+|---|---|---|
+| **V0.0** | Technical proof | PWA installs; folder picker; real browse/read/write on Windows + Android |
+| **V0.1** | Beautiful explorer | Gallery, navigation, previews, inspector, list, tabs, dark/light, offline shell |
+| **V0.2** | Portable catalog | *.sb persistence, source mappings, objectify/filename IDs, reconnection |
+| **V0.3** | Intelligent organization | Nested tags, custom typed properties, collections, multi-edit |
+| **V0.4** | Discovery | Search, smart folders, saved views, grouping, query builder |
+| **V0.5** | Collect anything | Drag/drop, import destination, clipboard, URL bookmarks, Android share fallback |
+| **V0.6** | File-manager quality | Safe copy/move/rename/create/delete semantics, tabs, history, keyboard commands |
+| **V0.7** | Rich media | PDF multipage, image zoom, better videos/text/SVG, cache refinements |
+| **V0.8** | Power & delight | Quick batch actions, customizable gallery, command palette, thoughtful polish |
+| **V0.9** | Hardening beta | Large-library benchmark, conflicts, backup/restore, permission recovery |
+| **V1.0** | Daily-driver release | Reliable, fast, feature-complete Chrome PWA on Windows + Android, polished and documented |
+
+**Important:** early releases may combine features based on technical dependencies. Version labels mean meaningful working vertical slices, not arbitrary date promises.
+
+## 27 — V0.0: PWA / filesystem technical spike
+
+**Goal:** No native wrapper assumptions. Test the exact architecture on both platforms first.
+
+- [ ] Initialize Vite/React/TypeScript, lint/typecheck/test, Chrome PWA manifest + service worker.
+- [ ] Set GitHub Pages deploy workflow with HTTPS and stable scope.
+- [ ] Install standalone on Windows and Pixel 8.
+- [ ] Open user-selected *.sb directory with read/write and save a JSON file.
+- [ ] Pick actual Syncthing-synchronized folder on Android and enumerate/write a test file.
+- [ ] Persist handles in IndexedDB, close app/restart/reopen, reauthorize gracefully.
+- [ ] Prove listing 500 real entries without blocking first paint.
+- [ ] Create thumbnail for image, SVG and first PDF page in browser.
+- [ ] Test copy / create file / rename capability detection on chosen roots.
+- [ ] Test receiving Android shared text/URL and file; document exact Chrome build / regression.
+- [ ] Test app offline after initial installation, and service worker upgrade path.
+- [ ] Write ADR for PWA capabilities and known limitations.
+
+**Release gate:** An installable PWA can open the same concept of catalog and real chosen folder on Windows/Android, with clearly understood permissions. Do not skip this gate.
+
+## 28 — V0.1: “I love browsing in it”
+
+**Goal:** Before clever catalog metadata, Sourcebook should be a superior visual browser.
+
+- [ ] App chrome, recent catalog welcome, folder sources.
+- [ ] Sidebar tree, breadcrumbs, back/forward, tabs and remembered state.
+- [ ] Gallery uniform adjustable grid + list; optional compact tile mode.
+- [ ] Resizable desktop panes; collapsible inspector/drawer on Android.
+- [ ] Image/SVG/PDF-first-page thumbnails, safe fallbacks for others.
+- [ ] Quick look overlay with keyboard/touch next/previous.
+- [ ] Basic file details in inspector, native raw filename/path accessible.
+- [ ] Multi-select, shift selection, long press, context menu, keyboard controls.
+- [ ] Light/dark/system themes including viewer.
+- [ ] Responsive layout at phone widths without alternate product design.
+- [ ] Virtualized item lists and measured 10k fixture gallery.
+- [ ] Focus/scroll restoration and accessible controls.
+- [ ] Empty/loading/error/permission states.
+
+**Gate:** Real files, no objectification, already delightful on both devices.
+
+## 29 — V0.2: Portable identity
+
+- [ ] Portable *.sb schema v1 and migrations.
+- [ ] Catalog switcher and recent catalogs.
+- [ ] Multiple logical source roots per catalog and source exclusion rules.
+- [ ] Device-private source mapping; sync folder reconnect.
+- [ ] Sequential catalog resource allocation, token parser and display clean name.
+- [ ] Safe objectify flow with ask-first/auto/never rename preferences.
+- [ ] Per-resource JSON write and restore; preview key mapping.
+- [ ] Multiple independent catalogs referencing same physical file.
+- [ ] Rename/move token re-discovery; missing/offline states.
+- [ ] Detect duplicate/colliding tokens and recover safely.
+- [ ] Catalog metadata backup/export.
+
+**Gate:** File[ab1][c1].pdf can be annotated in two catalogs; both identities persist through ordinary browsing and source regrant.
+
+## 30 — V0.3: Tags + custom properties
+
+- [ ] Nested tag tree, tag picker autocomplete and drag assign.
+- [ ] Colors optional / quiet; rename/reparent/merge hierarchy.
+- [ ] Rating/favorite, description and inline notes.
+- [ ] Custom property types and schema editor.
+- [ ] Inspector inline editing, property defaults and empty fields.
+- [ ] Bulk edit across 100+ resources.
+- [ ] Manual collections and collection picker.
+- [ ] Collection cover / sorting / counts.
+- [ ] Undo for catalog-only metadata changes.
+
+**Gate:** Build a reference classification system faster than you could move physical files into corresponding folders.
+
+## 31 — V0.4: Search + smart views
+
+- [ ] Metadata index with incremental rebuild.
+- [ ] Fast text search, path/source scope and fuzzy matching.
+- [ ] Filter chips for type/source/tags/rating/properties/date/size.
+- [ ] AND/OR query builder with nested groups.
+- [ ] Smart folder save, rename, delete and organize.
+- [ ] Saved gallery/list/table view configs with sorting and grouping.
+- [ ] Table column visibility/width, optional inline property editing.
+- [ ] Keyboard result selection, quick jump to containing folder.
+- [ ] Missing-file results show metadata with reconnect affordance.
+
+**Gate:** Any useful subset of indexed files can become a persistent, visually meaningful saved view.
+
+## 32 — V0.5: Capture / import
+
+- [ ] File/folder drop onto browser and folder.
+- [ ] Reference/copy/move choice with remembered default.
+- [ ] Explicit destination picker with path preview and conflict policy.
+- [ ] Clipboard paste image/text/URL.
+- [ ] URL first-class object, title/domain/favicon/cover fallback.
+- [ ] Android PWA share-target handling of URL/text.
+- [ ] File-share capability test + fallback import path for Chrome regression.
+- [ ] Batch file ingest with progress and safe cancellation.
+- [ ] Optional tags/collection during capture.
+- [ ] One-click quick capture with recent destination after initial setup.
+
+**Gate:** Save a reference from phone or laptop in moments without opening a big workflow.
+
+## 33 — V0.6: Serious file management
+
+- [ ] New folder, rename (safe fallback), copy, duplicate, move, delete policy.
+- [ ] Copy/cut/paste and drag onto source folder; path preview.
+- [ ] No silent overwrite; skip/replace/rename resolution.
+- [ ] Batch operation queue with visible status and failure recovery.
+- [ ] Operation journal and undo where technically safe.
+- [ ] Refresh and incremental rescan on focus/navigation.
+- [ ] Folder exclusion/hidden files toggle and sort by source properties.
+- [ ] Tabs with right-click open in new tab, recently visited.
+- [ ] Shortcut map / command palette and mobile equivalents.
+- [ ] Refuse unsupported destructive moves rather than fall back silently.
+
+**Gate:** Daily ordinary file-management tasks work within granted roots, with explicit limits and no data-loss surprises.
+
+## 34 — V0.7: Rich media
+
+- [ ] Image viewer: fit/fill/zoom/pan, checker and dark surround.
+- [ ] PDF.js page navigation, thumbnail strip optional, selection/copy if practical.
+- [ ] SVG sanitized high-quality viewing.
+- [ ] Video player + cover extraction where supported; metadata duration.
+- [ ] Text/Markdown preview with code fallback and safe no-script HTML text mode.
+- [ ] Folder collage/custom covers (optional).
+- [ ] URL visual cards, user-selected cover.
+- [ ] Cache limits/invalidation; preview regeneration.
+- [ ] Fullscreen/keyboard/mobile gestures refined.
+
+**Gate:** Browse mixed research folders without launching other apps for every quick inspection.
+
+## 35 — V0.8: Power features with restraint
+
+- [ ] Command palette commands and global quick navigation.
+- [ ] Multi-select bulk tag/collection/property/rename actions.
+- [ ] Quick filter combinations and saved presets.
+- [ ] Gallery aspect-ratio options, variable card metadata, density controls.
+- [ ] Pin/favorite sources and views.
+- [ ] Thumbnail cover picker and file/folder custom cover metadata.
+- [ ] URL collection improvements (extension-assisted metadata capture **if** no backend).
+- [ ] Keyboard shortcut overlay and contextual command hints.
+- [ ] Smoothness audits, motion refinement, keyboard accessibility.
+- [ ] Optional viewer side-by-side comparison if performance remains excellent.
+
+**Gate:** More power does not mean more permanent interface clutter.
+
+## 36 — V0.9: “You can trust it”
+
+- [ ] Sync-concurrency tests, including two offline devices colliding on resource IDs.
+- [ ] Syncthing simultaneous edits and conflict-file recovery UI.
+- [ ] Crash/forced-reload during metadata write.
+- [ ] Catalog migration/restore and missing-source remap.
+- [ ] Android permission revocation, Chrome update and service worker update.
+- [ ] Browse 50k fixture entries, sustained scroll and heavy thumbnail work.
+- [ ] Large files, corrupt PDFs/SVG, weird names, deeply nested paths, symlink loops.
+- [ ] Cold/warm startup measurement, FPS/long tasks memory profile.
+- [ ] Touch, mouse, stylus, keyboard, external-monitor checks.
+- [ ] Accessibility checks (contrast, focus order, screen reader basics).
+- [ ] Privacy/security audit; no surprise network calls.
+- [ ] Zero critical data-loss bugs and zero unexplained app crashes in beta.
+
+**Gate:** Personal daily use for real work without needing to trust the app blindly.
+
+## 37 — V1.0: Daily driver
+
+V1 is not “we implemented every possible file type.” It is a complete, consistent, tested **daily reference workflow** that feels substantially better than browsing a folder tree in a normal file explorer.
+
+### V1 must ship
+- [ ] Installable HTTPS Chrome PWA with reliable offline app shell.
+- [ ] Windows and Android feature-parity core experience.
+- [ ] *.sb catalogs stored anywhere user grants; source folder remapping.
+- [ ] First-rate gallery/list/table; navigation/tabs/preview/inspector.
+- [ ] Images/SVG/PDF/video/text/URLs with graceful fallbacks.
+- [ ] Catalog-specific bracket IDs and safe identity reconciliation.
+- [ ] Custom typed properties, nested tags, collections, smart folders and saved views.
+- [ ] Fast full-catalog metadata search + command palette.
+- [ ] Drag/drop + file picker + clipboard + Android URL share/capture.
+- [ ] Destination-selectable import, safe file operations and clear supported-limit disclosure.
+- [ ] Theme and visual polish across every main state.
+- [ ] Backup/restore + migration + conflict detection/recovery.
+- [ ] Performance validated on real mid-range Windows computer and Pixel 8.
+- [ ] Clear README, install instructions, troubleshooting and limitations.
+
+### Explicitly not required for V1
+AI/semantic embeddings, cloud sync, user accounts, collaborative sharing, 3D/CAD viewport, image editing studio, full website screenshot server, graph/board editor, semantic cross-app relations, iOS feature parity, exhaustive OS file explorer replacement.
+
+Those can become V1.x products only once the everyday workflow is proven.
+
+## 38 — End-to-end acceptance scenarios (must pass)
+
+A. Open 3 existing folders with mixed files, zero source mutations, gallery starts immediately.  
+B. Objectify one file in catalog ab, then in catalog c; verify tokens [ab1][c1], separate metadata and no accidental overwrite.  
+C. Move/rename objectified file within granted roots; catalog finds it via token or produces clear manual reconnect when operation is unsupported.  
+D. Tag 120 files “Facades/Timber,” bulk rate, store custom year number; relaunch and verify.  
+E. Create manual collection “Daylight Study” and smart folder “PDFs tagged Timber after 2024”; show same records in different saved views.  
+F. Save a URL, see an immediate useful bookmark card even if no web metadata image can be fetched.  
+G. Import photo/URL from Pixel 8 with share target where available, or file-picker/clipboard fallback; catalog/source mapping survives reinstall/grant.  
+H. Syncthing transfers catalog to Windows with different file paths; regrant source, same metadata works.  
+I. Copy file carrying [ab1], detect duplicate token rather than silently binding both to same record.  
+J. Offline desktop and Android objectify simultaneously and collide; both original files + records remain recoverable.  
+K. Revoke a directory permission and resume; no metadata loss or endless spinner.  
+L. Attempt unsupported native trash/rename; UI describes limits before destructive side effects.  
+M. Scroll 10k-gallery on Pixel 8, open images and PDFs, switch theme, multi-select, filter—no intolerable stutter.  
+N. Interrupt PWA update in mid-write; active catalog remains consistent or recoverable.  
+O. Export *.sb, clear browser site data, reconnect folder, rebuild local index and browse metadata again.  
+P. Empty catalog, missing files, malformed SVG, huge PDF, bad URL and unavailable permissions all show useful states.  
+Q. 60-second first-run flow succeeds without reading documentation.
+
+## 39 — Performance and polish release rubric
+
+Rate every release on 0–5 for each dimension. **V1 requires no score below 4**, and average >=4.5:
+
+1. Navigation / time-to-first-use.
+2. Scroll / selection fluidity.
+3. Preview quality and visual consistency.
+4. Organization speed / bulk actions.
+5. Predictable storage + file safety.
+6. Desktop + Android feature parity.
+7. Keyboard / touch discoverability.
+8. Reliability / crash and conflict handling.
+9. Offline / reconnect / permission recovery.
+10. Visual restraint / simplicity.
+
+Hold weekly short usability sessions with 5 real tasks:
+- Find a reference from a 5k-file folder.
+- Tag 20 files by material.
+- Save a web reference from Android.
+- Move/duplicate an objectified resource.
+- Create a filtered view and reopen next day.
+
+Count actions, time, hesitation, errors and “I don't know what happened” moments. Fix the worst friction before adding the next feature.
+
+## 40 — Automated tests and fixtures
+
+**Unit**
+- Filename parser, suffix append and preservation, sequence allocation and collision.
+- JSON schema validation/migration; nested tag edit; query logic; view serialization.
+- Permission/capability behavior, URL validation, preview cache invalidation.
+
+**Integration**
+- Multiple catalogs on same file/folder, browser record writes, rescan/reconnect.
+- Selection→objectify→rename→metadata persistence.
+- File copy/move policy + rollback behaviour under simulated errors.
+- Browser update/reload during indexing and metadata save.
+- Restore from saved catalog with browser local storage cleared.
+
+**E2E (Playwright Chromium desktop, plus manual Android test matrix)**
+- Install/use hosted origin and service worker states.
+- Empty/fresh/large catalog interactions and a11y semantics.
+- Search/tag/view/quick-look keyboard route.
+- Android manual share-to-PWA, long press, slow provider, offline and permission prompts.
+
+**Fixtures**
+- 100 files, 10k files and 50k synthetic entries; mixed JPG, PNG, WebP, SVG, PDF, video, text.
+- Spaces, emojis, Unicode/diacritics, right-to-left names, dots, brackets, extensionless, case-only renames.
+- Two same-named files in different folders; copied IDs; multi-token filename; collision.
+- Corrupt PDF, malicious SVG, huge photo/video, zero-byte file, read-only root and disappearing drive.
+- Symlink loop, deeply nested folder, catalog located inside scanned source, syncing conflict copies.
+- URL without title, OG image or remote CORS approval.
+
+## 41 — Development practices
+
+- Ship vertical slices: demonstrable real user flows, not months of skeletal architecture.
+- A new release must not regress startup, FPS, keyboard or data safety.
+- Use issue labels: epic / feature / UX / performance / bug / safety / blocked.
+- Every substantial decision gets an ADR in logs/decisions with reason and rejected alternatives.
+- Logs/development records real work and benchmark results. Logs/ideas captures uncommitted ideas.
+- No major visual changes without screenshots at 390px Android, 768px tablet and 1280px desktop.
+- No new feature unless it has empty/error/loading/permission/touch states.
+- Keep releases small and updateable; avoid adding dependencies simply to save a few lines.
+- Use real sample files and Android hardware throughout, not only fake cards in desktop devtools.
+
+## 42 — Critical path: order of operations
+
+1. **Prove PWA filesystem access on Pixel 8 and Windows Chrome** using the real desired synced directory.
+2. **Ship visual browsing**, real fast gallery, nothing fake.
+3. **Commit catalog data format** with independent source mappings.
+4. **Implement objectification/ID invariants** with collision and fallback behavior.
+5. **Add catalog organization and search** without sacrificing browse performance.
+6. **Implement capture/import** with destination choice and Android share fallback.
+7. **Harden file operations** before claiming comprehensive file management.
+8. **Polish everything**: real-life usability and performance audits, recovery, documentation.
+9. Ship V1 only after the release acceptance matrix passes.
+
+## 43 — Decision register
+
+### Confirmed
+- Sourcebook, separate from Notebook and Objectbook.
+- Chrome PWA-first, full desktop and Android functionality.
+- User-chosen portable *.sb catalog directory + sources outside it.
+- Catalog-specific terminal bracket IDs and sequential numbers.
+- Existing folder browsing, nested tags, custom properties, smart folders, views, previews, flexible capture/import.
+- Smooth, minimal, beautiful, high-functionality application.
+
+### Provisional engineering
+- React/TypeScript/Vite, service worker, File System Access API, IndexedDB/OPFS, web workers.
+- JSON-per-resource plus syncable catalogs and unsynced browser local index.
+- Filename rename fallback for sensitive files and browser safety limitations.
+- Catalog term (rather than Workspace) remains working terminology.
+- Gallery as default, light/dark neutral Soft Precision visual system.
+
+### Known blockers to validate
+- Android Chrome directory permission and Syncthing folder access under exact installed PWA origin.
+- External rename/move feasibility and safe behavior for large and linked files.
+- Web Share Target file payload regression in 2026 Chrome 153 builds.
+- Simultaneous offline sequential ID allocation / sync conflict merging.
+- CORS restrictions for webpage cover extraction without extension/service.
+- PWA origin stability/permission persistence and service worker update safety.
+
+## 44 — Beyond V1 (do not pollute V1)
+
+Potential future areas:
+- AI-assisted tagging / image similarity and natural-language search, opt-in.
+- Browser extension with one-click clip page/image/PDF, full-page screenshot, tab metadata.
+- Reference comparison/contact sheets/boards.
+- Rich file annotations and multi-page PDF markup.
+- Auto generated folder previews and semantic color search.
+- Powerful rules/automation engine.
+- Optional app packaging if web capability limits prove chronic, while preserving PWA as source.
+- Any integrations with Notebook/Objectbook only if actual workflows demand them.
+
+---
+
+## Final criterion
+
+**Sourcebook V1 succeeds when users forget they are using a database or an exotic PWA.** It should simply feel like the natural, visual way to navigate and organize their real files — on computer and phone — without ever compromising control of them.
+
+> Make what users do 100 times per day astonishingly good. Hide what they do once a month. Never pretend a dangerous filesystem operation is safe.
