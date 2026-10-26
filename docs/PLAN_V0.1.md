@@ -1,3 +1,5 @@
+> **Historical initial plan (2026-10-26).** The master plan is now [ROADMAP_V1_ULTRA.md](ROADMAP_V1_ULTRA.md). Its [PWA-first architecture](PWA_ARCHITECTURE.md) and [ADR 0002](../logs/decisions/0002-pwa-first.md) **supersede the Tauri/native-shell proposals in this document**. Keep this file as the original detailed V0.1 thinking, not as current implementation authority.
+
 # Sourcebook — MEGA Plan V0.1
 
 **Status:** Working implementation plan · **Date:** 2026-10-26  
