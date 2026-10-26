@@ -1,5 +1,8 @@
 # Sourcebook
 
+> **Implementation underway — V0.0 preview (2026-10-26).** The first Chrome PWA code, real-folder gallery, `.sb` catalog creation and simple metadata editing are in the repository. Automated syntax and filename-ID unit tests pass. The app has **not** yet been verified on Windows/Pixel 8. GitHub Pages publication is blocked until the repository's Pages source is set to **GitHub Actions** under Settings → Pages. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+
+
 **A beautiful, fast, local-first visual explorer and reference catalog for ordinary files, folders and URLs.**
 
 Sourcebook lets you point a portable **Catalog** at existing folders, browse everything immediately, generate previews, and selectively enrich resources with metadata — without requiring a proprietary managed library.
