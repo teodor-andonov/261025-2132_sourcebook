@@ -20,7 +20,7 @@
 | **Publish Sourcebook** (`pages.yml`) | Push to `main`; manual | Recheck tests, stage app assets, deploy via GitHub Pages. |
 | **Sourcebook Desktop Screenshots** (`screenshots.yml`) | **Manual only** | Chromium fixture screenshots, only when explicitly requested. |
 
-A screenshot fixture run is **not** part of normal development, PR CI or publishing. It currently pushes generated screenshots to `main` when manually invoked; avoid running it until that writeback is moved to a PR or removed to preserve the protected release-branch convention.
+A screenshot fixture run is **not** part of normal development, PR CI or publishing. The manual workflow uploads an Actions artifact only; it does not commit screenshots or write to `main`.
 
 ## Release safety
 
