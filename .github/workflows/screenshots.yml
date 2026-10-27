@@ -1,0 +1,44 @@
+name: Sourcebook Desktop Screenshots
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'index.html'
+      - 'assets/**'
+      - 'manifest.webmanifest'
+      - 'scripts/capture-desktop.mjs'
+      - '.github/workflows/screenshots.yml'
+permissions:
+  contents: write
+concurrency:
+  group: sourcebook-screenshots
+  cancel-in-progress: true
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-audit --no-fund playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/capture-desktop.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sourcebook-desktop-1440x900
+          path: screenshots/*.png
+          retention-days: 30
+      - name: Update screenshot gallery in repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add screenshots/desktop-launcher.png screenshots/desktop-gallery.png
+          if git diff --cached --quiet; then
+            echo "Screenshots unchanged"
+          else
+            git commit -m "chore: refresh 1440x900 desktop UI screenshots"
+            git push origin HEAD:main
+          fi
