@@ -2,6 +2,7 @@ import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.mjs';
+import {commitCatalogTransaction,inspectPendingCatalogTransaction,resumeCatalogTransaction} from './catalog-transactions.mjs';
 import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {catalogTagResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
@@ -21,9 +22,40 @@ const state={
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
   tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false,resourceSaving:false,
-  scan:null,scanBusy:false,scanGeneration:0,scanProgress:''
+  scan:null,scanBusy:false,scanGeneration:0,scanProgress:'',pendingTransaction:null
 };
-const viewsUI=createViewsController({state,readJson,writeJson,authorized,render,toast,forgetImages,navigate,refreshRecords});
+const viewsUI=createViewsController({state,readJson,authorized,render,toast,forgetImages,navigate,refreshRecords,commitCatalogEdits,refreshPendingCatalog});
+async function refreshPendingCatalog(){
+  if(!state.catalogHandle||!state.catalog){state.pendingTransaction=null;return;}
+  try{state.pendingTransaction=await inspectPendingCatalogTransaction(state.catalogHandle,state.catalog.id);}
+  catch(error){state.pendingTransaction={error:errorText(error),conflicts:['unreadable']};}
+}
+async function commitCatalogEdits(changes){
+  if(state.pendingTransaction)throw Error('Resolve the interrupted catalog save before editing.');
+  try{return await commitCatalogTransaction({handle:state.catalogHandle,catalogId:state.catalog.id,changes});}
+  finally{await refreshPendingCatalog();}
+}
+async function recoverCatalogSave(){
+  if(!state.catalog||state.resourceSaving||state.bulkSaving||state.viewSaving)return;
+  state.resourceSaving=true;
+  try{
+    await refreshPendingCatalog();
+    const pending=state.pendingTransaction;
+    if(!pending)return toast('No interrupted save found.');
+    if(pending.error||pending.conflicts?.length)
+      throw Error('Recovery is blocked by divergent or unreadable catalog data. Repair the catalog manually from a backup; nothing was overwritten.');
+    if(!confirm('Resume interrupted catalog save ('+pending.applied+'/'+pending.total+' changes already present)? Only catalog JSON will be written.'))return;
+    if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is required for recovery.');
+    await resumeCatalogTransaction(state.catalogHandle,state.catalog.id);
+    await refreshPendingCatalog();
+    state.catalog=await readJson(state.catalogHandle,'catalog.json');
+    state.taxonomy=await readJson(state.catalogHandle,'tags.json',[]);
+    state.views=validateViews(await readJson(state.catalogHandle,'views.json',[]));
+    await refreshRecords();invalidateScan();
+    toast('Interrupted catalog save completed. Source files unchanged.');
+  }catch(error){await refreshPendingCatalog();toast('Recovery failed: '+errorText(error),true);}
+  finally{state.resourceSaving=false;render();}
+}
 function invalidateScan(){++state.scanGeneration;state.scan=null;state.scanBusy=false;state.scanProgress='';}
 let tabPersistQueue=Promise.resolve();
 const glyphs={
@@ -136,7 +168,7 @@ async function setPlainFolder(handle,remember=true){
     state.sources=[];state.handles.clear();state.records.clear();state.taxonomy=[];state.tagFilter=null;
     for(const existing of tabs)state.handles.set(existing.id,existing.handle);
   }
-  state.catalog=null;state.catalogHandle=null;state.catalogTagView=null;state.activeViewId=null;state.views=[];
+  state.catalog=null;state.catalogHandle=null;state.catalogTagView=null;state.activeViewId=null;state.views=[];state.pendingTransaction=null;
   state.sources=[...tabs,tab];state.handles.set(tab.id,handle);
   state.sourceId=tab.id;state.parts=[];state.selected.clear();state.search='';state.sidebar=false;
   if(remember)void rememberFolderTabs();
@@ -251,6 +283,7 @@ async function openDirectory(h){
   if(!config?.id||!CODE_PATTERN.test(config.code))throw Error('Choose a .sb directory containing catalog.json.');
   invalidateScan();
   state.catalog=config;state.catalogHandle=h;
+  await refreshPendingCatalog(); // Read-only: never replay a journal on open.
   state.sources=await readJson(h,'sources.json',[]);
   const savedTags=await readJson(h,'tags.json',[]);
   if(!Array.isArray(savedTags))throw Error('Invalid tags.json catalog taxonomy');
@@ -439,6 +472,7 @@ function render(){
     ?'<div class="section-head"><span>CATALOG</span></div><nav><button class="nav-item" data-action="open-catalog">'+icon('database',16)+'<span>Open catalog</span></button><button class="nav-item" data-action="create-catalog">'+icon('plus',16)+'<span>New catalog</span></button></nav>'
     :'<div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="section-head"><span>VIEWS</span>'+button('Save View','plus','save-view')+'</div><nav>'+viewRows+'</nav>';
   const header='<button class="catalog-chip" data-action="home">'+icon(plain?'folder':'database',16)+'<span>'+escapeHTML(plain?'Browse':state.catalog.name)+'</span>'+icon('chevron',13)+'</button>';
+  const recoveryNotice=!plain&&state.pendingTransaction?'<div class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'Catalog recovery needs manual repair':'Interrupted catalog save · '+state.pendingTransaction.applied+'/'+state.pendingTransaction.total+' changes')+'</span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'':'<button class="secondary" data-action="recover-catalog" title="Resume catalog-only save">'+icon('refresh',14)+' Resume</button>')+'</div>':'';
   const selectionActions=plain||viewsUI.inResults()?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
   const fileActions=plain||viewsUI.inResults()?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
   const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="edit-view-tags" title="Edit View tags">'+icon('tag',15)+' <span>Tags</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
@@ -454,7 +488,7 @@ function render(){
   const historyControls=plain
     ?'<button class="icon-button" title="Back" aria-label="Back" data-action="tab-back" '+(backward?'':'disabled')+'>'+icon('back')+'</button><button class="icon-button" title="Forward" aria-label="Forward" data-action="tab-forward" '+(nextward?'':'disabled')+'>'+icon('forward')+'</button>'
     :'';
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+statusControl+sortControl+groupControl+columnsButton+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+recoveryNotice+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+statusControl+sortControl+groupControl+columnsButton+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML=viewsUI.inResults()?'<button data-action="exit-catalog-tag">'+icon('database',16)+' Catalog</button><span class="crumb">'+icon('chevron',13)+'</span><button>'+icon('tag',14)+' '+escapeHTML(viewsUI.title())+'</button>':'<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
@@ -899,6 +933,7 @@ document.addEventListener('click',async event=>{
     case 'recent':recentCatalog().catch(e=>toast(errorText(e),true));break;
     case 'home':if(state.resourceSaving||state.bulkSaving||state.viewSaving)return toast('Finish catalog editing first.',true);landing();break;
     case 'add-source':addSource();break;
+    case 'recover-catalog':void recoverCatalogSave();break;
     case 'reconnect':reconnect();break;
     case 'refresh':viewsUI.inResults()?void refreshCatalogTagView():navigate(state.sourceId,[...state.parts]);break;
     case 'scan-folders':void runCatalogScan();break;
@@ -1015,7 +1050,7 @@ async function boot(){
         if(old?.handle&&typeof old.handle.queryPermission==='function'&&await old.handle.queryPermission({mode:'read'})==='granted')return await setPlainFolder(old.handle);
       }
       if(session.tabs.length){
-        state.catalog=null;state.catalogHandle=null;state.records.clear();state.taxonomy=[];state.tagFilter=null;
+        state.catalog=null;state.catalogHandle=null;state.pendingTransaction=null;state.records.clear();state.taxonomy=[];state.tagFilter=null;
         state.sources=session.tabs;state.handles=new Map(session.tabs.map(tab=>[tab.id,tab.handle]));
         state.sourceId=session.activeId;
         const active=activeFolderTab();
