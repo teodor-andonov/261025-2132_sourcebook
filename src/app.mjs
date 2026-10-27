@@ -1,5 +1,6 @@
 import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.mjs';
-import {CODE_PATTERN,validName,appendToken,ownedToken,parseFilename} from './identity.mjs';
+import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
+import {planResourceIdentity} from './catalog.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
@@ -59,10 +60,9 @@ function itemKind(item){
   return 'file';
 }
 function itemRecord(item){
-  const token=ownedToken(item.name,state.catalog?.code);
+  // Never silently bind a copied filename token to another resource's record.
   const path=[...state.parts,item.name].join('/');
   for(const record of state.records.values()){
-    if(token&&record.id===state.catalog.code+token.number)return record;
     if(record.sourceId===state.sourceId&&record.path===path)return record;
   }
   return null;
@@ -105,8 +105,25 @@ async function submitCatalog(form){
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 async function chooseCatalog(){
-  try{const h=await window.showDirectoryPicker({mode:'readwrite'});await openDirectory(h);}
+  try{const h=await window.showDirectoryPicker({mode:'read'});await openDirectory(h);}
   catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
+}
+async function refreshRecords(){
+  const records=new Map();
+  let dir;
+  try{dir=await state.catalogHandle.getDirectoryHandle('resources');}
+  catch(e){if(e.name==='NotFoundError'){state.records=records;return;}throw e;}
+  for await(const [name,handle] of dir.entries()){
+    if(handle.kind!=='file'||!name.endsWith('.json'))continue;
+    try{
+      const r=JSON.parse(await (await handle.getFile()).text());
+      if(r?.id){
+        if(records.has(r.id))throw Error('Duplicate resource identity: '+r.id);
+        records.set(r.id,r);
+      }
+    }catch(e){console.warn('Invalid resource record',name,e);}
+  }
+  state.records=records;
 }
 async function openDirectory(h){
   const config=await readJson(h,'catalog.json');
@@ -114,13 +131,13 @@ async function openDirectory(h){
   state.catalog=config;state.catalogHandle=h;
   state.sources=await readJson(h,'sources.json',[]);
   state.handles.clear();state.records.clear();
-  for(const s of state.sources){const v=await getLocal('source:'+config.id+':'+s.id);if(v)state.handles.set(s.id,v);}
-  const records=await h.getDirectoryHandle('resources',{create:true});
-  for await(const [name,handle] of records.entries()){
-    if(handle.kind!=='file'||!name.endsWith('.json'))continue;
-    try{const r=JSON.parse(await (await handle.getFile()).text());if(r?.id)state.records.set(r.id,r);}catch(e){console.warn('Invalid resource record',name,e);}
+  for(const s of state.sources){
+    try{const v=await getLocal('source:'+config.id+':'+s.id);if(v)state.handles.set(s.id,v);}
+    catch(e){console.warn('This device cannot restore source handles',e);}
   }
-  await setLocal('recent',{handle:h,name:config.name});
+  await refreshRecords(); // Read-only catalog opening must never create a directory.
+  try{await setLocal('recent',{handle:h,name:config.name});}
+  catch(e){console.warn('This browser cannot remember the recent catalog',e);}
   state.sourceId=state.sources[0]?.id||null;
   state.parts=[];state.items=[];state.selected.clear();state.search='';
   render();
@@ -128,19 +145,21 @@ async function openDirectory(h){
 }
 async function addSource(){
   try{
-    const h=await window.showDirectoryPicker({mode:'readwrite'});
+    const h=await window.showDirectoryPicker({mode:'read'});
     const item={id:crypto.randomUUID(),name:h.name};
     state.sources.push(item);
     await writeJson(state.catalogHandle,'sources.json',state.sources);
-    await setLocal('source:'+state.catalog.id+':'+item.id,h);
+    try{await setLocal('source:'+state.catalog.id+':'+item.id,h);}
+    catch(e){console.warn('Source handle will need reconnecting after reload',e);toast('Source added, but this device cannot remember its permission.',true);}
     state.handles.set(item.id,h);
     toast('Added '+h.name);await navigate(item.id,[]);
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 async function reconnect(){
   try{
-    const h=await window.showDirectoryPicker({mode:'readwrite'});
-    await setLocal('source:'+state.catalog.id+':'+state.sourceId,h);
+    const h=await window.showDirectoryPicker({mode:'read'});
+    try{await setLocal('source:'+state.catalog.id+':'+state.sourceId,h);}
+    catch(e){console.warn('Source handle cannot be persisted',e);toast('Source connected for this session only.',true);}
     state.handles.set(state.sourceId,h);
     await navigate(state.sourceId,[]);
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
@@ -206,7 +225,7 @@ function renderInspector(){
   if(state.selected.size!==1){host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' selected':'Select a resource')+'</span></div>';return;}
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   const record=itemRecord(item);
-  host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),46)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">REAL FILENAME</div><code>'+escapeHTML(item.name)+'</code></div><div class="detail"><div class="label">TAGS <small>(comma separated)</small></div><input id="tags" value="'+escapeHTML((record?.tags||[]).join(', '))+'" placeholder="Architecture, Materials…"/></div><div class="detail"><div class="label">NOTES</div><textarea rows="4" id="notes" placeholder="Write a note…">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save')+' '+(record?'Save properties':'Objectify & save')+'</button><p class="hint">'+(record?'Catalog identity: '+escapeHTML(record.id):'Stores metadata in your catalog. Adds a filename ID if safe rename is supported.')+'</p><button class="secondary full" data-action="preview">'+icon('view')+' Quick look</button>';
+  host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),46)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">REAL FILENAME</div><code>'+escapeHTML(item.name)+'</code></div><div class="detail"><div class="label">TAGS <small>(comma separated)</small></div><input id="tags" value="'+escapeHTML((record?.tags||[]).join(', '))+'" placeholder="Architecture, Materials…"/></div><div class="detail"><div class="label">NOTES</div><textarea rows="4" id="notes" placeholder="Write a note…">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save')+' '+(record?'Save properties':'Save to catalog')+'</button><p class="hint">'+(record?'Catalog identity: '+escapeHTML(record.id):'Adds a catalog identity and metadata without renaming or modifying the original file.')+'</p><button class="secondary full" data-action="preview">'+icon('view')+' Quick look</button>';
 }
 function select(item,event){
   if(event.shiftKey&&state.lastSelected){
@@ -220,27 +239,37 @@ function select(item,event){
 async function saveResource(){
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   const tags=($('#tags')?.value||'').split(',').map(x=>x.trim()).filter(Boolean),notes=$('#notes')?.value||'';
-  let record=itemRecord(item);
+  const previous=itemRecord(item);
   try{
-    if(!record){
-      const number=state.catalog.nextSequence;
-      const id=state.catalog.code+number;
-      const config={...state.catalog,nextSequence:number+1};
-      await writeJson(state.catalogHandle,'catalog.json',config);
-      state.catalog=config;
-      let renamed=false;
-      if(item.kind==='file'&&!ownedToken(item.name,config.code)&&typeof item.handle.move==='function'){
-        try{
-          const name=appendToken(item.name,config.code,number);
-          await item.handle.move(name);item.name=name;renamed=true;
-        }catch(e){console.info('Safe rename unavailable; saving catalog-only association.',e);}
-      }
-      record={formatVersion:1,id,kind:item.kind,sourceId:state.sourceId,path:[...state.parts,item.name].join('/'),tags,notes,renamed,updatedAt:new Date().toISOString()};
-    }else{record={...record,tags,notes,updatedAt:new Date().toISOString()};}
+    if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed to save metadata.');
+    const latest=await readJson(state.catalogHandle,'catalog.json');
+    if(!latest||latest.id!==state.catalog.id||latest.code!==state.catalog.code)throw Error('Catalog identity changed. Reopen the catalog.');
+    await refreshRecords();
+    const current=itemRecord(item);
+    if(previous && (!current||previous.updatedAt!==current.updatedAt)){
+      throw Error('This resource changed on disk. Reopen the catalog before saving.');
+    }
     const dir=await state.catalogHandle.getDirectoryHandle('resources',{create:true});
-    await writeJson(dir,record.id+'.json',record);state.records.set(record.id,record);
-    toast(record.renamed?'Saved with filename ID':'Saved catalog metadata');
-    await navigate(state.sourceId,[...state.parts]);
+    if(current){
+      const updated={...current,tags,notes,updatedAt:new Date().toISOString()};
+      await writeJson(dir,updated.id+'.json',updated);
+      state.records.set(updated.id,updated);
+      toast('Properties saved in catalog');
+    }else{
+      // Source files are NEVER renamed as a side effect of saving metadata.
+      const plan=planResourceIdentity(latest,[...state.records.values()],item.name,state.items.map(i=>i.name));
+      if(await readJson(dir,plan.id+'.json'))throw Error('Identity already exists. Reopen the catalog and retry.');
+      const record={formatVersion:1,id:plan.id,kind:item.kind,sourceId:state.sourceId,path:[...state.parts,item.name].join('/'),tags,notes,renamed:false,updatedAt:new Date().toISOString()};
+      await writeJson(dir,record.id+'.json',record);
+      state.records.set(record.id,record);
+      if(plan.nextSequence>latest.nextSequence){
+        const next={...latest,nextSequence:plan.nextSequence};
+        await writeJson(state.catalogHandle,'catalog.json',next);
+        state.catalog=next;
+      }
+      toast('Saved to catalog · original file unchanged');
+    }
+    renderInspector();
   }catch(e){toast('Save failed: '+errorText(e),true);}
 }
 function closePreview(){
@@ -277,11 +306,13 @@ async function newFolder(){
   const name=prompt('Name of new folder:','New folder');
   if(!name)return;
   if(!validName(name))return toast('Invalid folder name',true);
-  try{const dir=await nested(sourceHandle(),state.parts);await dir.getDirectoryHandle(name,{create:true});await navigate(state.sourceId,state.parts);toast('Folder created');}
+  try{if(!await authorized(sourceHandle(),'readwrite'))throw Error('Write access is required to create a folder.');const dir=await nested(sourceHandle(),state.parts);await dir.getDirectoryHandle(name,{create:true});await navigate(state.sourceId,state.parts);toast('Folder created');}
   catch(e){toast(errorText(e),true);}
 }
 async function importFiles(){
   try{
+    if(!await authorized(sourceHandle(),'readwrite'))throw Error('Write access is required to import files.');
+    if(typeof window.showOpenFilePicker!=='function')throw Error('File import picker is unavailable in this browser.');
     const chosen=await window.showOpenFilePicker({multiple:true});
     const dest=await nested(sourceHandle(),state.parts);
     let count=0;
@@ -346,10 +377,10 @@ document.addEventListener('keydown',event=>{
   if((event.ctrlKey||event.metaKey)&&event.key==='k'){event.preventDefault();$('#search-input')?.focus();}
 });
 async function boot(){
-  if(!('showDirectoryPicker'in window)){landing();toast('Use Chrome with the File System Access API.',true);return;}
+  if(typeof window.showDirectoryPicker!=='function'){landing();toast('This browser does not provide directory access. Folder browsing is unavailable on this device.',true);return;}
   try{
     const r=await getLocal('recent');
-    if(r?.handle&&await authorized(r.handle,'read'))return await openDirectory(r.handle);
+    if(r?.handle&&typeof r.handle.queryPermission==='function'&&await r.handle.queryPermission({mode:'read'})==='granted')return await openDirectory(r.handle);
   }catch(e){console.warn('Restore needs permission',e);}
   landing();
 }

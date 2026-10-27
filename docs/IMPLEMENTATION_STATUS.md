@@ -1,8 +1,19 @@
 # Sourcebook implementation status
 
-**Date:** 2026-10-26  
+**Date:** 2026-10-27  
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
+
+## 2026-10-27 — Read-only browsing and safe catalog-only objectification
+
+- Opening existing catalogs and sources now requests **read** access; no automatic directory creation when merely opening a catalog.
+- On startup, recent-catalog restore checks existing permission **without prompting outside a user gesture**.
+- Saving notes/tags now writes catalog records **without automatically renaming source files**. The previous implicit FileSystemHandle.move attempt has been removed.
+- Pure ID planner checks current records and filename tokens, adopts an existing own-catalog suffix, and refuses collisions/duplicate tokens; tests cover these cases.
+- Metadata save refreshes disk records, rejects a stale edit, and only asks for catalog write permission when saving.
+- New folder/import operations request source write permission explicitly. Browser storage failures leave the current session usable with a warning.
+- Offline service worker cache bumped to 0.0.2 and includes the new catalog module.
+- **Not yet validated on a physical Android or Windows device.** Multi-writer catalog allocation remains unsafe without a locking/reconciliation design.
 
 ## Delivered
 
@@ -14,7 +25,7 @@
 - Responsive gallery/list UI, image lazy previews, adjustable thumbnail density, selection and optional inspector.
 - Quick look: image, browser-embedded PDF, video and plain text/Markdown/code; file-type fallback.
 - Metadata: save notes + comma-separated tags in resources/<code><sequence>.json; sequence recorded in catalog.json.
-- Catalog-aware terminal filename tokens [ab967][c5]; call FileSystemHandle.move for a safe single-file rename only if supported, otherwise metadata-only path binding.
+- Catalog-aware terminal filename tokens [ab967][c5]; **no implicit source rename** during metadata saving (explicit, verified rename remains a future feature).
 - Basic current-folder filename search, file picker import with collision-resistant copy, new folder action.
 - Light/dark using operating system preferences; keyboard Space quick look, Backspace parent, Ctrl/Cmd+K search.
 - Automated Node syntax checks and ID parsing tests in GitHub Actions: **passed** on 2026-10-26.
@@ -33,7 +44,7 @@ GitHub Actions **verify** job is passing. **Deploy** job failed in actions/confi
 - No PDF first-page *gallery thumbnails*: PDF opens in browser quick look instead.
 - No native Android incoming share-target or browser extension.
 - No reliable browser-general move, trash/recycle bin or watchers. PWA file-manager limitations remain.
-- No simultaneous-offline-editor ID conflict reconciliation; **avoid editing the same synced catalog concurrently for now**.
+- No simultaneous-offline-editor ID conflict reconciliation; **avoid editing the same synced catalog concurrently for now**. A catalog write is not an atomic multi-file transaction.
 - Gallery has an initial 150-resource render cap + Show more, not proper virtualization yet.
 - File import copies into the current granted folder only; an advanced destination selector is not built.
 - Browser IndexedDB handle persistence may be lost after site storage reset; remap folders through Open Catalog.
