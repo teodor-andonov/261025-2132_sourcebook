@@ -3,6 +3,7 @@ import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.mjs';
 import {commitCatalogTransaction,inspectPendingCatalogTransaction,resumeCatalogTransaction} from './catalog-transactions.mjs';
+import {createCatalogBackup,inspectCatalogBackup} from './catalog-backup.mjs';
 import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {catalogTagResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
@@ -24,7 +25,7 @@ const state={
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
   tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false,resourceSaving:false,
-  scan:null,scanBusy:false,scanGeneration:0,scanProgress:'',pendingTransaction:null
+  scan:null,scanBusy:false,scanGeneration:0,scanProgress:'',pendingTransaction:null,backupBusy:false
 };
 const viewsUI=createViewsController({state,readJson,authorized,render,toast,forgetImages,navigate,refreshRecords,commitCatalogEdits,refreshPendingCatalog});
 async function refreshPendingCatalog(){
@@ -33,12 +34,13 @@ async function refreshPendingCatalog(){
   catch(error){state.pendingTransaction={error:errorText(error),conflicts:['unreadable']};}
 }
 async function commitCatalogEdits(changes){
+  if(state.backupBusy)throw Error('Wait for the catalog backup inspection to finish.');
   if(state.pendingTransaction)throw Error('Resolve the interrupted catalog save before editing.');
   try{return await commitCatalogTransaction({handle:state.catalogHandle,catalogId:state.catalog.id,changes});}
   finally{await refreshPendingCatalog();}
 }
 async function recoverCatalogSave(){
-  if(!state.catalog||state.resourceSaving||state.bulkSaving||state.viewSaving)return;
+  if(!state.catalog||state.resourceSaving||state.bulkSaving||state.viewSaving||state.backupBusy)return;
   state.resourceSaving=true;
   let recovered=false;
   try{
@@ -68,6 +70,50 @@ async function recoverCatalogSave(){
       try{await navigate(state.sourceId,[]);}catch(error){render();toast('Folder needs reconnection: '+errorText(error),true);}
     }else render();
   }
+}
+async function exportCatalogBackup(){
+  if(!state.catalog||state.backupBusy||state.resourceSaving||state.bulkSaving||state.viewSaving)
+    return toast('Finish catalog editing before exporting a backup.',true);
+  const handle=state.catalogHandle,catalog=state.catalog;
+  state.backupBusy=true;
+  try{
+    const backup=await createCatalogBackup(handle);
+    if(state.catalogHandle!==handle)throw Error('Catalog changed during backup');
+    const blob=new Blob([JSON.stringify(backup,null,2)+'\n'],{type:'application/json'});
+    const url=URL.createObjectURL(blob),link=document.createElement('a');
+    const safeName=String(catalog.name||'catalog').replace(/[^a-z0-9_-]+/gi,'-').slice(0,60)||'catalog';
+    link.href=url;
+    link.download=safeName+'-'+new Date().toISOString().slice(0,10)+'.sourcebook-backup.json';
+    document.body.append(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    toast('Metadata backup prepared: '+backup.files.length+' files. Originals unchanged.');
+  }catch(error){toast('Backup failed: '+errorText(error),true);}
+  finally{state.backupBusy=false;}
+}
+function chooseBackupForInspection(){
+  if(!state.catalog)return toast('Open a catalog first.',true);
+  openDialog('<h2>Inspect metadata backup</h2><p>Compare a previously exported backup against the open Catalog. Read-only; no restore or overwrite.</p><label>Backup JSON<input id="backup-inspect-file" type="file" accept=".json,application/json"/></label><div id="backup-inspection-result" class="backup-results" aria-live="polite"></div><div class="dialog-actions"><button type="button" class="primary" data-action="dismiss">Done</button></div>');
+}
+async function inspectBackupFile(file){
+  const target=$('#backup-inspection-result');
+  if(!target||!file)return;
+  if(state.backupBusy)return;
+  if(file.size>32*1024*1024){target.textContent='Backup exceeds the 32 MiB file input limit.';return;}
+  const handle=state.catalogHandle;
+  state.backupBusy=true;target.textContent='Verifying checksums and comparing metadata…';
+  try{
+    const parsed=JSON.parse(await file.text());
+    const report=await inspectCatalogBackup(handle,parsed);
+    if(state.catalogHandle!==handle)throw Error('Catalog changed during inspection');
+    const changed=report.entries.filter(x=>x.status!=='unchanged');
+    const summary=report.counts;
+    target.innerHTML='<p>'+summary.unchanged+' unchanged · '+summary.changed+' changed · '+summary['missing-now']+' missing now · '+summary['added-since-backup']+' added since backup.</p>'+
+      (report.hasPendingJournal||report.currentPendingJournal?'<p>Recovery journal present. Do not assume this Catalog is safe to edit.</p>':'')+
+      (changed.length?'<div class="backup-diff">'+changed.slice(0,100).map(x=>'<div><strong>'+escapeHTML(x.status)+'</strong> · '+escapeHTML(x.path)+'</div>').join('')+
+      (changed.length>100?'<p>Showing first 100 of '+changed.length+' differences.</p>':'')+'</div>':'<p>Metadata matches this backup.</p>')+
+      '<p>Inspection does not restore or modify any files.</p>';
+  }catch(error){target.textContent='Cannot inspect backup: '+errorText(error);}
+  finally{state.backupBusy=false;}
 }
 function invalidateScan(){++state.scanGeneration;state.scan=null;state.scanBusy=false;state.scanProgress='';}
 let tabPersistQueue=Promise.resolve();
@@ -297,7 +343,7 @@ async function refreshRecords(){
   state.records=records;
 }
 async function openDirectory(h){
-  if(state.bulkSaving||state.viewSaving||state.resourceSaving)throw Error('Finish catalog editing before switching catalogs.');
+  if(state.bulkSaving||state.viewSaving||state.resourceSaving||state.backupBusy)throw Error('Finish catalog editing or backup inspection before switching catalogs.');
   const config=await readJson(h,'catalog.json');
   if(!config?.id||!CODE_PATTERN.test(config.code))throw Error('Choose a .sb directory containing catalog.json.');
   invalidateScan();
@@ -322,7 +368,7 @@ async function openDirectory(h){
   if(state.sourceId)await navigate(state.sourceId,[]);
 }
 async function addSource(){
-  if(state.bulkSaving||state.resourceSaving)return toast('Finish metadata editing before registering folders.',true);
+  if(state.bulkSaving||state.resourceSaving||state.backupBusy)return toast('Finish metadata editing or backup inspection before registering folders.',true);
   try{
     const h=await window.showDirectoryPicker({mode:'read'});
     if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed to register a folder.');
@@ -746,7 +792,7 @@ function select(item,event){
   refreshSelectionUI();renderInspector();
 }
 async function bulkTags(mode){
-  if(!state.catalog||state.bulkSaving||state.resourceSaving||state.selected.size<2)return;
+  if(!state.catalog||state.bulkSaving||state.resourceSaving||state.backupBusy||state.selected.size<2)return;
   if(!commitTagInput())return;
   const items=state.items.filter(item=>state.selected.has(item.id));
   if(items.length!==state.selected.size)return toast('Selection changed. Select again.',true);
@@ -787,7 +833,7 @@ async function bulkTags(mode){
 }
 async function saveResource(){
   if(!state.catalog)return;
-  if(state.bulkSaving||state.resourceSaving)return toast('Finish the current metadata save first.',true);
+  if(state.bulkSaving||state.resourceSaving||state.backupBusy)return toast('Finish the current metadata save or backup inspection first.',true);
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   if(!commitTagInput())return;
   const tags=[...state.tagDraft],notes=$('#notes')?.value||'';
@@ -982,6 +1028,7 @@ document.addEventListener('submit',event=>{
     void task.then(ok=>{if(ok)$('#dialog')?.remove();});
   }
 });
+document.addEventListener('change',event=>{if(event.target.id==='backup-inspect-file')void inspectBackupFile(event.target.files?.[0]);});
 document.addEventListener('input',event=>{
   if(event.target.id==='tag-input')showTagSuggestions();
   if(event.target.id==='view-tag-search'){
@@ -1041,6 +1088,8 @@ document.addEventListener('click',async event=>{
     case 'home':if(state.resourceSaving||state.bulkSaving||state.viewSaving)return toast('Finish catalog editing first.',true);landing();break;
     case 'add-source':addSource();break;
     case 'recover-catalog':void recoverCatalogSave();break;
+    case 'export-catalog-backup':void exportCatalogBackup();break;
+    case 'inspect-catalog-backup':chooseBackupForInspection();break;
     case 'reconnect':reconnect();break;
     case 'refresh':viewsUI.inResults()?void refreshCatalogTagView():navigate(state.sourceId,[...state.parts]);break;
     case 'scan-folders':void runCatalogScan();break;
@@ -1062,7 +1111,7 @@ document.addEventListener('click',async event=>{
     case 'clear-selection':state.selected.clear();state.lastSelected=null;state.selectionMode=false;render();break;
     case 'bulk-add':void bulkTags('add');break;
     case 'bulk-remove':void bulkTags('remove');break;
-    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label><div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
+    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect backup</button></div>':'')+'<div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
     case 'reset-accent':applyAccent('#5276bd');if($('#accent-color'))$('#accent-color').value='#5276bd';break;
     case 'save-resource':saveResource();break;
     case 'preview':showPreview();break;

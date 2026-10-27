@@ -254,3 +254,13 @@ video.side-preview-media{max-height:240px}
   .side-preview{min-height:130px}.side-preview-content{max-height:220px}.side-preview-pdf{height:210px}.side-preview-empty{min-height:130px}
   .layout-buttons{gap:0;padding:1px}.layout-buttons .icon-button{width:27px;height:27px}
 }
+
+/* Read-only catalog backup controls live inside Settings, not the browser toolbar. */
+.backup-tools{margin-top:18px;padding-top:14px;border-top:1px solid var(--border,rgba(127,127,127,.2))}
+.backup-tools strong{font-size:12px;font-weight:600}
+.backup-tools p,.backup-results p{font-size:12px;line-height:1.5;opacity:.8}
+.backup-tools button{margin:4px 4px 4px 0}
+.backup-results{max-width:100%;font-size:12px}
+.backup-diff{max-height:230px;overflow:auto;border:1px solid var(--border,rgba(127,127,127,.2));border-radius:6px;padding:8px;overflow-wrap:anywhere}
+.backup-diff>div{padding:4px 0}
+.backup-diff strong{font-weight:600}
