@@ -15,6 +15,14 @@
 - Offline service worker cache bumped to 0.0.2 and includes the new catalog module.
 - **Not yet validated on a physical Android or Windows device.** Multi-writer catalog allocation remains unsafe without a locking/reconciliation design.
 
+## 2026-10-27 — Smooth gallery interaction fixes
+
+- Selecting resources now updates selection state in-place rather than rebuilding the entire gallery and rereading every thumbnail.
+- Thumbnail object URLs are reused during current-folder filtering and selection; old URLs and observers are released on navigation.
+- Mobile inspector defaults closed, preventing it from covering the initial gallery.
+- Expired source permission now displays the reconnect state instead of a misleading empty folder.
+- Service worker cache bumped to 0.0.3. These are code-level changes; runtime performance/device verification is still pending.
+
 ## Delivered
 
 - Browser-based static PWA: HTML/CSS/JavaScript ES modules, manifest, service worker cache; no backend/build dependency.

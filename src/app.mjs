@@ -8,8 +8,8 @@ const state={
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,
   search:'', view:localStorage.getItem('sb-view')||'gallery',
   size:Number(localStorage.getItem('sb-size'))||164,
-  inspector:true, sidebar:false, loading:false, request:0,
-  imageUrls:new Set(), previewUrl:null, previewId:null, pageCount:150
+  inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
+  imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150
 };
 const glyphs={
   book:'M3 3h7v18H3z M10 7h4v14h-4z M16 4l5 17 M16 5l3-1',
@@ -48,7 +48,7 @@ function toast(text,warning=false){
   const el=document.createElement('div');el.id='toast';el.className='toast '+(warning?'danger':'');el.textContent=text;document.body.append(el);
   setTimeout(()=>el.remove(),4500);
 }
-function forgetImages(){for(const url of state.imageUrls)URL.revokeObjectURL(url);state.imageUrls.clear();}
+function forgetImages(){state.observer?.disconnect();state.observer=null;for(const url of state.imageUrls)URL.revokeObjectURL(url);state.imageUrls.clear();state.thumbnailUrls.clear();}
 function cleanName(name){return parseFilename(name).displayName;}
 function currentSource(){return state.sources.find(x=>x.id===state.sourceId);}
 function sourceHandle(){return state.handles.get(state.sourceId);}
@@ -171,7 +171,7 @@ async function navigate(id,parts){
   state.loading=true;state.items=[];forgetImages();render();
   try{
     const h=sourceHandle();if(!h)throw Error('This source is disconnected on this device.');
-    if(!await authorized(h))throw Error('Permission expired; reconnect the source.');
+    if(!await authorized(h)){state.handles.delete(id);throw Error('Permission expired; reconnect the source.');}
     const folder=await nested(h,parts);const items=[];
     for await(const [name,handle] of folder.entries()){
       if(request!==state.request)return;
@@ -194,6 +194,7 @@ function render(){
 }
 function renderItems(){
   const host=$('#items');if(!host)return;
+  state.observer?.disconnect();state.observer=null;
   host.className=state.view;
   host.style.setProperty('--size',state.size+'px');
   const items=state.items.filter(x=>cleanName(x.name).toLowerCase().includes(state.search.toLowerCase()));
@@ -208,17 +209,34 @@ function renderItems(){
   const watcher=new IntersectionObserver(entries=>{
     for(const entry of entries)if(entry.isIntersecting){watcher.unobserve(entry.target);thumbnail(entry.target);}
   },{root:$('#scroller'),rootMargin:'240px'});
+  state.observer=watcher;
   host.querySelectorAll('.resource:has(.thumbnail)').forEach(el=>watcher.observe(el));
   $('#status').textContent=state.selected.size?state.selected.size+' selected':'Local-first · '+items.length+' resources';
 }
 async function thumbnail(node){
   const item=state.items.find(i=>i.id===node.dataset.item);
   if(!item||!node.isConnected)return;
+  const img=$('.thumbnail',node);
+  if(!img)return;
+  const cached=state.thumbnailUrls.get(item.id);
+  if(cached){
+    img.onload=()=>node.classList.add('loaded');
+    img.src=cached;
+    if(img.complete&&img.naturalWidth)node.classList.add('loaded');
+    return;
+  }
+  const request=state.request;
   try{
-    const url=URL.createObjectURL(await item.handle.getFile());state.imageUrls.add(url);
-    if(!node.isConnected){URL.revokeObjectURL(url);state.imageUrls.delete(url);return;}
-    const img=$('.thumbnail',node);
-    if(img){img.src=url;img.onload=()=>node.classList.add('loaded');img.onerror=()=>{URL.revokeObjectURL(url);state.imageUrls.delete(url);};}
+    const file=await item.handle.getFile();
+    if(!node.isConnected||request!==state.request)return;
+    const url=URL.createObjectURL(file);
+    state.imageUrls.add(url);state.thumbnailUrls.set(item.id,url);
+    img.onload=()=>node.classList.add('loaded');
+    img.onerror=()=>{
+      if(state.thumbnailUrls.get(item.id)===url)state.thumbnailUrls.delete(item.id);
+      URL.revokeObjectURL(url);state.imageUrls.delete(url);
+    };
+    img.src=url;
   }catch{}
 }
 function renderInspector(){
@@ -228,6 +246,15 @@ function renderInspector(){
   const record=itemRecord(item);
   host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),46)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">REAL FILENAME</div><code>'+escapeHTML(item.name)+'</code></div><div class="detail"><div class="label">TAGS <small>(comma separated)</small></div><input id="tags" value="'+escapeHTML((record?.tags||[]).join(', '))+'" placeholder="Architecture, Materials…"/></div><div class="detail"><div class="label">NOTES</div><textarea rows="4" id="notes" placeholder="Write a note…">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save')+' '+(record?'Save properties':'Save to catalog')+'</button><p class="hint">'+(record?'Catalog identity: '+escapeHTML(record.id):'Adds a catalog identity and metadata without renaming or modifying the original file.')+'</p><button class="secondary full" data-action="preview">'+icon('view')+' Quick look</button>';
 }
+function refreshSelectionUI(){
+  for(const node of document.querySelectorAll('#items [data-item]')){
+    const selected=state.selected.has(node.dataset.item);
+    node.classList.toggle('selected',selected);
+    node.setAttribute('aria-selected',String(selected));
+  }
+  const status=$('#status');
+  if(status)status.textContent=state.selected.size?state.selected.size+' selected':'Local-first · '+state.items.length+' resources';
+}
 function select(item,event){
   if(event.shiftKey&&state.lastSelected){
     const a=state.items.findIndex(i=>i.id===state.lastSelected),b=state.items.findIndex(i=>i.id===item.id);
@@ -235,7 +262,7 @@ function select(item,event){
   }else if(event.ctrlKey||event.metaKey){if(state.selected.has(item.id))state.selected.delete(item.id);else state.selected.add(item.id);}
   else{state.selected.clear();state.selected.add(item.id);}
   state.lastSelected=item.id;
-  renderItems();renderInspector();
+  refreshSelectionUI();renderInspector();
 }
 async function saveResource(){
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
