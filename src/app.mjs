@@ -4,6 +4,7 @@ import {planResourceIdentity} from './catalog.mjs';
 import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.mjs';
 import {commitCatalogTransaction,inspectPendingCatalogTransaction,resumeCatalogTransaction} from './catalog-transactions.mjs';
 import {createCatalogBackup,inspectCatalogBackup} from './catalog-backup.mjs';
+import {planMissingResourceRestore,restoreMissingResourceRecords} from './catalog-restore.mjs';
 import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {catalogTagResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
@@ -25,7 +26,7 @@ const state={
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
   tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false,resourceSaving:false,
-  scan:null,scanBusy:false,scanGeneration:0,scanProgress:'',pendingTransaction:null,backupBusy:false
+  scan:null,scanBusy:false,scanGeneration:0,scanProgress:'',pendingTransaction:null,backupBusy:false,backupRestorePlan:null,backupRestoreSource:null
 };
 const viewsUI=createViewsController({state,readJson,authorized,render,toast,forgetImages,navigate,refreshRecords,commitCatalogEdits,refreshPendingCatalog});
 async function refreshPendingCatalog(){
@@ -92,12 +93,14 @@ async function exportCatalogBackup(){
 }
 function chooseBackupForInspection(){
   if(!state.catalog)return toast('Open a catalog first.',true);
-  openDialog('<h2>Inspect metadata backup</h2><p>Compare a previously exported backup against the open Catalog. Read-only; no restore or overwrite.</p><label>Backup JSON<input id="backup-inspect-file" type="file" accept=".json,application/json"/></label><div id="backup-inspection-result" class="backup-results" aria-live="polite"></div><div class="dialog-actions"><button type="button" class="primary" data-action="dismiss">Done</button></div>');
+  state.backupRestorePlan=null;state.backupRestoreSource=null;
+  openDialog('<h2>Inspect metadata backup</h2><p>Verify and compare a metadata-only backup. You may explicitly restore missing resource records; existing resource records and ordinary files are preserved; the Catalog ID counter may advance.</p><label>Backup JSON<input id="backup-inspect-file" type="file" accept=".json,application/json"/></label><div id="backup-inspection-result" class="backup-results" aria-live="polite"></div><div class="dialog-actions"><button type="button" class="primary" data-action="dismiss">Done</button></div>');
 }
 async function inspectBackupFile(file){
   const target=$('#backup-inspection-result');
   if(!target||!file)return;
   if(state.backupBusy)return;
+  state.backupRestorePlan=null;state.backupRestoreSource=null;
   if(file.size>32*1024*1024){target.textContent='Backup exceeds the 32 MiB file input limit.';return;}
   const handle=state.catalogHandle;
   state.backupBusy=true;target.textContent='Verifying checksums and comparing metadata…';
@@ -105,15 +108,62 @@ async function inspectBackupFile(file){
     const parsed=JSON.parse(await file.text());
     const report=await inspectCatalogBackup(handle,parsed);
     if(state.catalogHandle!==handle)throw Error('Catalog changed during inspection');
-    const changed=report.entries.filter(x=>x.status!=='unchanged');
-    const summary=report.counts;
+    let plan=null,restoreError='';
+    try{plan=await planMissingResourceRestore(handle,parsed);}
+    catch(error){restoreError=errorText(error);}
+    if(plan){state.backupRestorePlan=plan;state.backupRestoreSource=parsed;}
+    const changed=report.entries.filter(x=>x.status!=='unchanged'),summary=report.counts;
+    const rows=plan?.selectedPaths||[];
     target.innerHTML='<p>'+summary.unchanged+' unchanged · '+summary.changed+' changed · '+summary['missing-now']+' missing now · '+summary['added-since-backup']+' added since backup.</p>'+
-      (report.hasPendingJournal||report.currentPendingJournal?'<p>Recovery journal present. Do not assume this Catalog is safe to edit.</p>':'')+
+      (report.hasPendingJournal||report.currentPendingJournal?'<p>Recovery journal present. Resolve it before restoring.</p>':'')+
       (changed.length?'<div class="backup-diff">'+changed.slice(0,100).map(x=>'<div><strong>'+escapeHTML(x.status)+'</strong> · '+escapeHTML(x.path)+'</div>').join('')+
       (changed.length>100?'<p>Showing first 100 of '+changed.length+' differences.</p>':'')+'</div>':'<p>Metadata matches this backup.</p>')+
-      '<p>Inspection does not restore or modify any files.</p>';
-  }catch(error){target.textContent='Cannot inspect backup: '+errorText(error);}
+      (restoreError?'<p>Restoration unavailable: '+escapeHTML(restoreError)+'</p>':'')+
+      (plan?.nonResourceMissing.length?'<p>Missing non-resource metadata is NOT restored: '+escapeHTML(plan.nonResourceMissing.join(', '))+'</p>':'')+
+      (rows.length?'<div class="backup-recovery"><strong>Recover missing resource metadata</strong><p>Select records to recreate (up to 250 per batch). Existing/changed records are preserved. This does not restore missing original files.</p><div class="backup-restore-list">'+rows.map(path=>'<label><input type="checkbox" data-backup-restore-path="'+escapeHTML(path)+'" checked/><span>'+escapeHTML(path)+'</span></label>').join('')+'</div>'+
+        (plan.remaining?'<p>'+plan.remaining+' additional missing records require another inspected batch.</p>':'')+
+        '<button type="button" class="secondary" data-action="restore-missing-backup-records">Restore selected metadata…</button></div>':'')+
+      '<p>Inspection is read-only. Restoration requires explicit confirmation and catalog write permission.</p>';
+  }catch(error){state.backupRestorePlan=null;state.backupRestoreSource=null;target.textContent='Cannot inspect backup: '+errorText(error);}
   finally{state.backupBusy=false;}
+}
+async function restoreMissingBackupRecords(){
+  if(!state.catalog||state.backupBusy||state.resourceSaving||state.bulkSaving||state.viewSaving)
+    return toast('Finish the current Catalog operation first.',true);
+  const preview=state.backupRestorePlan,backup=state.backupRestoreSource,handle=state.catalogHandle;
+  const selected=[...document.querySelectorAll('[data-backup-restore-path]:checked')].map(input=>input.dataset.backupRestorePath);
+  if(!preview||!backup||!selected.length)return toast('Select missing metadata records to restore.',true);
+  state.backupBusy=true;
+  let restored=0;
+  try{
+    const approved=await planMissingResourceRestore(handle,backup,{selectedPaths:selected});
+    if(approved.signature!==preview.signature)throw Error('Catalog changed since inspection. Inspect the backup again.');
+    if(!confirm('Restore '+selected.length+' missing Catalog resource record(s)? This writes only Catalog JSON, never overwrites existing resource records or ordinary files, and may advance the Catalog ID counter.'))return;
+    if(!await authorized(handle,'readwrite'))throw Error('Catalog write permission is required for restoration.');
+    const result=await restoreMissingResourceRecords(handle,backup,approved);
+    if(state.catalogHandle!==handle)throw Error('Catalog switched during restoration');
+    restored=result.restored;
+    state.catalog=await readJson(handle,'catalog.json');
+    await refreshRecords();invalidateScan();
+    await refreshPendingCatalog();
+    state.backupRestorePlan=null;state.backupRestoreSource=null;
+    $('#dialog')?.remove();
+    toast('Recovered '+restored+' resource record(s). Ordinary files unchanged.');
+  }catch(error){
+    await refreshPendingCatalog();
+    state.backupRestorePlan=null;state.backupRestoreSource=null;
+    const target=$('#backup-inspection-result');
+    if(target)target.textContent='Restore stopped: '+errorText(error)+'. Reinspect the backup before retrying. If a recovery journal is pending, use Resume.';
+    toast('Restore stopped: '+errorText(error),true);
+  }finally{
+    state.backupBusy=false;
+    if(restored){
+      state.selected.clear();
+      if(viewsUI.inResults())await refreshCatalogTagView();
+      else if(state.sourceId)await navigate(state.sourceId,[...state.parts]).catch(()=>render());
+      else render();
+    }else if(state.pendingTransaction)render();
+  }
 }
 function invalidateScan(){++state.scanGeneration;state.scan=null;state.scanBusy=false;state.scanProgress='';}
 let tabPersistQueue=Promise.resolve();
@@ -409,7 +459,7 @@ async function reconnect(){
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 async function navigate(id,parts,historyPosition=null){
-  if(state.bulkSaving||state.viewSaving||state.resourceSaving)return toast('Finish catalog editing before navigating.',true);
+  if(state.bulkSaving||state.viewSaving||state.resourceSaving||state.backupBusy)return toast('Finish catalog editing or backup recovery before navigating.',true);
   state.catalogTagView=null;state.activeViewId=null;
   state.sourceId=id;state.parts=parts;state.search='';state.selected.clear();state.pageCount=150;
   state.tagDraftItem=null;state.tagFilter=null;state.selectionMode=false;
@@ -471,7 +521,7 @@ async function revealCatalogResult(item){
   else toast('Resource is no longer present at its catalog path.',true);
 }
 function openCatalogTagView(path){
-  if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving)return;
+  if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving||state.backupBusy)return;
   if(state.catalogTagView===path){void navigate(state.sourceId,[...state.parts]);return;}
   try{
     state.catalogTagView=path;state.activeViewId=null;state.tagFilter=null;state.search='';state.selected.clear();
@@ -1090,6 +1140,7 @@ document.addEventListener('click',async event=>{
     case 'recover-catalog':void recoverCatalogSave();break;
     case 'export-catalog-backup':void exportCatalogBackup();break;
     case 'inspect-catalog-backup':chooseBackupForInspection();break;
+    case 'restore-missing-backup-records':void restoreMissingBackupRecords();break;
     case 'reconnect':reconnect();break;
     case 'refresh':viewsUI.inResults()?void refreshCatalogTagView():navigate(state.sourceId,[...state.parts]);break;
     case 'scan-folders':void runCatalogScan();break;
@@ -1111,7 +1162,7 @@ document.addEventListener('click',async event=>{
     case 'clear-selection':state.selected.clear();state.lastSelected=null;state.selectionMode=false;render();break;
     case 'bulk-add':void bulkTags('add');break;
     case 'bulk-remove':void bulkTags('remove');break;
-    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect backup</button></div>':'')+'<div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
+    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button></div>':'')+'<div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
     case 'reset-accent':applyAccent('#5276bd');if($('#accent-color'))$('#accent-color').value='#5276bd';break;
     case 'save-resource':saveResource();break;
     case 'preview':showPreview();break;

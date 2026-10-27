@@ -264,3 +264,13 @@ video.side-preview-media{max-height:240px}
 .backup-diff{max-height:230px;overflow:auto;border:1px solid var(--border,rgba(127,127,127,.2));border-radius:6px;padding:8px;overflow-wrap:anywhere}
 .backup-diff>div{padding:4px 0}
 .backup-diff strong{font-weight:600}
+
+/* Metadata recovery remains a compact, scrollable dialog on desktop and touch. */
+.dialog:has(.backup-results){width:min(600px,100%);max-height:92dvh;overflow-y:auto}
+.backup-recovery{margin:12px 0;padding:12px 0;border-top:1px solid var(--border)}
+.backup-recovery>strong{font-size:12px}
+.backup-recovery>p{margin:6px 0 9px}
+.backup-restore-list{max-height:210px;overflow:auto;border:1px solid var(--border);border-radius:7px;padding:5px}
+.dialog .backup-restore-list label{display:flex;flex-direction:row;align-items:center;gap:9px;padding:5px;font-size:12px;font-weight:400;overflow-wrap:anywhere;cursor:pointer}
+.dialog .backup-restore-list input[type=checkbox]{width:16px;height:16px;flex:none;margin:0;padding:0;accent-color:var(--accent)}
+.backup-recovery button{margin-top:10px}
