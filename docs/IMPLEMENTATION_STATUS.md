@@ -4,6 +4,15 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — Catalog-wide nested Tag discovery (V0.0.15 candidate)
+
+- Clicking a Tag or pinned tag shortcut opens a **catalog-wide result view** across all registered roots, including matching descendants and legacy string-tag records; it no longer silently restricts sidebar tag browsing to the last open folder. This is a transient browser view, **not** another collection/smart-folder entity or physical folder Tab.
+- Result cards show their originating registered root/folder path; filename/tag search works within the results. A read-only inspector shows tags and a **Show in folder** action, which returns to the actual physical directory and selects that resource.
+- Image thumbnail and preview handles resolve lazily through already-granted source folders. Offline or revoked folder permissions do not trigger hidden permission prompts; metadata results still remain visible until reconnected.
+- Catalog-wide results cannot currently be bulk-tagged in place: explicitly reveal the resource in its physical folder first. This avoids applying current-folder writes to the wrong registered root. Search grouping, saved Views and full cross-root bulk editing remain future work.
+- Added pure `catalogTagResults` search-index tests for nested descendants, multiple sources, legacy tags, malformed paths, duplicates and deterministic ordering. No source files or catalog records are modified by this discovery feature.
+- Bumped service worker cache to `sourcebook-shell-0.0.15-ta-icons-1`. GitHub CI and physical Windows/Android acceptance remain pending until confirmed; screenshots and Pages remain manual-only and were not triggered.
+
 ## 2026-10-27 — Bulk nested Tags and safe catalog-only writes (V0.0.14 candidate)
 
 - Added touch-friendly Select mode, Ctrl/Cmd-click, Shift range and Ctrl/Cmd+A (current filtered folder results). Shift selection excludes resources hidden by active filters; the Clear action tracks selection without redrawing the gallery. The multi-resource inspector now supports Add/Remove nested tags using hashtag pills and keyboard suggestions, with a limit of 250 selected resources per operation.

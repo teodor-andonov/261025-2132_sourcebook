@@ -33,7 +33,7 @@ The first polished editable property is a **tag**. Avoid constructing a generic 
 - Typing slash-separated paths creates nested tags; existing tags appear as selectable suggestions.
 - Tags have stable catalog-local IDs and parent links, stored in \`tags.json\`.
 - Resource metadata stores \`tagIds\` in \`resources/*.json\`, so future tag renames/reparenting won't require rewriting every resource record.
-- Sidebar preserves the nested hierarchy while optional pinned shortcuts appear above it. Selecting a tag filters the **currently browsed folder**, including descendants; full catalog-wide tag browsing comes later.
+- Sidebar preserves the nested hierarchy while optional pinned shortcuts appear above it. Selecting a tag opens a **catalog-wide read-only result view**, including descendant matches across registered roots; folder-scoped hashtag search remains available within a physical folder.
 - Older resource records containing plain string \`tags\` remain readable. Their tags convert to stable IDs on explicit save.
 - Tags aren't metadata colors: use the active accent only to indicate UI selection/focus, not permanent different colors for every tag.
 - Keep "Save" explicit while the prototype lacks robust write queue / undo. Later aim for low-friction auto-save after safe transactional catalog writes.

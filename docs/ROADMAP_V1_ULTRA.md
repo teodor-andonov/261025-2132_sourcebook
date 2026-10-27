@@ -640,13 +640,13 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 - [x] Early V0.0 previews: stable nested taxonomy, hashtag pills, keyboard suggestions and current-folder tag search (CI passed; device validation pending).
 - [x] Pin/unpin shortcuts using stable tag IDs (V0.0.8 implementation; independent device validation pending).
 - [ ] Bulk assign/remove tags with safe writes and conflict checks.
-- [ ] Tag rename/reparent/merge by ID, catalog-wide tag browsing, pinned discovery.
+- [ ] Tag rename/reparent/merge by ID. Catalog-wide nested-tag browsing and pinned discovery implemented in V0.0.15 (CI/device validation pending).
 - [ ] Keep original files untouched; no manual Collections database or early custom-property framework.
 
 **Gate:** Curate, pin, reopen and search a nested tag without changing ordinary source files.
 
 ## 31 — V0.4: Saved Views
-- [ ] Safe catalog-wide metadata search, source filtering, offline/missing-file handling.
+- [ ] Full catalog-wide metadata search and multi-criteria filtering; read-only catalog-wide tag-result browser added in V0.0.15 with metadata-only offline results.
 - [ ] Scope/query builder for names, types, dates, sources and tag descendants, with lightweight filter chips.
 - [ ] Save named **Views** as one object combining query/filter and presentation (gallery/list/table, sort/group/density).
 - [ ] Rename, edit, pin and delete Views; no separate Smart Folder records.

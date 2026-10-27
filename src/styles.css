@@ -109,3 +109,8 @@
 .inspector .hint{line-height:1.5}
 
 .text-button[hidden]{display:none}
+
+/* Global tag discovery reuses the existing browser surface. */
+.catalog-results .resource .filetype{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--muted)}
+.catalog-results .resource .art{background:var(--panel2)}
+.catalog-results .tag-pill{display:inline-flex;margin-right:4px;margin-bottom:4px}
