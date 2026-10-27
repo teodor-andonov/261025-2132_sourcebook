@@ -1,5 +1,5 @@
-const CACHE='sourcebook-shell-0.0.15-ta-icons-1';
-const FILES=['./','./index.html','./src/styles.css','./src/app.mjs','./src/storage.mjs','./src/identity.mjs','./src/catalog.mjs','./src/catalog-folders.mjs','./src/catalog-search.mjs','./src/bulk-tags.mjs','./src/navigation.mjs','./src/workspace.mjs','./src/tags.mjs','./assets/icon.svg','./assets/icon-192.png','./assets/icon-512.png','./assets/icon-maskable-192.png','./assets/icon-maskable-512.png','./manifest.webmanifest'];
+const CACHE='sourcebook-shell-0.0.16-views';
+const FILES=['./','./index.html','./src/styles.css','./src/app.mjs','./src/storage.mjs','./src/identity.mjs','./src/catalog.mjs','./src/catalog-folders.mjs','./src/catalog-search.mjs','./src/views.mjs','./src/bulk-tags.mjs','./src/navigation.mjs','./src/workspace.mjs','./src/tags.mjs','./assets/icon.svg','./assets/icon-192.png','./assets/icon-512.png','./assets/icon-maskable-192.png','./assets/icon-maskable-512.png','./manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('sourcebook-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||new URL(e.request.url).origin!==self.location.origin)return;e.respondWith(caches.match(e.request).then(hit=>hit||fetch(e.request)));});
