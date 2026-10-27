@@ -134,6 +134,8 @@
 .view-tag-option[hidden]{display:none}
 /* Read-only discovery stays in the existing View toolbar, never a new panel. */
 .scan-status{font-size:10px;color:var(--muted);max-width:155px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1}
+.scan-subfolder{font:inherit;font-size:11px;min-width:75px;width:125px;max-width:145px;padding:5px;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:6px}
+.scan-subfolder:disabled{opacity:.5}
 @media(max-width:760px){.scan-status{display:none}}
 
 
