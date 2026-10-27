@@ -1,6 +1,7 @@
 import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.mjs';
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
+import {nextSelectionIndex} from './navigation.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
@@ -399,10 +400,27 @@ document.addEventListener('dblclick',event=>{
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'){closePreview();$('#dialog')?.remove();return;}
   if(state.previewId){if(event.key==='ArrowRight')previewStep(1);if(event.key==='ArrowLeft')previewStep(-1);return;}
-  if(event.target.matches('input,textarea'))return;
+  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('#search-input')?.focus();return;}
+  if(event.target.matches('input,textarea')||event.ctrlKey||event.metaKey||event.altKey)return;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key)){
+    const nodes=[...document.querySelectorAll('#items .resource[data-item]')];
+    if(!nodes.length)return;
+    event.preventDefault();
+    const columns=state.view==='list'?1:nodes.filter(node=>node.offsetTop===nodes[0].offsetTop).length;
+    const current=nodes.findIndex(node=>node.dataset.item===state.lastSelected);
+    const target=nextSelectionIndex(current,event.key,nodes.length,columns);
+    const next=nodes[target];
+    const item=state.items.find(x=>x.id===next.dataset.item);
+    if(item){select(item,event);next.focus({preventScroll:true});next.scrollIntoView({block:'nearest',inline:'nearest'});}
+    return;
+  }
+  if(event.key==='Enter'){
+    const selected=state.items.find(item=>item.id===state.lastSelected);
+    if(selected){event.preventDefault();showPreview(selected);}
+    return;
+  }
   if(event.key===' '){event.preventDefault();showPreview();}
   if(event.key==='Backspace'&&state.parts.length){event.preventDefault();navigate(state.sourceId,state.parts.slice(0,-1));}
-  if((event.ctrlKey||event.metaKey)&&event.key==='k'){event.preventDefault();$('#search-input')?.focus();}
 });
 async function boot(){
   if(typeof window.showDirectoryPicker!=='function'){landing();toast('This browser does not provide directory access. Folder browsing is unavailable on this device.',true);return;}

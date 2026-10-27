@@ -1,0 +1,13 @@
+// Pure, testable selection movement for Sourcebook's gallery and list.
+export function nextSelectionIndex(current,key,count,columns=1) {
+  if(!Number.isInteger(count)||count<=0)return -1;
+  columns=Math.max(1,Math.floor(columns)||1);
+  if(key==='Home')return 0;
+  if(key==='End')return count-1;
+  if(current<0)return 0;
+  if(key==='ArrowLeft')return Math.max(0,current-1);
+  if(key==='ArrowRight')return Math.min(count-1,current+1);
+  if(key==='ArrowUp')return Math.max(0,current-columns);
+  if(key==='ArrowDown')return Math.min(count-1,current+columns);
+  return Math.min(count-1,current);
+}
