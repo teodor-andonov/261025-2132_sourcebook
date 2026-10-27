@@ -19,7 +19,7 @@ Previously a bulk Tag save could update tags.json and catalog.json, then fail af
 - Commit 85dff32: corrected replay test; CI 40541989035 passed.
 - Commits cb5c62c, 2689d19, 64ca024 and 444d509: Views, recovery UI, metadata integration and identity/no-op fixes; corresponding CI runs passed.
 - Commit 8b81611: Folder binding and permission correction; CI 40542438446 passed 127 Node tests and JavaScript syntax checks.
-- The later navigation-refresh commit ea2b53d and documentation are not covered by the above run. Consult GitHub Actions for their CI status.
+- Final code commit ea2b53d passed [CI run 40542514229](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40542514229) (127 Node tests and JavaScript syntax checks). Documentation-only commits do not trigger code CI.
 - No browser-interaction fixture was run; no screenshots or visual captures were generated or committed; no Pages deployment or release was triggered; no physical Windows or Android test was performed.
 
 ## Explicit limitations and next steps
