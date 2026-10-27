@@ -131,3 +131,36 @@ test('read-only backup inspection reports conflicts while verified export refuse
   assert.equal(result.conflictCopies.counts.divergent,1);
   await assert.rejects(createCatalogBackup(h),/Syncthing conflict/);
 });
+
+test('a conflict appearing during a journaled write leaves the journal and requires manual resolution',async()=>{
+  class WritableDir extends MemoryDir{
+    async getFileHandle(name,{create=false}={}){
+      if(!this.files.has(name)){
+        if(!create)throw Object.assign(Error('missing'),{name:'NotFoundError'});
+        this.files.set(name,'');
+      }
+      return {getFile:async()=>({text:async()=>this.files.get(name)}),
+        createWritable:async()=>{
+          let data;
+          return {write:async value=>{data=value;},close:async()=>{
+            this.files.set(name,data);this.writes.push(name);
+            if(name==='tags.json'&&this.injectConflict){
+              this.injectConflict=false;
+              this.files.set('tags.sync-conflict-20261027-192500-ABCDE.json','[]');
+            }
+          },abort:async()=>{}};
+        }};
+    }
+    async removeEntry(name){this.files.delete(name);}
+  }
+  const h=new WritableDir({'catalog.json':JSON.stringify(cat),'tags.json':'[]'});
+  h.injectConflict=true;
+  const changes=[{path:'tags.json',before:[],after:[{id:'new-tag'}]}];
+  await assert.rejects(commitCatalogTransaction({handle:h,catalogId:cat.id,changes}),/Syncthing conflict/);
+  assert.equal(h.files.has('.sourcebook-pending.json'),true);
+  assert.equal((await inspectPendingCatalogTransaction(h,cat.id)).applied,1);
+  await assert.rejects(resumeCatalogTransaction(h,cat.id),/Syncthing conflict/);
+  h.files.delete('tags.sync-conflict-20261027-192500-ABCDE.json');
+  assert.equal(await resumeCatalogTransaction(h,cat.id),1);
+  assert.equal(h.files.has('.sourcebook-pending.json'),false);
+});
