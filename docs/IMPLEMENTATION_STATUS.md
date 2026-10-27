@@ -4,6 +4,13 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — Keyboard-first nested hashtag discovery (V0.0.7)
+
+- Existing catalog tags are suggested while typing `#` or a nested path, with case-insensitive and slash-normalized matching. Already-assigned paths are excluded; choosing a suggestion reuses its stable tag ID on save rather than creating another taxonomy node.
+- The inspector tag picker now supports ArrowDown/ArrowUp to highlight suggestions and Enter to select one. Enter without an active suggestion still creates the explicitly typed tag; comma retains the existing entry behavior. Combobox/listbox ARIA state reflects the highlighted option.
+- Added pure suggestion/navigation tests and extended the **real 1440×900 Chromium fixture** to exercise keyboard selection and verify stable-ID persistence with unchanged source filenames. A `desktop-tag-picker.png` fixture snapshot is configured for the next nightly/manual screenshot run; **no new screenshot capture or physical-device validation is claimed yet**.
+- Only catalog metadata is written when the user explicitly saves. No image editor, source renaming, collection system or custom-property schema added.
+
 ## 2026-10-27 — Current-folder tag-aware search (V0.0.6)
 
 - Search matches filenames or nested tag paths resolved from stable catalog `tagIds`; a leading `#` searches tags only, and `#` alone finds tagged entries.

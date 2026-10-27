@@ -146,8 +146,29 @@ try{
   await search.fill('Kinetic');
   if(await page.locator('#items .resource').count()!==1)throw Error('Filename search regressed.');
   await search.fill('');
+  // Exercise the actual inspector combobox with an existing stable-ID tag.
+  await page.locator('.resource[data-item]').filter({hasText:'Folded Canopy'}).click();
+  await page.locator('#tag-input').fill('#generative/geo');
+  if(await page.locator('.tag-suggestion').count()!==1)throw Error('Nested hashtag suggestion missing.');
+  await page.locator('#tag-input').press('ArrowDown');
+  if(await page.locator('.tag-suggestion[aria-selected="true"]').count()!==1)throw Error('Keyboard suggestion selection missing.');
+  if(await page.locator('#tag-input').getAttribute('aria-activedescendant')!=='tag-option-0')throw Error('Combobox active descendant missing.');
+  await page.screenshot({path:resolve(snapshots,'desktop-tag-picker.png')});
+  await page.locator('#tag-input').press('Enter');
+  if(await page.locator('.tag-pill-label[title="Generative / Geometry"]').count()!==1)throw Error('Enter did not reuse the existing nested tag.');
+  await page.locator('[data-action="save-resource"]').click();
+  await page.waitForFunction(()=>document.querySelector('.file-details .micro-hint')?.textContent.includes('ID: ab2'));
+  const reused=await page.evaluate(async()=>{
+    const dir=await window.__sourcebookFixture.parent.getDirectoryHandle('Architecture Research.sb');
+    const records=await dir.getDirectoryHandle('resources');
+    const first=JSON.parse(await (await (await records.getFileHandle('ab1.json')).getFile()).text());
+    const second=JSON.parse(await (await (await records.getFileHandle('ab2.json')).getFile()).text());
+    return second.tagIds?.length===1&&second.tagIds[0]===first.tagIds[0]&&window.__sourcebookFixture.source.files.has('Folded Canopy.svg');
+  });
+  if(!reused)throw Error('Keyboard tag selection did not persist the existing ID or changed the source file.');
+  await page.waitForTimeout(4700);
   await page.screenshot({path:resolve(snapshots,'desktop-gallery.png')});
-  console.log('Captured 1440×900: desktop-launcher.png and desktop-gallery.png');
+  console.log('Captured 1440×900: desktop-launcher.png, desktop-tag-picker.png and desktop-gallery.png');
   await context.close();
 }finally{
   if(browser)await browser.close();

@@ -8,6 +8,7 @@ All screenshots use exactly **1440 × 900 CSS pixels**, **device pixel ratio 1**
 | --- | --- |
 | [desktop-launcher.png](desktop-launcher.png) | Real app startup / new catalog screen |
 | [desktop-gallery.png](desktop-gallery.png) | Real browser gallery, inspector, file previews and saved tags/notes using fixture files |
+| [desktop-tag-picker.png](desktop-tag-picker.png) | Real browser inspector with an existing nested-tag suggestion selected using ArrowDown (fixture files; generated at next nightly/manual run) |
 
 To regenerate from the repository root:
 

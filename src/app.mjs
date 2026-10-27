@@ -2,7 +2,7 @@ import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {nextSelectionIndex} from './navigation.mjs';
-import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch} from './tags.mjs';
+import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
@@ -12,7 +12,7 @@ const state={
   size:Number(localStorage.getItem('sb-size'))||164,
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
-  tagDraftItem:null, tagDraft:[]
+  tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1
 };
 const glyphs={
   book:'M3 3h7v18H3z M10 7h4v14h-4z M16 4l5 17 M16 5l3-1',
@@ -276,11 +276,34 @@ function renderTagPills(){
 function showTagSuggestions(){
   const list=$('#tag-suggestions'),input=$('#tag-input');
   if(!list||!input)return;
-  const q=input.value.trim().toLocaleLowerCase();
-  if(!q){list.hidden=true;list.innerHTML='';return;}
-  const matches=flattenedTagTree(state.taxonomy).filter(tag=>tag.path.toLocaleLowerCase().includes(q)&&!state.tagDraft.some(x=>x.toLocaleLowerCase()===tag.path.toLocaleLowerCase())).slice(0,5);
-  list.innerHTML=matches.map(t=>'<button type="button" class="tag-suggestion" data-tag-suggestion="'+escapeHTML(t.path)+'"><strong>#'+escapeHTML(t.name)+'</strong><small>'+escapeHTML(t.path)+'</small></button>').join('');
+  const matches=suggestTagPaths(state.taxonomy,state.tagDraft,input.value);
+  state.tagSuggestions=matches;
+  state.tagSuggestionIndex=-1;
+  list.innerHTML=matches.map((t,i)=>'<button type="button" role="option" aria-selected="false" id="tag-option-'+i+'" class="tag-suggestion" data-tag-suggestion="'+i+'"><strong>#'+escapeHTML(t.name)+'</strong><small>'+escapeHTML(t.path)+'</small></button>').join('');
   list.hidden=!matches.length;
+  input.setAttribute('aria-expanded',String(matches.length>0));
+  input.removeAttribute('aria-activedescendant');
+}
+function moveTagSuggestion(direction){
+  const list=$('#tag-suggestions'),input=$('#tag-input');
+  if(!list||list.hidden||!state.tagSuggestions.length)return false;
+  const index=nextTagSuggestionIndex(state.tagSuggestionIndex,direction,state.tagSuggestions.length);
+  state.tagSuggestionIndex=index;
+  list.querySelectorAll('[data-tag-suggestion]').forEach((option,i)=>{
+    option.classList.toggle('active',i===index);
+    option.setAttribute('aria-selected',String(i===index));
+  });
+  input?.setAttribute('aria-activedescendant','tag-option-'+index);
+  list.querySelector('#tag-option-'+index)?.scrollIntoView({block:'nearest'});
+  return true;
+}
+function chooseTagSuggestion(index){
+  const tag=state.tagSuggestions[index];
+  if(!tag)return false;
+  const input=$('#tag-input');
+  if(!input)return false;
+  input.value=tag.path;
+  return commitTagInput();
 }
 function commitTagInput(){
   const input=$('#tag-input');if(!input||!input.value.trim())return true;
@@ -298,7 +321,7 @@ function renderInspector(){
   if(state.tagDraftItem!==item.id){
     state.tagDraftItem=item.id;state.tagDraft=recordTagPaths(record,state.taxonomy);
   }
-  host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),40)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">TAGS</div><div class="tag-editor" id="tag-editor"><div class="tag-pills" id="tag-pills"></div><input id="tag-input" aria-label="Add tag" placeholder="# Add tag…" autocomplete="off"/></div><div class="tag-suggestions" id="tag-suggestions" hidden></div><div class="micro-hint">Nest tags with /, e.g. Architecture / Facades</div></div><div class="detail"><div class="label">NOTES</div><textarea rows="3" id="notes" placeholder="Optional note">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save',16)+' Save</button><details class="file-details"><summary>File information</summary><code>'+escapeHTML(item.name)+'</code>'+(record?'<div class="micro-hint">ID: '+escapeHTML(record.id)+'</div>':'')+'</details>';
+  host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),40)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">TAGS</div><div class="tag-editor" id="tag-editor"><div class="tag-pills" id="tag-pills"></div><input id="tag-input" aria-label="Add tag" placeholder="# Add tag…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="tag-suggestions" aria-expanded="false"/></div><div class="tag-suggestions" id="tag-suggestions" role="listbox" aria-label="Existing tags" hidden></div><div class="micro-hint">Nest tags with /, e.g. Architecture / Facades</div></div><div class="detail"><div class="label">NOTES</div><textarea rows="3" id="notes" placeholder="Optional note">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save',16)+' Save</button><details class="file-details"><summary>File information</summary><code>'+escapeHTML(item.name)+'</code>'+(record?'<div class="micro-hint">ID: '+escapeHTML(record.id)+'</div>':'')+'</details>';
   renderTagPills();
 }
 function refreshSelectionUI(){
@@ -438,7 +461,7 @@ document.addEventListener('input',event=>{
 });
 document.addEventListener('click',async event=>{
   const suggestion=event.target.closest('[data-tag-suggestion]');
-  if(suggestion){$('#tag-input').value=suggestion.dataset.tagSuggestion;commitTagInput();$('#tag-input')?.focus();return;}
+  if(suggestion){chooseTagSuggestion(Number(suggestion.dataset.tagSuggestion));$('#tag-input')?.focus();return;}
   const tagNav=event.target.closest('[data-tag-filter]');
   if(tagNav){state.tagFilter=state.tagFilter===tagNav.dataset.tagFilter?null:tagNav.dataset.tagFilter;render();return;}
   const removeTag=event.target.closest('[data-remove-tag]');
@@ -477,9 +500,18 @@ document.addEventListener('dblclick',event=>{
 });
 document.addEventListener('keydown',event=>{
   if(event.target.id==='tag-input'){
-    if(event.key==='Enter'||event.key===','){event.preventDefault();commitTagInput();return;}
+    if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+      if(moveTagSuggestion(event.key==='ArrowDown'?1:-1))event.preventDefault();
+      return;
+    }
+    if(event.key==='Enter'||event.key===','){
+      event.preventDefault();
+      if(event.key==='Enter'&&state.tagSuggestionIndex>=0)chooseTagSuggestion(state.tagSuggestionIndex);
+      else commitTagInput();
+      return;
+    }
     if(event.key==='Backspace'&&!event.target.value&&state.tagDraft.length){state.tagDraft.pop();renderTagPills();return;}
-    if(event.key==='Escape'){event.target.value='';event.stopPropagation();return;}
+    if(event.key==='Escape'){event.preventDefault();event.target.value='';showTagSuggestions();event.stopPropagation();return;}
   }
   if(event.key==='Escape'){closePreview();$('#dialog')?.remove();return;}
   if(state.previewId){if(event.key==='ArrowRight')previewStep(1);if(event.key==='ArrowLeft')previewStep(-1);return;}

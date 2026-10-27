@@ -75,3 +75,6 @@
 .setting-row{display:flex!important;flex-direction:row!important;align-items:center;justify-content:space-between;padding:8px 0}
 .setting-row input[type=color]{height:32px;width:42px;padding:2px;cursor:pointer}
 @media(max-width:760px){.sidebar{width:min(80vw,290px)}.topbar{height:49px;min-height:49px;padding:0 6px}.contentbar{min-height:49px;padding:7px 10px}.gallery{padding:4px 9px 25px}.inspector{width:min(87vw,310px);top:49px}}
+
+/* Keyboard-active suggestion: the only color cue is the configured accent. */
+.tag-suggestion.active{background:var(--panel2);box-shadow:inset 2px 0 0 var(--accent)}

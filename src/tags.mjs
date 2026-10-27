@@ -107,3 +107,26 @@ export function matchesResourceSearch(filename,paths,query){
   if(!tagsOnly&&String(filename??'').toLocaleLowerCase().includes(needle))return true;
   return tagPaths.some(path=>String(path).replace(/\s*\/\s*/g,' / ').toLocaleLowerCase().includes(needle));
 }
+
+
+// Offer existing stable-ID tags while the user types a hashtag or path.
+// Suggestions are read-only: choosing one never changes the taxonomy.
+export function suggestTagPaths(tags,draft,input,limit=5){
+  const raw=String(input??'').trim();
+  if(!raw)return [];
+  const needle=raw.replace(/^#+\s*/,'').trim().replace(/\s*\/\s*/g,' / ').toLocaleLowerCase();
+  const selected=new Set((Array.isArray(draft)?draft:[]).map(value=>{
+    try{return normalizeTagPath(value).toLocaleLowerCase();}
+    catch{return String(value).toLocaleLowerCase();}
+  }));
+  return flattenedTagTree(tags).filter(tag=>
+    !selected.has(tag.path.toLocaleLowerCase())&&
+    (!needle||tag.path.toLocaleLowerCase().includes(needle))
+  ).slice(0,Math.max(0,Math.min(20,Number.isInteger(limit)?limit:5)));
+}
+export function nextTagSuggestionIndex(current,direction,count){
+  if(!Number.isInteger(count)||count<1)return -1;
+  if(direction!==1&&direction!==-1)return current;
+  if(!Number.isInteger(current)||current<0||current>=count)return direction===1?0:count-1;
+  return (current+direction+count)%count;
+}
