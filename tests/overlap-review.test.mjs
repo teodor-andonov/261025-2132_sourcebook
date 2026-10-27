@@ -58,7 +58,7 @@ test('same live file handles confirm an overlap without requesting writes',async
   const file=handle('file','photo.jpg','physical-photo');
   const nested=handle('directory','Nested','physical-nested',{'photo.jpg':file});
   const outer=handle('directory','Projects','physical-outer',{Nested:nested});
-  const inner=handle('directory','References','physical-nested',{'photo.jpg':file});
+  const inner=handle('directory','Nested','physical-nested',{'photo.jpg':file});
   const index={roots:[
     {sourceId:'outer',handle:outer,entries:[{sourceId:'outer',path:'Nested',kind:'directory'}]},
     {sourceId:'inner',handle:inner,entries:[]}
