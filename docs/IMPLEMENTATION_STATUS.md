@@ -4,6 +4,14 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — Prevent stale inspector tag writes (V0.0.10 candidate)
+
+- The inspector now compares its catalog-local `tags.json` snapshot with the current disk taxonomy **before any resource or taxonomy write**. If another editor changed tag names, hierarchy, pinning or membership taxonomy, Save refuses the stale edit and asks to reopen the catalog.
+- Pin/unpin uses the same snapshot guard; existing resource-record `updatedAt` conflict checks remain unchanged. The guard protects against **already-visible concurrent edits**, not writes racing after the check, power loss, or multi-file atomicity.
+- Added Node regression tests for unchanged, renamed, pinned, added and malformed taxonomy snapshots. Extended the 1440×900 real-Chromium **fixture** with a simulated external tag edit followed by a rejected stale inspector save, verifying both catalog resource JSON and source filenames remain unchanged.
+- No UI layout changes; existing screenshots remain valid until the next scheduled/manual capture. Service-worker cache bumped to `sourcebook-shell-0.0.10`. **CI and browser fixture results pending; no physical Windows/Android validation claimed.**
+- Documentation reflects the catalog-free folder slice already committed in V0.0.9; the multi-tab and full catalog-root sidebar remain future work.
+
 ## 2026-10-27 — Catalog-free read-only folder browsing (V0.0.9 candidate)
 
 - Landing now offers **Open folder** without creating/opening a catalog. The chosen folder can be navigated with gallery/list, breadcrumbs, current-folder search, quick look and file information.

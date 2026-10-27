@@ -131,6 +131,15 @@ export function nextTagSuggestionIndex(current,direction,count){
   return (current+direction+count)%count;
 }
 
+// Saving from an old inspector snapshot must not recreate tags that another
+// editor has renamed, reparented, pinned or deleted on disk. This is an
+// optimistic check, not a multi-file atomic transaction or a lock.
+export function assertTagSnapshotUnchanged(snapshot,disk){
+  if(!Array.isArray(snapshot)||!Array.isArray(disk)||JSON.stringify(snapshot)!==JSON.stringify(disk)){
+    throw Error('Tags changed on disk. Reopen the catalog before saving.');
+  }
+}
+
 // Pins are catalog-local shortcuts to tag IDs, never collection memberships.
 export function toggleTagPin(tags,id){
   if(!Array.isArray(tags)||typeof id!=='string'||tags.filter(t=>t?.id===id).length!==1)throw Error('Unknown or ambiguous tag ID');

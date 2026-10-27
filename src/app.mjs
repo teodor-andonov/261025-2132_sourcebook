@@ -3,7 +3,7 @@ import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {nextSelectionIndex} from './navigation.mjs';
 import {plainRoot} from './workspace.mjs';
-import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts} from './tags.mjs';
+import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts,assertTagSnapshotUnchanged} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
@@ -233,7 +233,7 @@ async function togglePin(id){
   try{
     if(!state.catalogHandle||!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed to pin a tag.');
     const disk=await readJson(state.catalogHandle,'tags.json',[]);
-    if(!Array.isArray(disk)||JSON.stringify(disk)!==JSON.stringify(state.taxonomy))throw Error('Tags changed on disk. Reopen the catalog before pinning.');
+    assertTagSnapshotUnchanged(state.taxonomy,disk);
     const updated=toggleTagPin(disk,id);
     await writeJson(state.catalogHandle,'tags.json',updated);
     if(JSON.stringify(await readJson(state.catalogHandle,'tags.json'))!==JSON.stringify(updated))throw Error('Tag pin could not be verified on disk.');
@@ -412,7 +412,7 @@ async function saveResource(){
       throw Error('This resource changed on disk. Reopen the catalog before saving.');
     }
     const diskTags=await readJson(state.catalogHandle,'tags.json',[]);
-    if(!Array.isArray(diskTags))throw Error('Invalid catalog tag taxonomy.');
+    assertTagSnapshotUnchanged(state.taxonomy,diskTags);
     let taxonomy=diskTags,tagIds=[];
     for(const path of tags){
       const result=ensureTagPath(taxonomy,path);

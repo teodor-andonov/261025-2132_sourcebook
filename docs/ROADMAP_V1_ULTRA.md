@@ -7,7 +7,7 @@
 > **Reference DNA:** Allusion × Eagle.cool × refern.app × File Pilot × Fold — inspiration only, not naming/architecture  
 > **Short form:** Existing files. Beautiful previews. Portable catalogs. Delightful organization.
 
-> **Superseding product decision (27 Oct 2026):** Sourcebook is a general file browser first, with optional portable catalogs. Two main sidebar areas: physical folder **Tabs** and **Catalog** (registered-root Folders, nested Tags, saved **Views**). Manual Collections are just tags, optionally pinned; dynamic Smart Folders are **Views**, which save scope/filter *and* display settings. Don't build separate manual Collection or Smart Folder databases. Image editing and annotations are outside V1. The existing prototype still requires a catalog; folder-first launch and new sidebar are planned, not shipped. Historical backlog wording below is subordinate to this decision.
+> **Superseding product decision (27 Oct 2026):** Sourcebook is a general file browser first, with optional portable catalogs. Two main sidebar areas: physical folder **Tabs** and **Catalog** (registered-root Folders, nested Tags, saved **Views**). Manual Collections are just tags, optionally pinned; dynamic Smart Folders are **Views**, which save scope/filter *and* display settings. Don't build separate manual Collection or Smart Folder databases. Image editing and annotations are outside V1. A read-only catalog-free Open Folder slice exists; persistent folder Tabs and full Catalog navigation remain planned. Historical backlog wording below is subordinate to this decision.
 
 ## 00 — Executive product promise
 
@@ -604,7 +604,7 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 
 **Goal:** Before clever catalog metadata, Sourcebook should be a superior visual browser.
 
-- [ ] Browser-first Open Folder without catalog; optional Open/New Catalog and recent workspaces.
+- [x] Initial read-only Open Folder without catalog (V0.0.9 code; CI/device validation still pending). Open/New Catalog remains available; multi-folder Tabs/recent workspaces are incomplete.
 - [ ] Two-part sidebar (physical folder Tabs and optional Catalog Folders/Tags/Views), breadcrumbs and persistent folder history.
 - [ ] Gallery uniform adjustable grid + list; optional compact tile mode.
 - [ ] Resizable desktop panes; collapsible inspector/drawer on Android.
@@ -638,7 +638,7 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 
 ## 30 — V0.3: Tags as the only manual grouping
 - [x] Early V0.0 previews: stable nested taxonomy, hashtag pills, keyboard suggestions and current-folder tag search (CI passed; device validation pending).
-- [ ] Persistent pin/unpin shortcuts using stable tag IDs (V0.0.8 candidate; mark verified only after CI).
+- [x] Pin/unpin shortcuts using stable tag IDs (V0.0.8 implementation; independent device validation pending).
 - [ ] Bulk assign/remove tags with safe writes and conflict checks.
 - [ ] Tag rename/reparent/merge by ID, catalog-wide tag browsing, pinned discovery.
 - [ ] Keep original files untouched; no manual Collections database or early custom-property framework.

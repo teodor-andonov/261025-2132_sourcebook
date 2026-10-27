@@ -186,6 +186,33 @@ try{
   if(!reused)throw Error('Keyboard tag selection did not persist the existing ID or changed the source file.');
   await page.waitForTimeout(4700);
   await page.screenshot({path:resolve(snapshots,'desktop-gallery.png')});
+  // Regression: another catalog editor changes tags.json while our inspector
+  // remains open. Saving must refuse stale taxonomy rather than recreate it.
+  const originalSecond=await page.evaluate(async()=>{
+    const dir=await window.__sourcebookFixture.parent.getDirectoryHandle('Architecture Research.sb');
+    const resources=await dir.getDirectoryHandle('resources');
+    return (await (await resources.getFileHandle('ab2.json')).getFile()).text();
+  });
+  await page.evaluate(async()=>{
+    const dir=await window.__sourcebookFixture.parent.getDirectoryHandle('Architecture Research.sb');
+    const handle=await dir.getFileHandle('tags.json');
+    const disk=JSON.parse(await (await handle.getFile()).text());
+    const writer=await handle.createWritable();
+    await writer.write(JSON.stringify([...disk,{id:'external-tag',name:'Externally Added',parentId:null}]));
+    await writer.close();
+  });
+  await page.locator('#notes').fill('This stale edit must not persist.');
+  await page.locator('[data-action="save-resource"]').click();
+  await page.locator('#toast').filter({hasText:'Tags changed on disk'}).waitFor();
+  const conflictSafe=await page.evaluate(async()=>{
+    const dir=await window.__sourcebookFixture.parent.getDirectoryHandle('Architecture Research.sb');
+    const resources=await dir.getDirectoryHandle('resources');
+    const after=(await (await resources.getFileHandle('ab2.json')).getFile()).text();
+    const disk=JSON.parse(await (await (await dir.getFileHandle('tags.json')).getFile()).text());
+    return {after,externalStillPresent:disk.some(t=>t.id==='external-tag'),sourceStillPresent:window.__sourcebookFixture.source.files.has('Folded Canopy.svg')};
+  });
+  if(conflictSafe.after!==originalSecond||!conflictSafe.externalStillPresent||!conflictSafe.sourceStillPresent)throw Error('Stale inspector save overwrote catalog or source data.');
+
   console.log('Captured 1440×900: desktop-launcher.png, desktop-folder.png, desktop-tag-picker.png and desktop-gallery.png');
   await context.close();
 }finally{

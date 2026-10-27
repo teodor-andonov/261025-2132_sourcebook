@@ -82,3 +82,20 @@ test('pin shortcuts preserve hierarchy, resource tag references and legacy catal
   assert.throws(()=>toggleTagPin(pinned,'missing'));
   assert.throws(()=>toggleTagPin([{id:'duplicate'},{id:'duplicate'}],'duplicate'));
 });
+
+import {assertTagSnapshotUnchanged} from '../src/tags.mjs';
+test('catalog save refuses stale tag snapshots without changing either taxonomy',()=>{
+  let n=0;
+  const current=ensureTagPath([],'Architecture / Facades',()=> 'stable-'+(++n)).tags;
+  const disk=current.map(t=>({...t}));
+  assert.doesNotThrow(()=>assertTagSnapshotUnchanged(current,disk));
+  const renamed=disk.map(t=>t.name==='Facades'?{...t,name:'Envelopes'}:t);
+  assert.throws(()=>assertTagSnapshotUnchanged(current,renamed),/Tags changed on disk/);
+  const repinned=disk.map(t=>({...t,pinned:true}));
+  assert.throws(()=>assertTagSnapshotUnchanged(current,repinned),/Tags changed on disk/);
+  const external=[...disk,{id:'new-external',name:'Material',parentId:null}];
+  assert.throws(()=>assertTagSnapshotUnchanged(current,external),/Tags changed on disk/);
+  assert.throws(()=>assertTagSnapshotUnchanged(current,null),/Tags changed on disk/);
+  assert.deepEqual(current,disk);
+  assert.equal(current.some(t=>t.name==='Envelopes'),false);
+});
