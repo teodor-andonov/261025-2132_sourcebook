@@ -4,6 +4,14 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — UI snapshots and keyboard navigation (V0.0.4)
+
+- Added `screenshots/` with a repeatable **1440×900** desktop screenshot workflow. A headless Chromium run exercises the actual app using synthetic files, produces launcher and gallery screenshots, and commits them to the repository automatically.
+- Verified screenshot GitHub Actions job **succeeded** and both PNGs are now in the repository. The fixture also checks that tagging persists notes/metadata and does not rename the original source file.
+- Added gallery keyboard navigation: arrow keys across rows/columns, Home/End, Enter for opening folders/files, visible selected/focused resource. Pure index-navigation tests added and passing.
+- Snapshot gallery: [launcher](../screenshots/desktop-launcher.png) · [gallery](../screenshots/desktop-gallery.png). Details in [screenshots/README.md](../screenshots/README.md).
+- **Limit:** these are headless Chromium/Linux browser renders with test fixtures, not Windows or Pixel 8 device validation.
+
 ## 2026-10-27 — Read-only browsing and safe catalog-only objectification
 
 - Opening existing catalogs and sources now requests **read** access; no automatic directory creation when merely opening a catalog.
@@ -36,7 +44,7 @@
 - Catalog-aware terminal filename tokens [ab967][c5]; **no implicit source rename** during metadata saving (explicit, verified rename remains a future feature).
 - Basic current-folder filename search, file picker import with collision-resistant copy, new folder action.
 - Light/dark using operating system preferences; keyboard Space quick look, Backspace parent, Ctrl/Cmd+K search.
-- Automated Node syntax checks and ID parsing tests in GitHub Actions: **passed** on 2026-10-26.
+- Automated Node syntax/ID-navigation tests: **passed** on 2026-10-27; screenshot capture workflow **passed**.
 
 ## Blocker
 
