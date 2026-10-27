@@ -118,3 +118,17 @@ test('editing View tag criteria changes matching results immediately after verif
   assert.deepEqual(f.writes,['views.json']);
   assert.equal(f.state.activeViewId,'v1');
 });
+
+
+test('View controller includes scanned ordinary files only when filters allow them',()=>{
+  const f=fixture();
+  f.state.scan={entries:[{sourceId:'a',path:'gallery/loose.pdf',kind:'file'}],completeRootIds:['a'],problems:[]};
+  f.state.views[0].tagIds=[];f.state.views[0].tagId=null;f.state.views[0].query='';
+  f.ui.open('v1');
+  assert.deepEqual(f.state.items.map(x=>x.name),['beam.png','loose.pdf','roof.png']);
+  assert.equal(f.state.items.find(x=>x.name==='loose.pdf').unobjectified,true);
+  assert.equal(f.state.items.find(x=>x.name==='loose.pdf').record,null);
+  f.state.search='loose';f.ui.requery();
+  assert.deepEqual(f.state.items.map(x=>x.name),['beam.png','loose.pdf','roof.png']); // Search is applied by the shared browser surface.
+  assert.deepEqual(f.writes,[]);
+});

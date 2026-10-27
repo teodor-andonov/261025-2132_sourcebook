@@ -132,3 +132,7 @@
 .view-tag-option:hover{background:var(--panel2)}
 .view-tag-option input{flex:none;accent-color:var(--accent)}
 .view-tag-option[hidden]{display:none}
+/* Read-only discovery stays in the existing View toolbar, never a new panel. */
+.scan-status{font-size:10px;color:var(--muted);max-width:155px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1}
+@media(max-width:760px){.scan-status{display:none}}
+

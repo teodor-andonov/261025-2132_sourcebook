@@ -45,17 +45,18 @@ test('scan limits, invalid entries and directory failures cannot mark a root com
   const failed=await scanRegisteredFolders([sources[0]],new Map([['a',broken]]));
   assert.match(failed.problems[0],/disk offline/);
 });
-test('cancellation returns a partial result explicitly flagged, not a complete root',async()=>{
+test('cancellation stops traversal and cannot publish a complete root',async()=>{
   let stop=false;
-  const scan=await scanRegisteredFolders([sources[0]],new Map([['a',dir('Images',[file('a'),file('b')])]]),{
-    onProgress(){stop=true;},isCancelled:()=>stop,maxEntries:1
+  const many=Array.from({length:300},(_,i)=>file('file-'+i));
+  const scan=await scanRegisteredFolders([sources[0]],new Map([['a',dir('Images',many)]]),{
+    onProgress(){stop=true;},isCancelled:()=>stop
   });
-  // A bounded scan cannot claim completion even if a caller aborts late.
-  assert.equal(scan.completeRootIds.length,0);
-  assert.ok(scan.problems.length>0);
+  assert.equal(scan.cancelled,true);
+  assert.equal(scan.entries.length,250);
+  assert.deepEqual(scan.completeRootIds,[]);
 });
 test('scanned unobjectified resources join unfiltered Views, but not tagged Views',()=>{
-  const tagged=ensureTagPath([],'Architecture / Timber',()=> 't1');
+  let tagSequence=0;const tagged=ensureTagPath([],'Architecture / Timber',()=> 't'+(++tagSequence));
   const records=[{id:'ab1',sourceId:'a',path:'gallery/tagged.png',kind:'file',tagIds:[tagged.id]},
     {id:'ab2',sourceId:'b',path:'lost.pdf',kind:'file',tagIds:[]}];
   const scan={entries:[

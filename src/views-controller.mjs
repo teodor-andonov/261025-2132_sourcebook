@@ -1,4 +1,4 @@
-import {catalogQueryResults} from './catalog-search.mjs';
+import {catalogQueryWithScan} from './catalog-search.mjs';
 import {validateViews,createSavedView,updateSavedView,removeSavedView,assertViewsSnapshotUnchanged} from './views.mjs';
 import {flattenedTagTree} from './tags.mjs';
 
@@ -7,7 +7,7 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
   const active=()=>state.views.find(v=>v.id===state.activeViewId)||null;
   const inResults=()=>!!(state.activeViewId||state.catalogTagView);
   const title=()=>active()?.name||(state.catalogTagView?'#'+state.catalogTagView.replaceAll(' / ','/'):null);
-  const results=view=>catalogQueryResults([...state.records.values()],state.sources,state.taxonomy,{...view,query:''}).map(x=>({...x,catalogResult:true,handle:null}));
+  const results=view=>catalogQueryWithScan([...state.records.values()],state.sources,state.taxonomy,{...view,query:''},state.scan).map(x=>({...x,catalogResult:true,handle:null}));
   function open(id){
     if(!state.catalog||state.bulkSaving||state.viewSaving)return;
     const view=state.views.find(v=>v.id===id);if(!view)return toast('View not found',true);

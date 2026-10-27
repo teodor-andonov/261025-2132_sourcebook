@@ -5,6 +5,7 @@ import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.m
 import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {catalogTagResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
+import {scanRegisteredFolders} from './source-scan.mjs';
 import {validateViews,sortViewsForSidebar} from './views.mjs';
 import {createViewsController} from './views-controller.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
@@ -18,9 +19,11 @@ const state={
   size:Number(localStorage.getItem('sb-size'))||164,
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
-  tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false
+  tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false,
+  scan:null,scanBusy:false,scanGeneration:0,scanProgress:''
 };
 const viewsUI=createViewsController({state,readJson,writeJson,authorized,render,toast,forgetImages,navigate,refreshRecords});
+function invalidateScan(){++state.scanGeneration;state.scan=null;state.scanBusy=false;state.scanProgress='';}
 let tabPersistQueue=Promise.resolve();
 const glyphs={
   book:'M3 3h7v18H3z M10 7h4v14h-4z M16 4l5 17 M16 5l3-1',
@@ -126,7 +129,7 @@ async function setPlainFolder(handle,remember=true){
   const tabs=stayingPlain?state.sources:restored.tabs;
   if(tabs.length>=32)throw Error('A maximum of 32 folder tabs can be open.');
   const tab=createFolderTab(handle,crypto.randomUUID());
-  closePreview();
+  closePreview();invalidateScan();
   if(!stayingPlain){
     state.sources=[];state.handles.clear();state.records.clear();state.taxonomy=[];state.tagFilter=null;
     for(const existing of tabs)state.handles.set(existing.id,existing.handle);
@@ -239,6 +242,7 @@ async function openDirectory(h){
   if(state.bulkSaving||state.viewSaving)throw Error('Finish catalog editing before switching catalogs.');
   const config=await readJson(h,'catalog.json');
   if(!config?.id||!CODE_PATTERN.test(config.code))throw Error('Choose a .sb directory containing catalog.json.');
+  invalidateScan();
   state.catalog=config;state.catalogHandle=h;
   state.sources=await readJson(h,'sources.json',[]);
   const savedTags=await readJson(h,'tags.json',[]);
@@ -264,7 +268,7 @@ async function addSource(){
     const item={id:crypto.randomUUID(),name:h.name};
     const nextSources=[...state.sources,item];
     await writeJson(state.catalogHandle,'sources.json',nextSources);
-    state.sources=nextSources;
+    state.sources=nextSources;invalidateScan();
     try{await setLocal('source:'+state.catalog.id+':'+item.id,h);}
     catch(e){console.warn('Source handle will need reconnecting after reload',e);toast('Source added, but this device cannot remember its permission.',true);}
     state.handles.set(item.id,h);
@@ -288,7 +292,7 @@ async function reconnect(){
     const h=await window.showDirectoryPicker({mode:'read'});
     try{await setLocal('source:'+state.catalog.id+':'+state.sourceId,h);}
     catch(e){console.warn('Source handle cannot be persisted',e);toast('Source connected for this session only.',true);}
-    state.handles.set(state.sourceId,h);
+    state.handles.set(state.sourceId,h);invalidateScan();
     await navigate(state.sourceId,[]);
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
@@ -374,6 +378,37 @@ async function refreshCatalogTagView(){
     state.selected.clear();render();
   }catch(error){toast(errorText(error),true);}
 }
+function scanStatus(){
+  if(state.scanBusy)return state.scanProgress||'Scanning folders…';
+  if(!state.scan)return 'Cataloged only';
+  const total=state.sources.length,complete=state.scan.completeRootIds.length;
+  return state.scan.entries.length+' indexed · '+complete+'/'+total+' folders'+(state.scan.problems.length?' · partial':'');
+}
+async function runCatalogScan(){
+  if(!state.catalog||state.scanBusy||state.bulkSaving||state.viewSaving)return;
+  const generation=++state.scanGeneration,catalogId=state.catalog.id;
+  state.scanBusy=true;state.scanProgress='Scanning folders…';render();
+  try{
+    const scan=await scanRegisteredFolders(state.sources.map(s=>({id:s.id,name:s.name})),new Map(state.handles),{
+      isCancelled:()=>generation!==state.scanGeneration||state.catalog?.id!==catalogId,
+      onProgress:p=>{
+        if(generation!==state.scanGeneration)return;
+        state.scanProgress=p.count+' entries · '+p.completeRoots+'/'+p.totalRoots+' folders';
+        const label=$('#scan-status');if(label)label.textContent=state.scanProgress;
+      }
+    });
+    if(generation!==state.scanGeneration||scan.cancelled)return;
+    state.scan=scan;
+    if(state.activeViewId)viewsUI.requery();else render();
+    toast(scan.problems.length?'Scan partial: '+scan.problems.length+' issue(s).':'Scanned '+scan.entries.length+' entries.',!!scan.problems.length);
+  }catch(error){if(generation===state.scanGeneration)toast('Scan failed: '+errorText(error),true);}
+  finally{if(generation===state.scanGeneration){state.scanBusy=false;state.scanProgress='';render();}}
+}
+function cancelCatalogScan(){
+  if(!state.scanBusy)return;
+  ++state.scanGeneration;state.scanBusy=false;state.scanProgress='';
+  render();toast('Scan cancelled; previous results retained.');
+}
 function render(){
   $('#folder-context')?.remove();
   if(!state.catalog&&!state.sourceId)return landing();
@@ -398,6 +433,7 @@ function render(){
   const fileActions=plain||viewsUI.inResults()?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
   const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="edit-view-tags" title="Edit View tags">'+icon('tag',15)+' <span>Tags</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
   const typeControl=plain?'':'<select id="file-type" class="sort-control type-control" aria-label="File type"><option value="all" '+(state.fileType==='all'?'selected':'')+'>All types</option><option value="image" '+(state.fileType==='image'?'selected':'')+'>Images</option><option value="pdf" '+(state.fileType==='pdf'?'selected':'')+'>PDFs</option><option value="video" '+(state.fileType==='video'?'selected':'')+'>Videos</option><option value="folder" '+(state.fileType==='folder'?'selected':'')+'>Folders</option><option value="other" '+(state.fileType==='other'?'selected':'')+'>Other</option></select>';
+  const scanControls=state.activeViewId?'<button class="text-button" data-action="'+(state.scanBusy?'cancel-scan':'scan-folders')+'" title="Read-only scan of granted Catalog Folders">'+icon(state.scanBusy?'close':'search',15)+' <span>'+(state.scanBusy?'Cancel':'Scan')+'</span></button><span class="scan-status" id="scan-status" title="Scans are temporary snapshots; incomplete roots are not marked missing">'+escapeHTML(scanStatus())+'</span>':'';
   const sortControl=plain?'':'<select id="sort-mode" class="sort-control" aria-label="Sort"><option value="name" '+(state.sort==='name'?'selected':'')+'>Name ↑</option><option value="name-desc" '+(state.sort==='name-desc'?'selected':'')+'>Name ↓</option><option value="type" '+(state.sort==='type'?'selected':'')+'>Type</option></select>';
   const activeTab=activeFolderTab();
   const backward=activeTab&&activeTab.position>0;
@@ -405,7 +441,7 @@ function render(){
   const historyControls=plain
     ?'<button class="icon-button" title="Back" aria-label="Back" data-action="tab-back" '+(backward?'':'disabled')+'>'+icon('back')+'</button><button class="icon-button" title="Forward" aria-label="Forward" data-action="tab-forward" '+(nextward?'':'disabled')+'>'+icon('forward')+'</button>'
     :'';
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+sortControl+viewActions+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+sortControl+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML=viewsUI.inResults()?'<button data-action="exit-catalog-tag">'+icon('database',16)+' Catalog</button><span class="crumb">'+icon('chevron',13)+'</span><button>'+icon('tag',14)+' '+escapeHTML(viewsUI.title())+'</button>':'<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
@@ -441,7 +477,7 @@ function renderItems(){
   if(!items.length){host.innerHTML='<div class="empty">'+icon('folder',32)+'<h3>'+(state.loading?'Reading files…':state.search||state.tagFilter||viewsUI.inResults()?'No matches':'Nothing here yet')+'</h3></div>';return;}
   host.innerHTML=items.slice(0,state.pageCount).map(item=>{
     const kind=itemKind(item);
-    return '<button class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" title="'+escapeHTML(item.name)+'" aria-selected="'+state.selected.has(item.id)+'"><span class="art '+kind+'">'+icon(kind==='pdf'?'file':kind,kind==='folder'?37:31)+(kind==='image'?'<img loading="lazy" alt="" class="thumbnail"/>':'')+'</span><span class="filename">'+escapeHTML(cleanName(item.name))+'</span><span class="filetype">'+(item.catalogResult?escapeHTML(item.location):kind==='folder'?'Folder':kind)+'</span></button>';
+    return '<button class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" title="'+escapeHTML(item.name)+'" aria-selected="'+state.selected.has(item.id)+'"><span class="art '+kind+'">'+icon(kind==='pdf'?'file':kind,kind==='folder'?37:31)+(kind==='image'?'<img loading="lazy" alt="" class="thumbnail"/>':'')+'</span><span class="filename">'+escapeHTML(cleanName(item.name))+'</span><span class="filetype">'+(item.catalogResult?escapeHTML(item.location+(item.missing?' · Missing at scan':'')+(item.unobjectified?' · Not cataloged':'')):kind==='folder'?'Folder':kind)+'</span></button>';
   }).join('')+(items.length>state.pageCount?'<button class="show-more" data-action="show-more">Show more ('+(items.length-state.pageCount)+')</button>':'');
   const watcher=new IntersectionObserver(entries=>{
     for(const entry of entries)if(entry.isIntersecting){watcher.unobserve(entry.target);thumbnail(entry.target);}
@@ -524,7 +560,7 @@ function renderInspector(){
     const selected=state.selected.size===1?state.items.find(item=>state.selected.has(item.id)):null;
     if(!selected){host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' results selected':'Select a resource')+'</span></div>';return;}
     const tags=recordTagPaths(selected.record,state.taxonomy);
-    host.innerHTML='<div class="inspector-cover">'+icon(itemKind(selected)==='pdf'?'file':itemKind(selected),40)+'</div><h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div><div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
+    host.innerHTML='<div class="inspector-cover">'+icon(itemKind(selected)==='pdf'?'file':itemKind(selected),40)+'</div><h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
     return;
   }
   if(state.selected.size!==1){
@@ -690,14 +726,16 @@ function previewStep(offset){
 }
 async function newFolder(){
   if(!state.catalog||!sourceHandle())return;
+  if(state.scanBusy)return toast('Finish or cancel the folder scan first.',true);
   const name=prompt('Name of new folder:','New folder');
   if(!name)return;
   if(!validName(name))return toast('Invalid folder name',true);
-  try{if(!await authorized(sourceHandle(),'readwrite'))throw Error('Write access is required to create a folder.');const dir=await nested(sourceHandle(),state.parts);await dir.getDirectoryHandle(name,{create:true});await navigate(state.sourceId,state.parts);toast('Folder created');}
+  try{if(!await authorized(sourceHandle(),'readwrite'))throw Error('Write access is required to create a folder.');const dir=await nested(sourceHandle(),state.parts);await dir.getDirectoryHandle(name,{create:true});invalidateScan();await navigate(state.sourceId,state.parts);toast('Folder created');}
   catch(e){toast(errorText(e),true);}
 }
 async function importFiles(){
   if(!state.catalog)return;
+  if(state.scanBusy)return toast('Finish or cancel the folder scan first.',true);
   try{
     if(!await authorized(sourceHandle(),'readwrite'))throw Error('Write access is required to import files.');
     if(typeof window.showOpenFilePicker!=='function')throw Error('File import picker is unavailable in this browser.');
@@ -716,7 +754,7 @@ async function importFiles(){
       try{await writer.write(file);await writer.close();count++;}
       catch(e){try{await writer.abort();}catch{}throw e;}
     }
-    await navigate(state.sourceId,state.parts);toast('Imported '+count+' file(s)');
+    invalidateScan();await navigate(state.sourceId,state.parts);toast('Imported '+count+' file(s)');
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 document.addEventListener('submit',event=>{
@@ -783,6 +821,8 @@ document.addEventListener('click',async event=>{
     case 'add-source':addSource();break;
     case 'reconnect':reconnect();break;
     case 'refresh':viewsUI.inResults()?void refreshCatalogTagView():navigate(state.sourceId,[...state.parts]);break;
+    case 'scan-folders':void runCatalogScan();break;
+    case 'cancel-scan':cancelCatalogScan();break;
     case 'exit-catalog-tag':navigate(state.sourceId,[...state.parts]);break;
     case 'reveal-catalog-result':revealCatalogResult(state.items.find(x=>state.selected.has(x.id))).catch(e=>toast(errorText(e),true));break;
     case 'save-view':viewFilterDialog('save');break;
