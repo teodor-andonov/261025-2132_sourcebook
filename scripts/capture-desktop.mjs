@@ -128,7 +128,7 @@ try{
     const file=await records.getFileHandle('ab1.json');
     return JSON.parse(await (await file.getFile()).text());
   });
-  if(record.notes!=='Study of iterative geometric envelope systems.' || JSON.stringify(record.tags)!==JSON.stringify(['Generative/Geometry','Facades']))throw Error('Tag pill edits were not persisted as expected.');
+  if(record.notes!=='Study of iterative geometric envelope systems.' || JSON.stringify(record.tags)!==JSON.stringify(['Generative / Geometry','Facades']))throw Error('Tag pill edits were not persisted as expected.');
   await page.screenshot({path:resolve(snapshots,'desktop-gallery.png')});
   console.log('Captured 1440×900: desktop-launcher.png and desktop-gallery.png');
   await context.close();

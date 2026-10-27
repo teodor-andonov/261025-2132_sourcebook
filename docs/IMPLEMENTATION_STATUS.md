@@ -11,7 +11,7 @@
 - Neutral grayscale light/dark surfaces and file icons with one default blue focus/selection accent; inspector spacing reduced. Configurable accent settings are deferred.
 - Pure tag tests and actual headless Chromium **1440×900** screenshot harness updated to exercise pill add/remove/persistence. **Screenshot images pending** next successful nightly/manual run; existing gallery still depicts prior UI.
 - Prevented overwrite when another writer creates a resource record after selection. No source file rename/write added.
-- Stable tag IDs, nested taxonomy operations, descendant queries, bulk tagging and custom properties remain pending. No Windows/Pixel device validation.
+- Stable-ID taxonomy helpers and unit tests exist, but are not yet wired to tag persistence or the UI; descendant filtering, bulk tagging and custom properties remain pending. No Windows/Pixel device validation.
 
 ## 2026-10-27 — CI and live deployment split
 

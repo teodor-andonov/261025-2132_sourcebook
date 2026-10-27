@@ -1,19 +1,92 @@
-// Tag paths are provisional string labels, not stable hierarchical tag IDs.
-export function normalizeTagLabel(value) {
-  if(typeof value!=='string')throw Error('Tag must be text.');
-  const parts=value.trim().replace(/^#/, '').split('/').map(x=>x.trim().replace(/\s+/g,' '));
-  if(parts.length>8)throw Error('Tags support up to 8 nested levels for now.');
-  if(parts.some(x=>!x||x==='.'||x==='..'||/[#\u0000-\u001f\u007f]/.test(x)))throw Error('Use a tag name, with / between non-empty levels.');
-  const label=parts.join('/');
+// Portable catalog taxonomy. Stable IDs; labels and hierarchy can change
+// without rewriting resource records.
+export function splitTagPath(value) {
+  const raw=String(value??'').trim().replace(/^#+\s*/,'');
+  if(!raw)return [];
+  const parts=raw.split('/').map(s=>s.trim());
+  if(parts.some(s=>!s||s.length>80||/[<>\u0000-\u001f]/.test(s)))throw Error('Invalid tag path');
+  if(parts.length>12)throw Error('Tag hierarchy is too deep');
+  return parts;
+}
+export function normalizeTagPath(value){return splitTagPath(value).join(' / ');}
+export function tagPath(tags,id){
+  const byId=new Map(tags.map(t=>[t.id,t]));
+  const names=[],visited=new Set();
+  let node=byId.get(id);
+  while(node){
+    if(visited.has(node.id))throw Error('Cyclic tag hierarchy');
+    visited.add(node.id);names.unshift(node.name);
+    node=node.parentId?byId.get(node.parentId):null;
+  }
+  return names.join(' / ');
+}
+export function ensureTagPath(tags,value,idFactory=()=>crypto.randomUUID()){
+  const parts=splitTagPath(value);
+  if(!parts.length)throw Error('Empty tag');
+  const next=[...tags];let parentId=null,created=false,tag=null;
+  for(const name of parts){
+    tag=next.find(t=>(t.parentId??null)===parentId&&t.name.toLocaleLowerCase()===name.toLocaleLowerCase());
+    if(!tag){
+      tag={id:idFactory(),name,parentId};
+      if(next.some(t=>t.id===tag.id))throw Error('Duplicate tag ID');
+      next.push(tag);created=true;
+    }
+    parentId=tag.id;
+  }
+  return {tags:next,id:tag.id,created};
+}
+export function recordTagPaths(record,tags){
+  const paths=[];
+  for(const id of record?.tagIds||[]){
+    const path=tagPath(tags,id);if(path)paths.push(path);
+  }
+  // Old Sourcebook records had plain string tags. Preserve those on read
+  // and promote them to stable taxonomy IDs only when explicitly saved.
+  for(const name of record?.tags||[]){
+    try{const path=normalizeTagPath(name);if(path)paths.push(path);}catch{}
+  }
+  return [...new Map(paths.map(x=>[x.toLocaleLowerCase(),x])).values()];
+}
+export function flattenedTagTree(tags){
+  const output=[],visited=new Set();
+  function visit(parentId,depth){
+    const children=tags.filter(t=>(t.parentId??null)===parentId)
+      .sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
+    for(const t of children){
+      if(visited.has(t.id))continue;
+      visited.add(t.id);output.push({...t,depth,path:tagPath(tags,t.id)});
+      visit(t.id,depth+1);
+    }
+  }
+  visit(null,0);
+  return output;
+}
+export function includesTagPath(paths,filterPath){
+  const f=normalizeTagPath(filterPath).toLocaleLowerCase();
+  return paths.some(path=>{
+    const value=normalizeTagPath(path).toLocaleLowerCase();
+    return value===f||value.startsWith(f+' / ');
+  });
+}
+
+// Inspector tag-entry helpers. Use the same slash-path normalization as
+// the stable-ID taxonomy above; legacy record strings are preserved on read.
+export function normalizeTagLabel(value){
+  const label=normalizeTagPath(value);
+  if(!label)throw Error('Enter a tag name.');
   if(label.length>120)throw Error('Tag names must be at most 120 characters.');
   return label;
 }
-export function mergeTagInput(existing,input) {
+function comparableTag(value){
+  try{return normalizeTagPath(value).toLocaleLowerCase();}
+  catch{return String(value).toLocaleLowerCase();}
+}
+export function mergeTagInput(existing,input){
   if(!Array.isArray(existing))throw Error('Invalid existing tags.');
-  const result=[...existing],seen=new Set(result.map(x=>String(x).toLowerCase()));
+  const result=[...existing],seen=new Set(result.map(comparableTag));
   for(const raw of String(input).split(',')){
     if(!raw.trim())continue;
-    const label=normalizeTagLabel(raw),key=label.toLowerCase();
+    const label=normalizeTagLabel(raw),key=comparableTag(label);
     if(seen.has(key))continue;
     if(result.length>=64)throw Error('A resource can have at most 64 tags.');
     result.push(label);seen.add(key);
