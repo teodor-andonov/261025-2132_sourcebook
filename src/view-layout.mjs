@@ -40,6 +40,7 @@ export function viewTableMetadata(item,paths=[]){
   const label={folder:'Folder',image:'Image',pdf:'PDF',video:'Video'}[type]||ext||'File';
   const location=item?.location||'—';
   const tags=[...paths].map(x=>String(x).split(' / ').at(-1)).filter(Boolean);
-  const status=item?.overlapConflict?'Overlap · review metadata':item?.changedKind?'Type changed':item?.missing?'Missing':item?.staleIndex?'Cached · refresh':item?.unobjectified?'Not cataloged':'';
+  const health=item?.changedKind?'Type changed':item?.missing?'Missing':item?.staleIndex?'Cached · refresh':item?.unobjectified?'Not cataloged':'';
+  const status=item?.overlapConflict?'Overlap · review metadata'+(health?' · '+health:''):health;
   return {type:label,location,tags,status,source:String(item?.sourceName||'—'),notes:String(item?.record?.notes||''),id:String(item?.record?.id||'')};
 }

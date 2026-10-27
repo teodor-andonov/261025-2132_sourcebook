@@ -123,7 +123,7 @@ export function collapseVerifiedOverlaps(items,overlaps=[],{sourceId=null}={}){
   const groups=new Map();
   for(const item of items){
     const {key,depth:distance}=physicalResultKey(item,overlaps);
-    const groupKey=key+'\u0000'+item.kind;
+    const groupKey=key;
     if(!groups.has(groupKey))groups.set(groupKey,[]);
     groups.get(groupKey).push({item,distance});
   }
@@ -131,7 +131,8 @@ export function collapseVerifiedOverlaps(items,overlaps=[],{sourceId=null}={}){
   for(const group of groups.values()){
     if(group.length===1){output.push(group[0].item);continue;}
     const cataloged=group.filter(x=>x.item.record&&!x.item.unobjectified);
-    const suspect=group.some(x=>x.item.missing||x.item.changedKind);
+    const suspect=group.some(x=>x.item.missing||x.item.changedKind)||
+      new Set(group.map(x=>x.item.kind)).size>1;
     if(cataloged.length>1||suspect){
       // Never hide contradictory metadata or a possible stale physical binding.
       output.push(...group.map(x=>({...x.item,overlapConflict:true})));

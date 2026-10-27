@@ -93,6 +93,8 @@ test('missing/type-drift and mismatched kinds remain visible instead of being hi
   const kinds=collapseVerifiedOverlaps([{...entry('a','Nested/x'),record:null,unobjectified:true},
     {...entry('b','x','directory'),record:null,unobjectified:true}],overlaps);
   assert.equal(kinds.length,2);
+  assert.ok(kinds.every(x=>x.overlapConflict));
+  assert.equal(viewTableMetadata(found.find(x=>x.record)).status,'Overlap · review metadata · Missing');
 });
 test('fresh scan wins over stale nested cache; transitive ancestry resolves stable physical keys',()=>{
   const edges=[{ancestorId:'a',descendantId:'b',prefix:'Nested'},
