@@ -28,4 +28,4 @@ Use a bounded live `isSameEntry` check to prove root equality or ancestor/descen
 
 ## Verification
 
-Simulated File System Access tests were added for positive and negative identity proof, duplicate suppression, scoped behavior, metadata ambiguity and stale scan safety. **Pending GitHub PR CI** at the time of this log. Do not claim physical device testing or deployment until separately verified. Screenshots not requested and not generated.
+Simulated File System Access tests were added for positive and negative identity proof, duplicate suppression, scoped behavior, metadata ambiguity and stale scan safety. **GitHub PR CI passed:** [run 40595699115](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40595699115), 188/188 Node tests and JavaScript syntax checks. A candidate-path optimization initially failed a regression test by treating a path string as an entry object; it was corrected and the final code passed. Physical device testing and Pages deployment must be verified separately. Screenshots not requested and not generated.
