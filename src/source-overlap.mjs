@@ -36,7 +36,17 @@ export async function inspectIndexedRootOverlaps(index,handles,{maxCandidates=12
       problems.push('Indexed Folder '+String(cached.sourceId)+' cannot be identity-verified for overlap checks');
       continue;
     }
-    roots.push({id:cached.sourceId,handle,entries:cached.entries});
+    // Build bounded candidate buckets once, rather than rescanning up to
+    // 50,000 indexed entries for every possible ancestor/descendant pair.
+    const byName=new Map();
+    for(const entry of cached.entries){
+      if(entry?.kind!=='directory'||!validPath(entry.path))continue;
+      const name=entry.path.split('/').at(-1);
+      if(!byName.has(name))byName.set(name,[]);
+      const paths=byName.get(name);
+      if(paths.length<=maxCandidates)paths.push(entry.path);
+    }
+    roots.push({id:cached.sourceId,handle,byName});
   }
   const overlaps=[],seen=new Set();
   let comparisons=0;
@@ -49,8 +59,7 @@ export async function inspectIndexedRootOverlaps(index,handles,{maxCandidates=12
       continue;
     }
     for(const [ancestor,descendant] of [[a,b],[b,a]]){
-      const matches=ancestor.entries.filter(entry=>entry?.kind==='directory'&&
-        validPath(entry.path)&&entry.path.split('/').at(-1)===descendant.handle.name);
+      const matches=ancestor.byName.get(descendant.handle.name)||[];
       if(matches.length>maxCandidates){
         problems.push('Too many candidate paths to verify '+ancestor.id+' / '+descendant.id);
         continue;
@@ -87,9 +96,7 @@ export async function inspectIndexedRootOverlaps(index,handles,{maxCandidates=12
 // A verified relation describes a descendant root's relative location inside
 // its ancestor. Resolve to the shallowest proven root without changing the
 // original sourceId/path, Catalog records, or their metadata assignments.
-export function physicalResultKey(item,overlaps=[]){
-  const original=String(item?.sourceId||'')+'\u0000'+String(item?.path||'');
-  if(!validId(item?.sourceId)||!validPath(item?.path)||!Array.isArray(overlaps))return {key:original,depth:0};
+function overlapParents(overlaps){
   const parents=new Map();
   for(const o of overlaps){
     if(!o||!validId(o.ancestorId)||!validId(o.descendantId)||
@@ -100,6 +107,11 @@ export function physicalResultKey(item,overlaps=[]){
       (depth(candidate.prefix)===depth(previous.prefix)&&candidate.id.localeCompare(previous.id)<0))
       parents.set(o.descendantId,candidate);
   }
+  return parents;
+}
+function physicalKeyWithParents(item,parents){
+  const original=String(item?.sourceId||'')+'\u0000'+String(item?.path||'');
+  if(!validId(item?.sourceId)||!validPath(item?.path))return {key:original,depth:0};
   let id=item.sourceId,path=item.path,steps=0;
   const visited=new Set();
   while(parents.has(id)){
@@ -113,6 +125,9 @@ export function physicalResultKey(item,overlaps=[]){
   }
   return {key:id+'\u0000'+path,depth:steps};
 }
+export function physicalResultKey(item,overlaps=[]){
+  return physicalKeyWithParents(item,overlapParents(Array.isArray(overlaps)?overlaps:[]));
+}
 
 // Global Views suppress only PROVEN duplicate physical paths. Two distinct
 // Catalog metadata records are NEVER collapsed: both stay visible with a
@@ -120,9 +135,9 @@ export function physicalResultKey(item,overlaps=[]){
 export function collapseVerifiedOverlaps(items,overlaps=[],{sourceId=null}={}){
   if(!Array.isArray(items))throw Error('Invalid overlapping View results');
   if(sourceId||!Array.isArray(overlaps)||!overlaps.length)return [...items];
-  const groups=new Map();
+  const groups=new Map(),parents=overlapParents(overlaps);
   for(const item of items){
-    const {key,depth:distance}=physicalResultKey(item,overlaps);
+    const {key,depth:distance}=physicalKeyWithParents(item,parents);
     const groupKey=key;
     if(!groups.has(groupKey))groups.set(groupKey,[]);
     groups.get(groupKey).push({item,distance});
