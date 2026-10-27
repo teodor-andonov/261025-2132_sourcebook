@@ -605,7 +605,7 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 **Goal:** Before clever catalog metadata, Sourcebook should be a superior visual browser.
 
 - [x] Initial read-only Open Folder without catalog (V0.0.9 code; CI/device validation still pending). Open/New Catalog remains available; multi-folder Tabs/recent workspaces are incomplete.
-- [ ] Two-part sidebar (physical folder Tabs and optional Catalog Folders/Tags/Views), breadcrumbs and persistent folder history.
+- [x] Standalone physical folder Tabs, nested-folder opening, independent back/forward histories and device-local restore (V0.0.11; CI/device verification pending). Complete Catalog Folders/Tags/Views integration remains open.
 - [ ] Gallery uniform adjustable grid + list; optional compact tile mode.
 - [ ] Resizable desktop panes; collapsible inspector/drawer on Android.
 - [ ] Image/SVG/PDF-first-page thumbnails, safe fallbacks for others.
@@ -679,7 +679,7 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 - [ ] Operation journal and undo where technically safe.
 - [ ] Refresh and incremental rescan on focus/navigation.
 - [ ] Folder exclusion/hidden files toggle and sort by source properties.
-- [ ] Tabs with right-click open in new tab, recently visited.
+- [ ] Right-click 'Open in new tab' and further recently visited/session refinements; folder-tab inspector action and Ctrl+Enter already implemented in V0.0.11.
 - [ ] Shortcut map / command palette and mobile equivalents.
 - [ ] Refuse unsupported destructive moves rather than fall back silently.
 

@@ -2,7 +2,7 @@ import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {nextSelectionIndex} from './navigation.mjs';
-import {plainRoot} from './workspace.mjs';
+import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
 import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts,assertTagSnapshotUnchanged} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
@@ -15,6 +15,7 @@ const state={
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
   tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1
 };
+let tabPersistQueue=Promise.resolve();
 const glyphs={
   book:'M3 3h7v18H3z M10 7h4v14h-4z M16 4l5 17 M16 5l3-1',
   folder:'M3 7V5a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
@@ -33,6 +34,7 @@ const glyphs={
   pin:'M16 3l5 5-3 1-3 3v5l-1 1-5-5-4 4-1-1 4-4-5-5 1-1h5z',
   close:'M18 6 6 18 M6 6l12 12',
   back:'M15 18l-6-6 6-6',
+  forward:'M9 18l6-6-6-6',
   chevron:'M9 18l6-6-6-6',
   view:'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   database:'M3 5a9 3 0 0 0 18 0 M3 5v14a9 3 0 0 0 18 0V5 M3 12a9 3 0 0 0 18 0',
@@ -99,22 +101,67 @@ async function recentCatalog(){
   if(await authorized(r.handle,'read'))await openDirectory(r.handle);
   else toast('Open the catalog again to grant access.',true);
 }
+function activeFolderTab(){return state.catalog?null:state.sources.find(tab=>tab.id===state.sourceId);}
+function rememberFolderTabs(){
+  if(state.catalog)return tabPersistQueue;
+  const session={tabs:state.sources.map(tab=>({...tab})),activeId:state.sourceId};
+  tabPersistQueue=tabPersistQueue.catch(()=>{}).then(async()=>{
+    await setLocal('folder-tabs-v1',session);
+    await setLocal('last-mode','folder');
+  }).catch(error=>console.warn('Folder tab workspace could not be saved',error));
+  return tabPersistQueue;
+}
 async function setPlainFolder(handle,remember=true){
-  const root=plainRoot(handle);
+  plainRoot(handle);
+  const stayingPlain=!state.catalog;
+  const restored=stayingPlain?null:loadFolderTabs(await getLocal('folder-tabs-v1').catch(()=>null));
+  const tabs=stayingPlain?state.sources:restored.tabs;
+  if(tabs.length>=32)throw Error('A maximum of 32 folder tabs can be open.');
+  const tab=createFolderTab(handle,crypto.randomUUID());
   closePreview();
-  state.catalog=null;state.catalogHandle=null;
-  state.sources=[root];state.handles.clear();state.handles.set(root.id,handle);
-  state.records.clear();state.taxonomy=[];state.tagFilter=null;state.sidebar=false;
-  state.sourceId=root.id;state.parts=[];state.selected.clear();state.search='';
-  if(remember){
-    try{await setLocal('last-folder',{handle,name:root.name});await setLocal('last-mode','folder');}
-    catch(e){console.warn('Folder session cannot be restored',e);}
+  if(!stayingPlain){
+    state.sources=[];state.handles.clear();state.records.clear();state.taxonomy=[];state.tagFilter=null;
+    for(const existing of tabs)state.handles.set(existing.id,existing.handle);
   }
-  await navigate(root.id,[]);
+  state.catalog=null;state.catalogHandle=null;
+  state.sources=[...tabs,tab];state.handles.set(tab.id,handle);
+  state.sourceId=tab.id;state.parts=[];state.selected.clear();state.search='';state.sidebar=false;
+  if(remember)void rememberFolderTabs();
+  await navigate(tab.id,[]);
 }
 async function choosePlainFolder(){
   try{const handle=await window.showDirectoryPicker({mode:'read'});await setPlainFolder(handle);}
   catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
+}
+async function openSelectedFolderTab(){
+  if(state.catalog||state.selected.size!==1)return;
+  const item=state.items.find(x=>state.selected.has(x.id));
+  if(item?.kind==='directory')await setPlainFolder(item.handle);
+}
+async function switchFolderTab(id){
+  const tab=state.sources.find(x=>x.id===id);
+  if(!tab||state.catalog)return;
+  state.sidebar=false;
+  await navigate(id,[...tab.parts]);
+}
+async function closePlainFolderTab(id){
+  if(state.catalog)return;
+  const wasActive=state.sourceId===id;
+  const result=closeFolderTab(state.sources,id,state.sourceId);
+  state.sources=result.tabs;state.sourceId=result.activeId;state.handles.delete(id);
+  if(wasActive){
+    ++state.request;closePreview();forgetImages();
+    state.items=[];state.parts=[];state.selected.clear();
+  }
+  void rememberFolderTabs();
+  if(!result.activeId){landing();return;}
+  if(wasActive)await switchFolderTab(result.activeId);
+  else render();
+}
+async function folderHistoryStep(delta){
+  if(state.catalog)return;
+  const target=folderHistoryTarget(state.sources,state.sourceId,delta);
+  if(target)await navigate(state.sourceId,target.parts,target.position);
 }
 function createCatalog(){
   openDialog('<h2>Create a catalog</h2><p>A portable <code>.sb</code> folder, stored wherever you choose.</p><form id="catalog-form"><label>Catalog name<input required name="name" value="My References" maxlength="90"/></label><label>Catalog code<small>1–4 lowercase letters used for filename IDs</small><input required name="code" value="ab" maxlength="4" pattern="[a-z]{1,4}"/></label><div class="dialog-actions"><button class="secondary" type="button" data-action="dismiss">Cancel</button><button class="primary">Choose location</button></div></form>');
@@ -189,7 +236,18 @@ async function addSource(){
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 async function reconnect(){
-  if(!state.catalog)return choosePlainFolder();
+  if(!state.catalog){
+    try{
+      const tab=activeFolderTab();
+      if(!tab)return choosePlainFolder();
+      const handle=await window.showDirectoryPicker({mode:'read'});
+      if(typeof tab.handle?.isSameEntry==='function'&&!await tab.handle.isSameEntry(handle))throw Error('Reconnect the same folder, or open a different folder in a new tab.');
+      state.sources=state.sources.map(x=>x.id===tab.id?{...x,handle,name:handle.name}:x);
+      state.handles.set(tab.id,handle);
+      await navigate(tab.id,[...tab.parts]);
+    }catch(error){if(error.name!=='AbortError')toast(errorText(error),true);}
+    return;
+  }
   try{
     const h=await window.showDirectoryPicker({mode:'read'});
     try{await setLocal('source:'+state.catalog.id+':'+state.sourceId,h);}
@@ -198,7 +256,7 @@ async function reconnect(){
     await navigate(state.sourceId,[]);
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
-async function navigate(id,parts){
+async function navigate(id,parts,historyPosition=null){
   state.sourceId=id;state.parts=parts;state.search='';state.selected.clear();state.pageCount=150;
   state.tagDraftItem=null;state.tagFilter=null;
   const request=++state.request;
@@ -214,7 +272,9 @@ async function navigate(id,parts){
       if(items.length%100===0){state.items=sort(items);renderItems();}
     }
     if(request!==state.request)return;
-    state.items=sort(items);state.loading=false;render();
+    state.items=sort(items);state.loading=false;
+    if(!state.catalog){state.sources=visitFolderTab(state.sources,id,parts,{historyPosition});void rememberFolderTabs();}
+    render();
   }catch(e){if(request===state.request){state.loading=false;render();toast(errorText(e),true);}}
 }
 function sort(items){return [...items].sort((a,b)=>((a.kind==='directory'?-1:1)-(b.kind==='directory'?-1:1))||a.name.localeCompare(b.name,undefined,{numeric:true}));}
@@ -242,17 +302,27 @@ async function togglePin(id){
   }catch(error){toast('Pin failed: '+errorText(error),true);}
 }
 function render(){
+  $('#folder-context')?.remove();
   if(!state.catalog&&!state.sourceId)return landing();
   const plain=!state.catalog;
   document.title=(state.parts.at(-1)||currentSource()?.name||state.catalog?.name||'Sourcebook')+' — Sourcebook';
-  const sources=state.sources.map(source=>'<button class="nav-item '+(source.id===state.sourceId?'selected':'')+'" data-source="'+escapeHTML(source.id)+'">'+icon('folder',16)+'<span>'+escapeHTML(source.name)+'</span>'+(!state.handles.has(source.id)?icon('alert',13):'')+'</button>').join('');
+  const sources=state.sources.map(source=>plain
+    ?'<div class="tab-entry"><button class="nav-item tab-nav '+(source.id===state.sourceId?'selected':'')+'" data-source="'+escapeHTML(source.id)+'" title="'+escapeHTML([source.name,...source.parts].join('/'))+'">'+icon('folder',16)+'<span>'+escapeHTML(source.name)+'</span></button><button class="tab-close" data-close-tab="'+escapeHTML(source.id)+'" title="Close '+escapeHTML(source.name)+'" aria-label="Close '+escapeHTML(source.name)+'">'+icon('close',12)+'</button></div>'
+    :'<button class="nav-item '+(source.id===state.sourceId?'selected':'')+'" data-source="'+escapeHTML(source.id)+'">'+icon('folder',16)+'<span>'+escapeHTML(source.name)+'</span>'+(!state.handles.has(source.id)?icon('alert',13):'')+'</button>'
+  ).join('');
   const rootSection='<div class="section-head"><span>'+(plain?'TABS':'FOLDERS')+'</span>'+button(plain?'Open folder':'Register folder','plus',plain?'open-folder':'add-source')+'</div><nav>'+sources+'</nav>';
   const catalogSection=plain
     ?'<div class="section-head"><span>CATALOG</span></div><nav><button class="nav-item" data-action="open-catalog">'+icon('database',16)+'<span>Open catalog</span></button><button class="nav-item" data-action="create-catalog">'+icon('plus',16)+'<span>New catalog</span></button></nav>'
     :'<div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav>';
   const header='<button class="catalog-chip" data-action="home">'+icon(plain?'folder':'database',16)+'<span>'+escapeHTML(plain?'Browse':state.catalog.name)+'</span>'+icon('chevron',13)+'</button>';
   const fileActions=plain?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
+  const activeTab=activeFolderTab();
+  const backward=activeTab&&activeTab.position>0;
+  const nextward=activeTab&&activeTab.position<activeTab.history.length-1;
+  const historyControls=plain
+    ?'<button class="icon-button" title="Back" aria-label="Back" data-action="tab-back" '+(backward?'':'disabled')+'>'+icon('back')+'</button><button class="icon-button" title="Forward" aria-label="Forward" data-action="tab-forward" '+(nextward?'':'disabled')+'>'+icon('forward')+'</button>'
+    :'';
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML='<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
@@ -368,7 +438,7 @@ function renderInspector(){
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   const record=itemRecord(item);
   if(!state.catalog){
-    host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),40)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><details class="file-details" open><summary>File information</summary><code>'+escapeHTML(item.name)+'</code></details>';
+    host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),40)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4>'+(item.kind==='directory'?'<button class="secondary full" data-action="open-selected-tab">'+icon('plus',15)+' Open in new tab</button>':'')+'<details class="file-details" open><summary>File information</summary><code>'+escapeHTML(item.name)+'</code></details>';
     return;
   }
   if(state.tagDraftItem!==item.id){
@@ -515,6 +585,7 @@ document.addEventListener('input',event=>{
   if(event.target.id==='density'){state.size=Number(event.target.value);localStorage.setItem('sb-size',state.size);$('#items')?.style.setProperty('--size',state.size+'px');}
 });
 document.addEventListener('click',async event=>{
+  $('#folder-context')?.remove();
   const suggestion=event.target.closest('[data-tag-suggestion]');
   if(suggestion){chooseTagSuggestion(Number(suggestion.dataset.tagSuggestion));$('#tag-input')?.focus();return;}
   const pin=event.target.closest('[data-toggle-tag-pin]');
@@ -524,12 +595,16 @@ document.addEventListener('click',async event=>{
   const removeTag=event.target.closest('[data-remove-tag]');
   if(removeTag){state.tagDraft.splice(Number(removeTag.dataset.removeTag),1);renderTagPills();$('#tag-input')?.focus();return;}
   const crumb=event.target.closest('[data-crumb]');if(crumb){return navigate(state.sourceId,state.parts.slice(0,Number(crumb.dataset.crumb)+1));}
-  const source=event.target.closest('[data-source]');if(source){state.sidebar=false;return navigate(source.dataset.source,[]);}
+  const closeTab=event.target.closest('[data-close-tab]');if(closeTab){return closePlainFolderTab(closeTab.dataset.closeTab);}
+  const source=event.target.closest('[data-source]');if(source){return state.catalog?navigate(source.dataset.source,[]):switchFolderTab(source.dataset.source);}
   const tile=event.target.closest('[data-item]');if(tile){const item=state.items.find(i=>i.id===tile.dataset.item);if(item)select(item,event);return;}
   const action=event.target.closest('[data-action]')?.dataset.action;
   if(!action)return;
   switch(action){
     case 'open-folder':choosePlainFolder();break;
+    case 'open-selected-tab':openSelectedFolderTab().catch(e=>toast(errorText(e),true));break;
+    case 'tab-back':folderHistoryStep(-1);break;
+    case 'tab-forward':folderHistoryStep(1);break;
     case 'create-catalog':createCatalog();break;
     case 'open-catalog':chooseCatalog().catch(e=>toast(errorText(e),true));break;
     case 'recent':recentCatalog().catch(e=>toast(errorText(e),true));break;
@@ -551,6 +626,24 @@ document.addEventListener('click',async event=>{
     case 'import':importFiles();break;
   }
 });
+// Contextual folder action is read-only. Long-press on supported touch browsers
+// maps to contextmenu; no source directory is moved or renamed here.
+document.addEventListener('contextmenu',event=>{
+  if(state.catalog)return;
+  const tile=event.target.closest('[data-item]');
+  const item=tile&&state.items.find(x=>x.id===tile.dataset.item);
+  if(item?.kind!=='directory')return;
+  event.preventDefault();$('#folder-context')?.remove();
+  select(item,{shiftKey:false,ctrlKey:false,metaKey:false});
+  const menu=document.createElement('div');
+  menu.id='folder-context';menu.className='folder-context';
+  menu.setAttribute('role','menu');
+  menu.innerHTML='<button role="menuitem" data-action="open-selected-tab">'+icon('plus',15)+' Open in new tab</button>';
+  document.body.append(menu);
+  const rect=menu.getBoundingClientRect();
+  menu.style.left=Math.max(8,Math.min(event.clientX,window.innerWidth-rect.width-8))+'px';
+  menu.style.top=Math.max(8,Math.min(event.clientY,window.innerHeight-rect.height-8))+'px';
+});
 document.addEventListener('dblclick',event=>{
   const tile=event.target.closest('[data-item]');if(!tile)return;
   const item=state.items.find(i=>i.id===tile.dataset.item);
@@ -571,9 +664,11 @@ document.addEventListener('keydown',event=>{
     if(event.key==='Backspace'&&!event.target.value&&state.tagDraft.length){state.tagDraft.pop();renderTagPills();return;}
     if(event.key==='Escape'){event.preventDefault();event.target.value='';showTagSuggestions();event.stopPropagation();return;}
   }
-  if(event.key==='Escape'){closePreview();$('#dialog')?.remove();return;}
+  if(!state.catalog&&event.altKey&&(event.key==='ArrowLeft'||event.key==='ArrowRight')){event.preventDefault();folderHistoryStep(event.key==='ArrowLeft'?-1:1);return;}
+  if(event.key==='Escape'){closePreview();$('#dialog')?.remove();$('#folder-context')?.remove();return;}
   if(state.previewId){if(event.key==='ArrowRight')previewStep(1);if(event.key==='ArrowLeft')previewStep(-1);return;}
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('#search-input')?.focus();return;}
+  if(!state.catalog&&event.ctrlKey&&event.key==='Enter'){const selected=state.items.find(item=>item.id===state.lastSelected);if(selected?.kind==='directory'){event.preventDefault();openSelectedFolderTab().catch(e=>toast(errorText(e),true));}return;}
   if(event.target.matches('input,textarea')||event.ctrlKey||event.metaKey||event.altKey)return;
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key)){
     const nodes=[...document.querySelectorAll('#items .resource[data-item]')];
@@ -599,8 +694,21 @@ async function boot(){
   if(typeof window.showDirectoryPicker!=='function'){landing();toast('This browser does not provide directory access. Folder browsing is unavailable on this device.',true);return;}
   try{
     if(await getLocal('last-mode')==='folder'){
-      const r=await getLocal('last-folder');
-      if(r?.handle&&typeof r.handle.queryPermission==='function'&&await r.handle.queryPermission({mode:'read'})==='granted')return await setPlainFolder(r.handle,false);
+      const session=loadFolderTabs(await getLocal('folder-tabs-v1'));
+      if(!session.tabs.length){
+        // Upgrade the previous single-root local preference when present.
+        const old=await getLocal('last-folder');
+        if(old?.handle&&typeof old.handle.queryPermission==='function'&&await old.handle.queryPermission({mode:'read'})==='granted')return await setPlainFolder(old.handle);
+      }
+      if(session.tabs.length){
+        state.catalog=null;state.catalogHandle=null;state.records.clear();state.taxonomy=[];state.tagFilter=null;
+        state.sources=session.tabs;state.handles=new Map(session.tabs.map(tab=>[tab.id,tab.handle]));
+        state.sourceId=session.activeId;
+        const active=activeFolderTab();
+        state.parts=[...active.parts];
+        if(await active.handle.queryPermission({mode:'read'})==='granted')return await navigate(active.id,[...active.parts]);
+        state.handles.delete(active.id);render();return;
+      }
       landing();return;
     }
     const r=await getLocal('recent');

@@ -4,6 +4,15 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — Big development cycle: independent physical Folder Tabs (V0.0.11 candidate)
+
+- Browser-first read-only browsing now supports up to 32 independent physical folder Tabs, including opening folders through the directory picker or from a selected nested folder. Each Tab remembers its own root, current path, backward/forward history and active position.
+- Added compact close controls, disabled Back/Forward controls and Alt+Left/Right navigation. Clicking another Tab restores its own path without silently resetting to root. Right-click/long-press, Ctrl+Enter or the inspector action opens a selected directory in a separate Tab.
+- Tab sessions are saved to browser-local IndexedDB, preserving FileSystemDirectoryHandles and navigation history where permitted. Reload restores previously granted folders only; revoked permissions require explicit reconnect. A single-folder preference from V0.0.9 can be migrated. No catalog records or ordinary files are modified by these operations.
+- New pure tab-model tests cover independent histories, branch truncation, stored session validation, closing tabs and no source mutations. New tab UI awaits manual screenshot capture; do **not** run screenshot or Pages workflows automatically.
+- Service worker bumped to `sourcebook-shell-0.0.11-ta-icons-1`. **CI and physical Windows/Android verification remain pending at commit time**; catalog-wide root trees, catalog tabs/Views and advanced context menus are not yet delivered.
+- The user has explicitly selected **large coherent development cycles**, and now controls both screenshot generation and live Pages publishing manually. Only commit CI remains automatic. Historical status sections below describe older automatic schedule policies and are retained as dated history, not current workflow policy.
+
 ## 2026-10-27 — Prevent stale inspector tag writes (V0.0.10 candidate)
 
 - The inspector now compares its catalog-local `tags.json` snapshot with the current disk taxonomy **before any resource or taxonomy write**. If another editor changed tag names, hierarchy, pinning or membership taxonomy, Save refuses the stale edit and asks to reopen the catalog.

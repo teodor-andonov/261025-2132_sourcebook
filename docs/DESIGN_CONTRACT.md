@@ -18,7 +18,7 @@ Sourcebook should be an unusually capable **visual file utility**, not a decorat
 ## Browser-first + optional catalog contract
 
 - Sidebar: **Tabs** (physical folder workspaces) and **Catalog** (registered existing root Folders, nested Tags and saved Views).
-- An ordinary folder is browsable without a catalog in the current read-only prototype. Persistent multi-folder Tabs and the complete Catalog navigation remain future increments.
+- An ordinary folder is browsable without a catalog in the current read-only prototype. Standalone multi-folder Tabs now preserve independent paths/history and support device-local restoration. The complete Catalog navigation remains a future increment.
 - Catalog Folders reference registered disk roots; objectified items appear under their nearest registered root via derived relative ancestors. Registration must not copy/rename/import.
 - Nested tags provide manual grouping; a pinned tag is only a shortcut to the same stable ID, not a separate manual Collection record.
 - **Views** combines saved resource scope/filter/query with view settings; avoid independent Smart Folders and Collection schemas.
