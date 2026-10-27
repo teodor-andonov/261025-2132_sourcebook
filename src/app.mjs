@@ -34,12 +34,13 @@ async function refreshPendingCatalog(){
   catch(error){state.pendingTransaction={error:errorText(error),conflicts:['unreadable']};}
 }
 async function commitCatalogEdits(changes){
+  if(state.backupBusy)throw Error('Wait for the catalog backup inspection to finish.');
   if(state.pendingTransaction)throw Error('Resolve the interrupted catalog save before editing.');
   try{return await commitCatalogTransaction({handle:state.catalogHandle,catalogId:state.catalog.id,changes});}
   finally{await refreshPendingCatalog();}
 }
 async function recoverCatalogSave(){
-  if(!state.catalog||state.resourceSaving||state.bulkSaving||state.viewSaving)return;
+  if(!state.catalog||state.resourceSaving||state.bulkSaving||state.viewSaving||state.backupBusy)return;
   state.resourceSaving=true;
   let recovered=false;
   try{
@@ -367,7 +368,7 @@ async function openDirectory(h){
   if(state.sourceId)await navigate(state.sourceId,[]);
 }
 async function addSource(){
-  if(state.bulkSaving||state.resourceSaving)return toast('Finish metadata editing before registering folders.',true);
+  if(state.bulkSaving||state.resourceSaving||state.backupBusy)return toast('Finish metadata editing or backup inspection before registering folders.',true);
   try{
     const h=await window.showDirectoryPicker({mode:'read'});
     if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed to register a folder.');
@@ -791,7 +792,7 @@ function select(item,event){
   refreshSelectionUI();renderInspector();
 }
 async function bulkTags(mode){
-  if(!state.catalog||state.bulkSaving||state.resourceSaving||state.selected.size<2)return;
+  if(!state.catalog||state.bulkSaving||state.resourceSaving||state.backupBusy||state.selected.size<2)return;
   if(!commitTagInput())return;
   const items=state.items.filter(item=>state.selected.has(item.id));
   if(items.length!==state.selected.size)return toast('Selection changed. Select again.',true);
@@ -832,7 +833,7 @@ async function bulkTags(mode){
 }
 async function saveResource(){
   if(!state.catalog)return;
-  if(state.bulkSaving||state.resourceSaving)return toast('Finish the current metadata save first.',true);
+  if(state.bulkSaving||state.resourceSaving||state.backupBusy)return toast('Finish the current metadata save or backup inspection first.',true);
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   if(!commitTagInput())return;
   const tags=[...state.tagDraft],notes=$('#notes')?.value||'';
