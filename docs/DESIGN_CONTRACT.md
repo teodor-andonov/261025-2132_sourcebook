@@ -68,6 +68,13 @@ Typed custom schemas, manual ratings, tag colors, elaborate forms, kanban, AI-ta
 - Set accent to a custom hex color in Settings; navigation and selection adopt it without recoloring the neutral surfaces.
 - Use one 1440×900 screenshot viewport for desktop visual review; real browser captures with fixture data, not mockups.
 
+## Indexed View freshness contract
+
+- Indexing is explicit, read-only and device-local. An Index/Refresh control in saved Views may target all registered Folders or one selected Folder. It must not silently request write access or alter Catalog metadata.
+- Persisted Folder snapshots must be identity-bound to the original directory handle and revalidated with `isSameEntry` before use. Display restored results as **Cached · refresh**, never as live filesystem truth.
+- Missing/type-drift labels require a completed scan in the current session. Partial, disconnected, cancelled or quota-failed refreshes must not silently replace a known complete snapshot or imply that files are absent.
+- A **Clear** action removes only the device's cached index after confirmation. Neither it nor refresh may touch source files, Tag IDs or Views JSON. Root-granular refresh is not a filesystem watcher.
+
 ## Cross-references
 
 [ULTRA Roadmap](ROADMAP_V1_ULTRA.md) · [Implementation status](IMPLEMENTATION_STATUS.md) · [1440×900 screenshots](../screenshots/README.md)

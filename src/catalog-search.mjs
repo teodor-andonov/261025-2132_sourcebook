@@ -103,12 +103,13 @@ export function catalogQueryWithScan(records,sources,taxonomy,filter={},scan=nul
     if(!recordKeys.has(k))extra.push({id:null,sourceId:entry.sourceId,path:entry.path,kind:entry.kind,tagIds:[]});
   }
   const complete=new Set(Array.isArray(scan.completeRootIds)?scan.completeRootIds:[]);
+  const stale=new Set(Array.isArray(scan.staleRootIds)?scan.staleRootIds:[]);
   const results=catalogQueryResults([...originals,...extra],sources,taxonomy,filter).map(item=>{
     const unobjectified=item.record?.id===null;
     const k=item.sourceId+'\u0000'+item.path;
     const missing=!unobjectified&&complete.has(item.sourceId)&&!found.has(k);
     const changedKind=!unobjectified&&found.has(k)&&found.get(k)!==item.kind;
-    return {...item,record:unobjectified?null:item.record,unobjectified,missing,changedKind};
+    return {...item,record:unobjectified?null:item.record,unobjectified,missing,changedKind,staleIndex:stale.has(item.sourceId)};
   });
   return filterCatalogStatus(results,filter.fileStatus??'all');
 }
