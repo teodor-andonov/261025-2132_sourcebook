@@ -11,3 +11,12 @@ export function nextSelectionIndex(current,key,count,columns=1) {
   if(key==='ArrowDown')return Math.min(count-1,current+columns);
   return Math.min(count-1,current);
 }
+
+// Shift selection must never include items hidden by a search or tag filter.
+export function selectionRangeIds(visibleItems,anchorId,targetId){
+  const ids=visibleItems.map(item=>item.id);
+  const a=ids.indexOf(anchorId),b=ids.indexOf(targetId);
+  if(b<0)return [];
+  if(a<0)return [targetId];
+  return ids.slice(Math.min(a,b),Math.max(a,b)+1);
+}

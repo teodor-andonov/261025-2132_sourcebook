@@ -6,7 +6,7 @@
 
 ## 2026-10-27 — Bulk nested Tags and safe catalog-only writes (V0.0.14 candidate)
 
-- Added touch-friendly Select mode, Ctrl/Cmd-click, Shift range and Ctrl/Cmd+A (current filtered folder results). The multi-resource inspector now supports Add/Remove nested tags using hashtag pills and keyboard suggestions, with a limit of 250 selected resources per operation.
+- Added touch-friendly Select mode, Ctrl/Cmd-click, Shift range and Ctrl/Cmd+A (current filtered folder results). Shift selection excludes resources hidden by active filters; the Clear action tracks selection without redrawing the gallery. The multi-resource inspector now supports Add/Remove nested tags using hashtag pills and keyboard suggestions, with a limit of 250 selected resources per operation.
 - Add preserves unrelated tags and notes; Remove matches exact paths rather than descendants. Legacy string tags migrate only on explicitly changed records. Stable IDs are reused; new resource identities are allocated without renaming or writing ordinary files.
 - Catalog identity, taxonomy and selected records are preflight-checked; source entries are revalidated read-only. Catalog JSON writes are read back and verified, with stale checks during the batch. **Not atomic:** interrupted batches can partially save; errors report verified record count and the catalog refreshes afterward.
 - Single-resource save now compares the entire previous record rather than only `updatedAt`; changing search/tag filters clears hidden selection.

@@ -2,7 +2,7 @@ import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.mjs';
-import {nextSelectionIndex} from './navigation.mjs';
+import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
 import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts,assertTagSnapshotUnchanged} from './tags.mjs';
@@ -322,7 +322,7 @@ function render(){
     ?'<div class="section-head"><span>CATALOG</span></div><nav><button class="nav-item" data-action="open-catalog">'+icon('database',16)+'<span>Open catalog</span></button><button class="nav-item" data-action="create-catalog">'+icon('plus',16)+'<span>New catalog</span></button></nav>'
     :'<div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav>';
   const header='<button class="catalog-chip" data-action="home">'+icon(plain?'folder':'database',16)+'<span>'+escapeHTML(plain?'Browse':state.catalog.name)+'</span>'+icon('chevron',13)+'</button>';
-  const selectionActions=plain?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+(state.selected.size?'<button class="text-button" data-action="clear-selection" title="Clear selection">'+icon('close',15)+' <span>Clear</span></button>':'');
+  const selectionActions=plain?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
   const fileActions=plain?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
   const activeTab=activeFolderTab();
   const backward=activeTab&&activeTab.position>0;
@@ -470,13 +470,13 @@ function refreshSelectionUI(){
     node.classList.toggle('selected',selected);
     node.setAttribute('aria-selected',String(selected));
   }
+  const clear=$('[data-action="clear-selection"]');if(clear)clear.hidden=!state.selected.size;
   const status=$('#status');
   if(status)status.textContent=state.selected.size?state.selected.size+' selected':'Local-first · '+state.items.length+' resources';
 }
 function select(item,event){
   if(event.shiftKey&&state.lastSelected){
-    const a=state.items.findIndex(i=>i.id===state.lastSelected),b=state.items.findIndex(i=>i.id===item.id);
-    if(a>=0&&b>=0){state.selected.clear();for(let x=Math.min(a,b);x<=Math.max(a,b);x++)state.selected.add(state.items[x].id);}
+    state.selected=new Set(selectionRangeIds(visibleItems(),state.lastSelected,item.id));
   }else if(event.ctrlKey||event.metaKey||state.selectionMode){if(state.selected.has(item.id))state.selected.delete(item.id);else state.selected.add(item.id);}
   else{state.selected.clear();state.selected.add(item.id);}
   state.lastSelected=item.id;

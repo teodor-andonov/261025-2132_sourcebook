@@ -17,3 +17,12 @@ test('Home and End target visible bounds',()=>{
   assert.equal(next(6,'Home',10,3),0);
   assert.equal(next(1,'End',10,3),9);
 });
+
+import {selectionRangeIds} from '../src/navigation.mjs';
+test('Shift selection uses only filtered visible items and falls back safely when anchor is hidden',()=>{
+  const visible=[{id:'a'},{id:'c'},{id:'f'}];
+  assert.deepEqual(selectionRangeIds(visible,'a','f'),['a','c','f']);
+  assert.deepEqual(selectionRangeIds(visible,'f','a'),['a','c','f']);
+  assert.deepEqual(selectionRangeIds(visible,'b','f'),['f']);
+  assert.deepEqual(selectionRangeIds(visible,'a','hidden'),[]);
+});
