@@ -36,6 +36,10 @@ These are **real Chromium browser captures** of Sourcebook with synthetic local 
 
 Full details: [Release and CI policy](docs/RELEASE_PROCESS.md). Pages must first be enabled from repository Settings → Pages → GitHub Actions.
 
+## Current design direction
+
+**Minimal and utilitarian:** grayscale surfaces, compact spacing, subtle corners, one configurable blue highlight color, icon-first controls. **Tags first:** small hashtag pills and a nested tag taxonomy; no large custom-property system yet. See [Design contract](docs/DESIGN_CONTRACT.md).
+
 ## Product principles
 
 1. Browse existing folders without importing or renaming files.
