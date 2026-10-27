@@ -119,5 +119,5 @@ export function catalogQueryWithScan(records,sources,taxonomy,filter={},scan=nul
   // Never infer overlap from a matching filename. Only current-session, live
   // isSameEntry-verified root relationships may collapse duplicate results.
   // Source-scoped Views retain their own registered Folder projection.
-  return filterCatalogStatus(collapseVerifiedOverlaps(results,scan.overlaps||[],filter),filter.fileStatus??'all');
+  return sortCatalogResults(filterCatalogStatus(collapseVerifiedOverlaps(results,scan.overlaps||[],filter),filter.fileStatus??'all'),filter.sort||'name');
 }
