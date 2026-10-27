@@ -31,6 +31,7 @@ Sourcebook should be an unusually capable **visual file utility**, not a decorat
 - Opening a Catalog is read-only, including inspection of an unfinished journal. Never replay or discard it silently. Block further catalog edits and expose a compact **Resume** action with explicit permission and confirmation.
 - If a journal contains malformed data or any record differs from both its before and after snapshot, stop without overwriting; direct the user to manual backup/reconciliation. Do not claim automatic conflict merging or crash-atomicity.
 - A journal is **not** a lock against simultaneous offline editors or Syncthing races. Avoid concurrent editing of one synced Catalog until proper reconciliation and device acceptance exist.
+- A verified backup may explicitly recreate **missing** resource metadata records, in journaled batches of at most 250, after preview, stale-state revalidation and write permission. Never overwrite changed records or auto-restore core JSON, pending journals, previews or ordinary source files. This is selective recovery, **not** full restore or conflict merging.
 
 ## Tags first
 

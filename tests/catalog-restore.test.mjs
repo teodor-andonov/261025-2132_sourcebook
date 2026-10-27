@@ -15,7 +15,7 @@ class MemoryDir {
       createWritable:async()=>{
         let buffer;
         return {write:async data=>{buffer=data;},close:async()=>{
-          if(this.failName===name){this.failName=null;throw Error('Simulated interruption');}
+          if(this.failName===name){this.failName=null;this.files.delete(name);throw Error('Simulated interruption');}
           this.files.set(name,buffer);this.writes.push(name);
         },abort:async()=>{}};
       }};
