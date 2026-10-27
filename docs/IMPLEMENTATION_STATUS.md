@@ -1,3 +1,12 @@
+## 2026-10-27 — Verified Catalog metadata backups and read-only inspection (V0.0.24 candidate)
+
+- **Implemented in source:** Settings now offers **Export backup** for the active Catalog. The JSON snapshot includes raw `catalog.json`, `sources.json`, `tags.json`, `views.json`, all `resources/*.json` metadata records and any pending `.sourcebook-pending.json` recovery journal. It intentionally excludes previews, device-local grants and ordinary source files.
+- Every included file has a SHA-256 digest. Export re-reads the file list and contents to catch common concurrent modifications, caps payloads at 25 MiB/10,000 records and refuses unexpected resource JSON paths. **Not** an atomic filesystem snapshot, cross-device lock or complete catalog folder archive.
+- **Inspect backup** accepts a local JSON file, verifies its digests and catalog ID/code, then compares metadata read-only against the open Catalog: unchanged, changed, missing now and added since backup. Pending journals are flagged. No automatic restore/merge exists; no source or Catalog files are written by inspection.
+- Added unit tests for snapshot content, checksums, tampering, foreign Catalogs, pending journals and simulated concurrent edits. Offline shell precaches the new module. **PR CI, Pages publishing and physical Windows/Android validation pending** at the time of this log entry.
+- **Development workflow:** side branch → PR CI → squash merge into release `main` → GitHub Actions publication (manual dispatch also supported). Manual screenshots remain artifact-only and are never part of normal CI.
+- Follow-up: genuine browser/file-picker acceptance, safe catalog restore design with explicit preview/confirmation, Syncthing conflict-copy detection and large-catalog streaming export.
+
 ## 2026-10-27 — Fold-inspired file identity and side-preview refinement (V0.0.23 candidate)
 
 - Audited Fold `teodor-andonov/261013-1633_pwa-file-explorer` (its file extension palette and badges, neutral root rail, layout controls, preview pane and resizer). Ported design principles rather than Fold's edit/write/delete operations or code architecture.
