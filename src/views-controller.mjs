@@ -12,15 +12,22 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
     if(!state.catalog||state.bulkSaving||state.viewSaving)return;
     const view=state.views.find(v=>v.id===id);if(!view)return toast('View not found',true);
     state.activeViewId=id;state.catalogTagView=null;state.tagFilter=null;state.search=view.query;
-    state.view=view.presentation.mode;state.size=view.presentation.size;state.sort=view.presentation.sort;
+    state.view=view.presentation.mode;state.size=view.presentation.size;state.sort=view.presentation.sort;state.fileType=view.fileType;
     state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;state.selectionMode=false;state.pageCount=150;
     ++state.request;forgetImages();state.loading=false;state.items=results(view);render();
+  }
+  function requery(){
+    const view=active();
+    if(!view)return;
+    state.items=results({...view,fileType:state.fileType});
+    state.selected.clear();state.lastSelected=null;state.pageCount=150;
+    render();
   }
   async function refresh(){
     if(!inResults())return;
     await refreshRecords();
     const view=active();
-    if(view)state.items=results(view);
+    if(view)state.items=results({...view,fileType:state.fileType});
     state.selected.clear();render();
   }
   function spec(){
@@ -28,7 +35,7 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
     const tagId=base?base.tagId:path?flattenedTagTree(state.taxonomy).find(t=>t.path===path)?.id||null:null;
     if(path&&!tagId)throw Error('Tag no longer exists');
     return {sourceId:base?base.sourceId:state.catalogTagView?null:state.sourceId,
-      folderPath:base?base.folderPath:state.catalogTagView?'':state.parts.join('/'),tagId,query:state.search,
+      folderPath:base?base.folderPath:state.catalogTagView?'':state.parts.join('/'),tagId,query:state.search,fileType:state.fileType,
       presentation:{mode:state.view,size:state.size,sort:state.sort}};
   }
   async function mutate(edit){
@@ -50,10 +57,15 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
   async function save(name){return mutate(v=>createSavedView(v,{...spec(),name},crypto.randomUUID()));}
   async function update(){const id=state.activeViewId;if(!id)return false;return mutate(v=>updateSavedView(v,id,spec()));}
   async function rename(name){const id=state.activeViewId;if(!id)return false;return mutate(v=>updateSavedView(v,id,{name}));}
+  async function togglePin(id){
+    const view=state.views.find(v=>v.id===id);
+    if(!view)return false;
+    return mutate(v=>updateSavedView(v,id,{pinned:!view.pinned}));
+  }
   async function remove(id){
     const view=state.views.find(v=>v.id===id);
     if(!view||!confirm('Delete View "'+view.name+'"? Files and tags remain unchanged.'))return;
     if(await mutate(v=>removeSavedView(v,id))&&state.activeViewId===id)await navigate(state.sourceId,[...state.parts]);
   }
-  return {active,inResults,title,open,refresh,save,update,rename,remove};
+  return {active,inResults,title,open,refresh,requery,save,update,rename,remove,togglePin};
 }

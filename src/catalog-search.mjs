@@ -1,6 +1,15 @@
 import {recordTagPaths,includesTagPath,normalizeTagPath,matchesResourceSearch,tagPath} from './tags.mjs';
 
 // Read-only catalog-wide projection: records only, no file handles or writes.
+export function catalogFileType(item){
+  if(item?.kind==='directory')return 'folder';
+  if(item?.kind!=='file')return 'other';
+  const name=String(item.name||'').toLocaleLowerCase();
+  if(/\.(jpe?g|png|webp|gif|avif|bmp|svg)$/.test(name))return 'image';
+  if(/\.pdf$/.test(name))return 'pdf';
+  if(/\.(mp4|mov|webm)$/.test(name))return 'video';
+  return 'other';
+}
 export function sortCatalogResults(items,mode='name'){
   if(!['name','name-desc','type'].includes(mode))throw Error('Invalid sort mode');
   const cmp=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'});
@@ -25,6 +34,8 @@ export function catalogQueryResults(records,sources,taxonomy,filter={}){
   if(!Array.isArray(records)||!Array.isArray(sources)||!Array.isArray(taxonomy))throw Error('Invalid catalog index');
   const roots=new Map(sources.filter(s=>s&&typeof s.id==='string').map(s=>[s.id,s]));
   const sourceId=filter.sourceId??null,scope=validScope(filter.folderPath??'');
+  const fileType=filter.fileType??'all';
+  if(!['all','image','pdf','video','folder','other'].includes(fileType))throw Error('Invalid file type filter');
   if(scope.length&&!sourceId)throw Error('Folder scope needs a source');
   if(sourceId&&!roots.has(sourceId))return [];
   const tag=filter.tagId?tagPath(taxonomy,filter.tagId):normalizeTagPath(filter.tagPath||'');
@@ -39,6 +50,7 @@ export function catalogQueryResults(records,sources,taxonomy,filter={}){
     const paths=recordTagPaths(record,taxonomy);
     if(tag&&!includesTagPath(paths,tag))continue;
     const name=segments.at(-1);
+    if(fileType!=='all'&&catalogFileType({name,kind:record.kind})!==fileType)continue;
     if(!matchesResourceSearch(name,paths,filter.query||''))continue;
     const key=record.sourceId+'\u0000'+record.path;
     if(seen.has(key))continue;

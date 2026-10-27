@@ -59,3 +59,29 @@ test('saving from a nested physical folder captures recursive source scope and l
   assert.equal(f.disk['views.json'][0].tagId,null);
   assert.deepEqual(f.writes,['views.json']);
 });
+
+
+test('opening a filtered View restores its type and does not overwrite underlying files',()=>{
+  const f=fixture();
+  f.state.views[0].fileType='pdf';f.state.views[0].pinned=true;
+  f.ui.open('v1');
+  assert.equal(f.state.fileType,'pdf');
+  assert.deepEqual(f.state.items,[]);
+  assert.deepEqual(f.writes,[]);
+});
+test('pinning a View is an explicit catalog-only edit and keeps its identity',async()=>{
+  const f=fixture();
+  assert.equal(await f.ui.togglePin('v1'),true);
+  assert.equal(f.state.views[0].pinned,true);
+  assert.equal(f.state.views[0].id,'v1');
+  assert.deepEqual(f.writes,['views.json']);
+});
+test('live file type change requeries active saved View without writing until Update',async()=>{
+  const f=fixture();
+  f.ui.open('v1');
+  f.state.fileType='pdf';f.ui.requery();
+  assert.deepEqual(f.state.items,[]);
+  assert.deepEqual(f.writes,[]);
+  assert.equal(await f.ui.update(),true);
+  assert.equal(f.disk['views.json'][0].fileType,'pdf');
+});

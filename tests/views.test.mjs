@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {catalogQueryResults,sortCatalogResults,sortBrowserItems} from '../src/catalog-search.mjs';
 import {ensureTagPath} from '../src/tags.mjs';
-import {normalizeView,validateViews,createSavedView,updateSavedView,removeSavedView,assertViewsSnapshotUnchanged} from '../src/views.mjs';
+import {normalizeView,validateViews,createSavedView,updateSavedView,removeSavedView,assertViewsSnapshotUnchanged,sortViewsForSidebar} from '../src/views.mjs';
 const roots=[{id:'a',name:'Images'},{id:'b',name:'Papers'}];
 let i=0;
 const tags=ensureTagPath([],'Architecture / Timber',()=> 't'+(++i));
@@ -58,4 +58,32 @@ test('physical folder sort control preserves folders first and sorts remaining f
   const items=[{name:'z.pdf',kind:'file'},{name:'B',kind:'directory'},{name:'a.png',kind:'file'},{name:'A',kind:'directory'}];
   assert.deepEqual(sortBrowserItems(items,'name-desc').map(x=>x.name),['B','A','z.pdf','a.png']);
   assert.deepEqual(sortBrowserItems(items,'type').map(x=>x.name),['A','B','z.pdf','a.png']);
+});
+
+
+test('backwards-compatible View fields default to unpinned and all files',()=>{
+  const legacy={...spec,id:'v-legacy'};
+  const normalized=normalizeView(legacy);
+  assert.equal(normalized.fileType,'all');
+  assert.equal(normalized.pinned,false);
+  assert.doesNotThrow(()=>assertViewsSnapshotUnchanged([normalized],[legacy]));
+  assert.throws(()=>assertViewsSnapshotUnchanged([normalized],[{...legacy,query:'roof'}]),/changed/);
+});
+test('View pins and file-type filters survive edit, sorting and validation',()=>{
+  const a=createSavedView([],spec,'a');
+  const b=createSavedView(a,{...spec,name:'Pinned PDF',fileType:'pdf',pinned:true},'b');
+  assert.equal(b[1].fileType,'pdf');
+  assert.equal(b[1].pinned,true);
+  assert.deepEqual(sortViewsForSidebar(b).map(x=>x.id),['b','a']);
+  const flipped=updateSavedView(b,'b',{pinned:false});
+  assert.equal(flipped[1].pinned,false);
+  assert.throws(()=>normalizeView({...spec,id:'c',fileType:'docx'}),/file type/);
+  assert.throws(()=>normalizeView({...spec,id:'c',pinned:'true'}),/pin/);
+});
+test('catalog-wide file type filter separates gallery assets, PDFs and folders',()=>{
+  const rich=[...records,{id:'folder',sourceId:'a',path:'gallery/archive',kind:'directory'}];
+  assert.deepEqual(catalogQueryResults(rich,roots,roof.tags,{fileType:'image'}).map(x=>x.name),['beam.png','outside.png','roof.png']);
+  assert.deepEqual(catalogQueryResults(rich,roots,roof.tags,{fileType:'pdf'}).map(x=>x.name),['beam.pdf']);
+  assert.deepEqual(catalogQueryResults(rich,roots,roof.tags,{fileType:'folder'}).map(x=>x.name),['archive']);
+  assert.deepEqual(catalogQueryResults(rich,roots,roof.tags,{fileType:'video'}),[]);
 });

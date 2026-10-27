@@ -116,3 +116,9 @@
 .catalog-results .tag-pill{display:inline-flex;margin-right:4px;margin-bottom:4px}
 
 .view-row{display:flex;align-items:center;min-width:0}.view-row .nav-item{flex:1;min-width:0}.view-delete{width:24px;min-width:24px;height:28px;display:grid;place-items:center;border-radius:6px;color:var(--muted)}.view-delete:hover{background:var(--panel2)}.sort-control{font:inherit;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px;max-width:85px}
+
+/* Pinned View shortcuts and file-type controls remain compact and neutral. */
+.view-pin{width:23px;min-width:23px;height:28px;display:grid;place-items:center;color:var(--muted);border-radius:6px;opacity:.58}
+.view-pin[aria-pressed="true"]{opacity:1;color:var(--accent)}
+.view-pin:hover,.view-pin:focus-visible{opacity:1;background:var(--panel2)}
+.sort-control.type-control{max-width:92px}

@@ -648,8 +648,8 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 ## 31 — V0.4: Saved Views
 - [ ] Full catalog-wide metadata search and multi-criteria filtering; read-only catalog-wide tag-result browser added in V0.0.15 with metadata-only offline results.
 - [ ] Scope/query builder for names, types, dates, sources and tag descendants, with lightweight filter chips.
-- [ ] Save named **Views** as one object combining query/filter and presentation (gallery/list/table, sort/group/density).
-- [ ] Rename, edit, pin and delete Views; no separate Smart Folder records.
+- [ ] Extend saved Views beyond current scope, search, one nested tag, file type, gallery/list, sort and density; table mode, grouping and compound tag predicates remain pending.
+- [x] Rename, edit, pin and delete Views, with an optional file-type filter (V0.0.17; validation pending). No separate Smart Folder records.
 - [ ] Clicking Views changes the content area, not the physical folder Tabs; jump to source folder available.
 - [ ] Keyboard navigation and reuse of the same preview/inspector.
 

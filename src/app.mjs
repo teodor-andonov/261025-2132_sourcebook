@@ -4,15 +4,15 @@ import {planResourceIdentity} from './catalog.mjs';
 import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.mjs';
 import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
-import {catalogTagResults,sortCatalogResults,sortBrowserItems} from './catalog-search.mjs';
-import {validateViews} from './views.mjs';
+import {catalogTagResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
+import {validateViews,sortViewsForSidebar} from './views.mjs';
 import {createViewsController} from './views-controller.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
 import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts,assertTagSnapshotUnchanged} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
-  catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,activeViewId:null,views:[],viewSaving:false,sort:'name',
+  catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,activeViewId:null,views:[],viewSaving:false,sort:'name',fileType:'all',
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,
   search:'', view:localStorage.getItem('sb-view')||'gallery',
   size:Number(localStorage.getItem('sb-size'))||164,
@@ -363,7 +363,7 @@ function render(){
     return '<button class="nav-item catalog-folder '+(selected?'selected':'')+'" data-catalog-folder="'+escapeHTML(folder.sourceId)+'" data-folder-path="'+escapeHTML(folder.path)+'" title="'+escapeHTML(folder.name)+'" style="--depth:'+Math.min(folder.depth,10)+'">'+icon('folder',15)+'<span>'+escapeHTML(folder.name)+'</span>'+(offline&&folder.root?icon('alert',12):'')+'</button>';
   }).join('');
   const rootSection='<div class="section-head"><span>'+(plain?'TABS':'FOLDERS')+'</span>'+button(plain?'Open folder':'Register folder','plus',plain?'open-folder':'add-source')+'</div><nav>'+folderItems+'</nav>';
-  const viewRows=state.views.map(v=>'<div class="view-row"><button class="nav-item '+(state.activeViewId===v.id?'selected':'')+'" data-open-view="'+escapeHTML(v.id)+'" title="'+escapeHTML(v.name)+'">'+icon('bookmark',15)+'<span>'+escapeHTML(v.name)+'</span></button><button class="view-delete" data-delete-view="'+escapeHTML(v.id)+'" aria-label="Delete View '+escapeHTML(v.name)+'">'+icon('close',12)+'</button></div>').join('');
+  const viewRows=sortViewsForSidebar(state.views).map(v=>'<div class="view-row"><button class="nav-item '+(state.activeViewId===v.id?'selected':'')+'" data-open-view="'+escapeHTML(v.id)+'" title="'+escapeHTML(v.name)+'">'+icon('bookmark',15)+'<span>'+escapeHTML(v.name)+'</span></button><button class="view-pin" data-pin-view="'+escapeHTML(v.id)+'" aria-label="'+(v.pinned?'Unpin':'Pin')+' View '+escapeHTML(v.name)+'" title="'+(v.pinned?'Unpin':'Pin')+' View" aria-pressed="'+v.pinned+'">'+icon('pin',12)+'</button><button class="view-delete" data-delete-view="'+escapeHTML(v.id)+'" aria-label="Delete View '+escapeHTML(v.name)+'" title="Delete View">'+icon('close',12)+'</button></div>').join('');
   const catalogSection=plain
     ?'<div class="section-head"><span>CATALOG</span></div><nav><button class="nav-item" data-action="open-catalog">'+icon('database',16)+'<span>Open catalog</span></button><button class="nav-item" data-action="create-catalog">'+icon('plus',16)+'<span>New catalog</span></button></nav>'
     :'<div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="section-head"><span>VIEWS</span>'+button('Save View','plus','save-view')+'</div><nav>'+viewRows+'</nav>';
@@ -371,6 +371,7 @@ function render(){
   const selectionActions=plain||viewsUI.inResults()?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
   const fileActions=plain||viewsUI.inResults()?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
   const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
+  const typeControl=plain?'':'<select id="file-type" class="sort-control type-control" aria-label="File type"><option value="all" '+(state.fileType==='all'?'selected':'')+'>All types</option><option value="image" '+(state.fileType==='image'?'selected':'')+'>Images</option><option value="pdf" '+(state.fileType==='pdf'?'selected':'')+'>PDFs</option><option value="video" '+(state.fileType==='video'?'selected':'')+'>Videos</option><option value="folder" '+(state.fileType==='folder'?'selected':'')+'>Folders</option><option value="other" '+(state.fileType==='other'?'selected':'')+'>Other</option></select>';
   const sortControl=plain?'':'<select id="sort-mode" class="sort-control" aria-label="Sort"><option value="name" '+(state.sort==='name'?'selected':'')+'>Name ↑</option><option value="name-desc" '+(state.sort==='name-desc'?'selected':'')+'>Name ↓</option><option value="type" '+(state.sort==='type'?'selected':'')+'>Type</option></select>';
   const activeTab=activeFolderTab();
   const backward=activeTab&&activeTab.position>0;
@@ -378,12 +379,12 @@ function render(){
   const historyControls=plain
     ?'<button class="icon-button" title="Back" aria-label="Back" data-action="tab-back" '+(backward?'':'disabled')+'>'+icon('back')+'</button><button class="icon-button" title="Forward" aria-label="Forward" data-action="tab-forward" '+(nextward?'':'disabled')+'>'+icon('forward')+'</button>'
     :'';
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+sortControl+viewActions+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+sortControl+viewActions+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML=viewsUI.inResults()?'<button data-action="exit-catalog-tag">'+icon('database',16)+' Catalog</button><span class="crumb">'+icon('chevron',13)+'</span><button>'+icon('tag',14)+' '+escapeHTML(viewsUI.title())+'</button>':'<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
 function visibleItems(){
-  if(viewsUI.inResults())return sortCatalogResults(state.items.filter(item=>matchesResourceSearch(item.name,recordTagPaths(item.record,state.taxonomy),state.search)),state.sort);
+  if(viewsUI.inResults())return sortCatalogResults(state.items.filter(item=>(state.fileType==='all'||catalogFileType(item)===state.fileType)&&matchesResourceSearch(item.name,recordTagPaths(item.record,state.taxonomy),state.search)),state.sort);
   const query=state.search.trim();
   const plainQuery=query&&!query.startsWith('#')?query.toLocaleLowerCase():null;
   // Resolve catalog records once per render, rather than scanning all records per item.
@@ -394,6 +395,7 @@ function visibleItems(){
     }
   }
   return sortBrowserItems(state.items.filter(item=>{
+    if(state.fileType!=='all'&&catalogFileType(item)!==state.fileType)return false;
     const name=cleanName(item.name);
     if(!state.tagFilter&&(!query||(plainQuery&&name.toLocaleLowerCase().includes(plainQuery))))return true;
     const path=[...state.parts,item.name].join('/');
@@ -700,6 +702,10 @@ document.addEventListener('input',event=>{
   if(event.target.id==='accent-color')applyAccent(event.target.value);
   if(event.target.id==='search-input'){state.search=event.target.value;state.pageCount=150;state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;renderItems();renderInspector();}
   if(event.target.id==='sort-mode'){state.sort=event.target.value;renderItems();}
+  if(event.target.id==='file-type'){
+    state.fileType=event.target.value;state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;state.pageCount=150;
+    if(state.activeViewId)viewsUI.requery();else {renderItems();renderInspector();}
+  }
   if(event.target.id==='density'){state.size=Number(event.target.value);localStorage.setItem('sb-size',state.size);$('#items')?.style.setProperty('--size',state.size+'px');}
 });
 document.addEventListener('click',async event=>{
@@ -707,6 +713,7 @@ document.addEventListener('click',async event=>{
   const suggestion=event.target.closest('[data-tag-suggestion]');
   if(suggestion){chooseTagSuggestion(Number(suggestion.dataset.tagSuggestion));$('#tag-input')?.focus();return;}
   const viewButton=event.target.closest('[data-open-view]');if(viewButton){viewsUI.open(viewButton.dataset.openView);return;}
+  const pinButton=event.target.closest('[data-pin-view]');if(pinButton){void viewsUI.togglePin(pinButton.dataset.pinView);return;}
   const deleteButton=event.target.closest('[data-delete-view]');if(deleteButton){void viewsUI.remove(deleteButton.dataset.deleteView);return;}
   const pin=event.target.closest('[data-toggle-tag-pin]');
   if(pin){await togglePin(pin.dataset.toggleTagPin);return;}

@@ -1,3 +1,12 @@
+## 2026-10-27 — Saved View file-type filters and pinned shortcuts (V0.0.17 candidate)
+
+- Views now have an optional file-type predicate (All, Images, PDFs, Videos, Folders, Other) and optional pin state. A compact selector in the existing content toolbar changes file-type filtering; explicit View Save/Update persists it. Folder browsing can also filter locally without creating or editing files.
+- Pin/unpin and pinned-first alphabetical sorting reuse the existing Views sidebar and the catalog-only verified `views.json` writer. Stable View IDs are preserved.
+- Older `views.json` files without these fields are normalized in memory. Optimistic snapshot comparisons canonicalize both legacy and new schemas to avoid rejecting unchanged legacy Views; no implicit migration write occurs.
+- Tests cover backward compatibility, pinning and sorting, file-type matching and View controller saves. Source files and catalog resource records remain untouched by these View edits.
+- Cache name updated to `sourcebook-shell-0.0.17-view-filters`. User-controlled screenshots and Pages were not run. CI and real-device interaction checks pending at commit time.
+- Compound multi-tag conditions, grouping/table views and catalog-wide queries including unobjectified files remain later work.
+
 ## 2026-10-27 — Saved Views first vertical slice (V0.0.16)
 
 - **Implemented in source:** catalog-local `views.json` with stable View IDs, optional registered-root/recursive-folder scope, nested tag ID, filename/hashtag query, gallery/list, density and name/type sorting. Catalog sidebar supports Save View, open, explicit Update/Rename and Delete. Results are read-only catalog metadata projections with existing preview and Show in folder actions.
