@@ -122,3 +122,13 @@
 .view-pin[aria-pressed="true"]{opacity:1;color:var(--accent)}
 .view-pin:hover,.view-pin:focus-visible{opacity:1;background:var(--panel2)}
 .sort-control.type-control{max-width:92px}
+
+/* Views: searchable nested-tag selection in the existing compact dialog. */
+.view-tag-mode{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
+.view-tag-mode select{max-width:200px;font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:6px}
+#view-tag-search{width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-size:12px}
+.view-tag-options{max-height:220px;min-height:38px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px}
+.view-tag-option{display:flex;align-items:center;gap:8px;padding:5px 7px;font-size:11px;cursor:pointer;overflow-wrap:anywhere}
+.view-tag-option:hover{background:var(--panel2)}
+.view-tag-option input{flex:none;accent-color:var(--accent)}
+.view-tag-option[hidden]{display:none}

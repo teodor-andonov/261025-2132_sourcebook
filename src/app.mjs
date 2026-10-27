@@ -171,6 +171,32 @@ async function folderHistoryStep(delta){
   const target=folderHistoryTarget(state.sources,state.sourceId,delta);
   if(target)await navigate(state.sourceId,target.parts,target.position);
 }
+function viewTagOptionsHTML(){
+  const filter=viewsUI.selectedTags(),selected=new Set(filter.tagIds);
+  const tags=flattenedTagTree(state.taxonomy),known=new Set(tags.map(tag=>tag.id));
+  const rows=tags.map(tag=>
+    '<label class="view-tag-option" data-view-tag-option="'+escapeHTML(tag.path.toLocaleLowerCase())+'"><input type="checkbox" name="viewTagIds" value="'+escapeHTML(tag.id)+'" '+(selected.has(tag.id)?'checked':'')+'/>'+'<span>#'+escapeHTML(tag.path.replaceAll(' / ','/'))+'</span></label>'
+  ).join('');
+  const missing=filter.tagIds.filter(id=>!known.has(id)).map(id=>
+    '<label class="view-tag-option" data-view-tag-option="missing"><input type="checkbox" name="viewTagIds" value="'+escapeHTML(id)+'" checked/><span>Missing tag ('+escapeHTML(id)+')</span></label>'
+  ).join('');
+  return '<label class="view-tag-mode">Match<select name="viewTagMode"><option value="all" '+(filter.tagMode==='all'?'selected':'')+'>All selected tags (AND)</option><option value="any" '+(filter.tagMode==='any'?'selected':'')+'>Any selected tag (OR)</option></select></label>'+
+    '<input type="search" id="view-tag-search" placeholder="Find tags…" aria-label="Find tags" autocomplete="off"/>'+
+    '<div class="view-tag-options" role="group" aria-label="Filter by tags">'+(rows+missing||'<span class="micro-hint">No catalog tags yet</span>')+'</div>';
+}
+function viewFilterDialog(mode){
+  const editing=mode==='tags',renaming=mode==='rename';
+  const name=viewsUI.active()?.name||(state.catalogTagView?'#'+tagLeaf(state.catalogTagView):state.parts.at(-1)||'New View');
+  openDialog('<h2>'+(renaming?'Rename View':editing?'View tags':'Save View')+'</h2><form id="view-form" data-rename="'+renaming+'" data-edit-tags="'+editing+'">'+
+    (editing?'':'<label>Name<input required name="name" maxlength="80" value="'+escapeHTML(name)+'"/></label>')+
+    (renaming?'':viewTagOptionsHTML())+
+    '<div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button><button class="primary">Save</button></div></form>');
+}
+function selectedViewTags(form){
+  const tagIds=[...form.querySelectorAll('input[name="viewTagIds"]:checked')].map(input=>input.value);
+  if(tagIds.length>16)throw Error('Use at most 16 tags per View');
+  return {tagIds,tagMode:form.elements.viewTagMode?.value||'all'};
+}
 function createCatalog(){
   openDialog('<h2>Create a catalog</h2><p>A portable <code>.sb</code> folder, stored wherever you choose.</p><form id="catalog-form"><label>Catalog name<input required name="name" value="My References" maxlength="90"/></label><label>Catalog code<small>1–4 lowercase letters used for filename IDs</small><input required name="code" value="ab" maxlength="4" pattern="[a-z]{1,4}"/></label><div class="dialog-actions"><button class="secondary" type="button" data-action="dismiss">Cancel</button><button class="primary">Choose location</button></div></form>');
 }
@@ -370,7 +396,7 @@ function render(){
   const header='<button class="catalog-chip" data-action="home">'+icon(plain?'folder':'database',16)+'<span>'+escapeHTML(plain?'Browse':state.catalog.name)+'</span>'+icon('chevron',13)+'</button>';
   const selectionActions=plain||viewsUI.inResults()?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
   const fileActions=plain||viewsUI.inResults()?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
-  const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
+  const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="edit-view-tags" title="Edit View tags">'+icon('tag',15)+' <span>Tags</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
   const typeControl=plain?'':'<select id="file-type" class="sort-control type-control" aria-label="File type"><option value="all" '+(state.fileType==='all'?'selected':'')+'>All types</option><option value="image" '+(state.fileType==='image'?'selected':'')+'>Images</option><option value="pdf" '+(state.fileType==='pdf'?'selected':'')+'>PDFs</option><option value="video" '+(state.fileType==='video'?'selected':'')+'>Videos</option><option value="folder" '+(state.fileType==='folder'?'selected':'')+'>Folders</option><option value="other" '+(state.fileType==='other'?'selected':'')+'>Other</option></select>';
   const sortControl=plain?'':'<select id="sort-mode" class="sort-control" aria-label="Sort"><option value="name" '+(state.sort==='name'?'selected':'')+'>Name ↑</option><option value="name-desc" '+(state.sort==='name-desc'?'selected':'')+'>Name ↓</option><option value="type" '+(state.sort==='type'?'selected':'')+'>Type</option></select>';
   const activeTab=activeFolderTab();
@@ -695,10 +721,26 @@ async function importFiles(){
 }
 document.addEventListener('submit',event=>{
   if(event.target.id==='catalog-form'){event.preventDefault();submitCatalog(event.target);}
-  if(event.target.id==='view-form'){event.preventDefault();void (event.target.dataset.rename==='true'?viewsUI.rename(event.target.elements.name.value.trim()):viewsUI.save(event.target.elements.name.value.trim())).then(ok=>{if(ok)$('#dialog')?.remove();});}
+  if(event.target.id==='view-form'){
+    event.preventDefault();
+    const form=event.target;
+    let task;
+    try{
+      if(form.dataset.rename==='true')task=viewsUI.rename(form.elements.name.value.trim());
+      else {
+        const tags=selectedViewTags(form);
+        task=form.dataset.editTags==='true'?viewsUI.update(tags):viewsUI.save(form.elements.name.value.trim(),tags);
+      }
+    }catch(e){toast(e.message||String(e),true);return;}
+    void task.then(ok=>{if(ok)$('#dialog')?.remove();});
+  }
 });
 document.addEventListener('input',event=>{
   if(event.target.id==='tag-input')showTagSuggestions();
+  if(event.target.id==='view-tag-search'){
+    const q=event.target.value.trim().toLocaleLowerCase();
+    for(const label of document.querySelectorAll('[data-view-tag-option]'))label.hidden=!!q&&!label.dataset.viewTagOption.includes(q);
+  }
   if(event.target.id==='accent-color')applyAccent(event.target.value);
   if(event.target.id==='search-input'){state.search=event.target.value;state.pageCount=150;state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;renderItems();renderInspector();}
   if(event.target.id==='sort-mode'){state.sort=event.target.value;renderItems();}
@@ -743,7 +785,9 @@ document.addEventListener('click',async event=>{
     case 'refresh':viewsUI.inResults()?void refreshCatalogTagView():navigate(state.sourceId,[...state.parts]);break;
     case 'exit-catalog-tag':navigate(state.sourceId,[...state.parts]);break;
     case 'reveal-catalog-result':revealCatalogResult(state.items.find(x=>state.selected.has(x.id))).catch(e=>toast(errorText(e),true));break;
-    case 'save-view':case 'rename-view':{const rename=action==='rename-view';const name=rename?viewsUI.active()?.name:state.catalogTagView?'#'+tagLeaf(state.catalogTagView):state.parts.at(-1)||'New View';openDialog('<h2>'+(rename?'Rename View':'Save View')+'</h2><form id="view-form" data-rename="'+rename+'"><label>Name<input required name="name" maxlength="80" value="'+escapeHTML(name)+'"/></label><div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button><button class="primary">Save</button></div></form>');break;}
+    case 'save-view':viewFilterDialog('save');break;
+    case 'rename-view':viewFilterDialog('rename');break;
+    case 'edit-view-tags':viewFilterDialog('tags');break;
     case 'update-view':void viewsUI.update();break;
     case 'gallery':case 'list':state.view=action;localStorage.setItem('sb-view',action);render();break;
     case 'inspector':state.inspector=!state.inspector;render();break;

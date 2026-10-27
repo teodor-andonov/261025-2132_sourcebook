@@ -85,3 +85,36 @@ test('live file type change requeries active saved View without writing until Up
   assert.equal(await f.ui.update(),true);
   assert.equal(f.disk['views.json'][0].fileType,'pdf');
 });
+
+test('saving compound tag logic persists stable IDs without changing resources',async()=>{
+  const f=fixture();f.state.views=[];f.disk['views.json']=[];
+  const ids=[f.state.taxonomy.at(-1).id,'tag-new'];
+  assert.equal(await f.ui.save('Combined',{tagIds:ids,tagMode:'any'}),true);
+  assert.deepEqual(f.disk['views.json'][0].tagIds,ids);
+  assert.equal(f.disk['views.json'][0].tagMode,'any');
+  assert.equal(f.disk['views.json'][0].tagId,ids[0]);
+  assert.deepEqual(f.writes,['views.json']);
+});
+test('reopening compound View preserves filters through Update without selecting tags again',async()=>{
+  const f=fixture();
+  f.state.views[0].tagIds=[f.state.taxonomy.at(-1).id,'missing'];
+  f.state.views[0].tagMode='all';
+  f.disk['views.json']=structuredClone(f.state.views); // This View was persisted before opening.
+  f.ui.open('v1');
+  assert.deepEqual(f.state.items,[]);
+  assert.deepEqual(f.ui.selectedTags(),{tagIds:[f.state.taxonomy.at(-1).id,'missing'],tagMode:'all'});
+  assert.equal(await f.ui.update(),true);
+  assert.deepEqual(f.disk['views.json'][0].tagIds,[f.state.taxonomy.at(-1).id,'missing']);
+});
+
+test('editing View tag criteria changes matching results immediately after verified save',async()=>{
+  const f=fixture();
+  const matchId=f.state.taxonomy.at(-1).id;
+  f.ui.open('v1');
+  assert.deepEqual(f.state.items.map(x=>x.name),['beam.png']);
+  assert.equal(await f.ui.update({tagIds:['deleted-id'],tagMode:'all'}),true);
+  assert.deepEqual(f.state.items,[]);
+  assert.deepEqual(f.disk['views.json'][0].tagIds,['deleted-id']);
+  assert.deepEqual(f.writes,['views.json']);
+  assert.equal(f.state.activeViewId,'v1');
+});

@@ -9,6 +9,12 @@ export function normalizeView(value){
   if(typeof folderPath!=='string'||folderPath.startsWith('/')||folderPath.endsWith('/')||folderPath.includes('\\')||folderPath.split('/').some(p=>p==='.'||p==='..'||(!p&&folderPath!=='')||/[\u0000-\u001f]/.test(p)))throw Error('Invalid View folder');
   if(folderPath&&!sourceId)throw Error('View folder requires a source');
   if(tagId!==null&&(typeof tagId!=='string'||!tagId||tagId.length>128))throw Error('Invalid View tag');
+  // A legacy single tagId becomes a one-element compound filter. Preserve
+  // stable tag IDs and do not silently discard missing/deleted taxonomy IDs.
+  const tagIds=value.tagIds??(tagId?[tagId]:[]);
+  if(!Array.isArray(tagIds)||tagIds.length>16||tagIds.some(id=>typeof id!=='string'||!id||id.length>128)||new Set(tagIds).size!==tagIds.length)throw Error('Invalid View tag IDs');
+  const tagMode=value.tagMode??'all';
+  if(!['all','any'].includes(tagMode))throw Error('Invalid View tag logic');
   const fileType=value.fileType??'all';
   if(!['all','image','pdf','video','folder','other'].includes(fileType))throw Error('Invalid View file type');
   const pinned=value.pinned===true;
@@ -17,7 +23,7 @@ export function normalizeView(value){
   if(typeof query!=='string'||query.length>200||/[\u0000-\u001f]/.test(query))throw Error('Invalid View query');
   const p=value.presentation;
   if(!p||!['gallery','list'].includes(p.mode)||!Number.isInteger(p.size)||p.size<110||p.size>280||!['name','name-desc','type'].includes(p.sort))throw Error('Invalid View presentation');
-  return {id,name:name.trim(),sourceId,folderPath,tagId,query,fileType,pinned,presentation:{mode:p.mode,size:p.size,sort:p.sort}};
+  return {id,name:name.trim(),sourceId,folderPath,tagId:tagIds[0]??null,tagIds:[...tagIds],tagMode,query,fileType,pinned,presentation:{mode:p.mode,size:p.size,sort:p.sort}};
 }
 export function validateViews(value){
   if(!Array.isArray(value)||value.length>200)throw Error('Invalid views.json');

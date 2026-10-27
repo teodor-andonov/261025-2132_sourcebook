@@ -87,3 +87,37 @@ test('catalog-wide file type filter separates gallery assets, PDFs and folders',
   assert.deepEqual(catalogQueryResults(rich,roots,roof.tags,{fileType:'folder'}).map(x=>x.name),['archive']);
   assert.deepEqual(catalogQueryResults(rich,roots,roof.tags,{fileType:'video'}),[]);
 });
+
+test('compound nested tags support AND / OR across catalog roots and file types',()=>{
+  let i=0;
+  const a=ensureTagPath([],'Architecture / Facades',()=> 'c'+(++i));
+  const b=ensureTagPath(a.tags,'Materials / Timber',()=> 'c'+(++i));
+  const c=ensureTagPath(b.tags,'Architecture / Facades / Glazed',()=> 'c'+(++i));
+  const rs=[
+    {id:'one',sourceId:'a',path:'gallery/timber.png',kind:'file',tagIds:[a.id,b.id]},
+    {id:'two',sourceId:'b',path:'references/glazed.pdf',kind:'file',tagIds:[c.id]},
+    {id:'three',sourceId:'a',path:'gallery/timber.pdf',kind:'file',tagIds:[b.id]}
+  ];
+  assert.deepEqual(catalogQueryResults(rs,roots,c.tags,{tagIds:[a.id,b.id],tagMode:'all'}).map(x=>x.record.id),['one']);
+  assert.deepEqual(catalogQueryResults(rs,roots,c.tags,{tagIds:[a.id,b.id],tagMode:'any',fileType:'pdf'}).map(x=>x.record.id),['two','three']);
+  assert.deepEqual(catalogQueryResults(rs,roots,c.tags,{tagIds:[c.id,b.id],tagMode:'all'}),[]);
+});
+test('missing/deleted tag IDs cannot silently widen compound Views',()=>{
+  const r=catalogQueryResults(records,roots,roof.tags,{tagIds:[tags.id,'deleted-id'],tagMode:'all'});
+  assert.deepEqual(r,[]);
+  assert.deepEqual(catalogQueryResults(records,roots,roof.tags,{tagIds:['deleted-id'],tagMode:'any'}),[]);
+  assert.deepEqual(catalogQueryResults(records,roots,roof.tags,{tagIds:[tags.id,'deleted-id'],tagMode:'any'}).map(x=>x.record.id),['x2','x1']);
+  assert.throws(()=>catalogQueryResults(records,roots,roof.tags,{tagIds:['dup','dup']}),/Invalid tag filter/);
+});
+test('legacy single-tag View canonicalization is stable with multiple new tags',()=>{
+  const before={...spec,id:'legacy'};
+  assert.deepEqual(normalizeView(before).tagIds,[tags.id]);
+  assert.doesNotThrow(()=>assertViewsSnapshotUnchanged([normalizeView(before)],[before]));
+  const combined=normalizeView({...before,tagIds:[tags.id,roof.id],tagMode:'any'});
+  assert.deepEqual(combined.tagIds,[tags.id,roof.id]);
+  assert.equal(combined.tagId,tags.id);
+  assert.equal(combined.tagMode,'any');
+  assert.throws(()=>normalizeView({...before,tagIds:[tags.id,tags.id]}),/tag IDs/);
+  assert.throws(()=>normalizeView({...before,tagMode:'xor'}),/tag logic/);
+  assert.throws(()=>normalizeView({...before,tagIds:Array.from({length:17},(_,i)=>'id'+i)}),/tag IDs/);
+});

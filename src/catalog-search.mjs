@@ -38,8 +38,16 @@ export function catalogQueryResults(records,sources,taxonomy,filter={}){
   if(!['all','image','pdf','video','folder','other'].includes(fileType))throw Error('Invalid file type filter');
   if(scope.length&&!sourceId)throw Error('Folder scope needs a source');
   if(sourceId&&!roots.has(sourceId))return [];
-  const tag=filter.tagId?tagPath(taxonomy,filter.tagId):normalizeTagPath(filter.tagPath||'');
-  if(filter.tagId&&!tag)return []; // Deleted tag must never widen a View.
+  const tagIds=filter.tagIds??(filter.tagId?[filter.tagId]:[]);
+  if(!Array.isArray(tagIds)||tagIds.length>16||tagIds.some(id=>typeof id!=='string'||!id||id.length>128)||new Set(tagIds).size!==tagIds.length)throw Error('Invalid tag filter');
+  const tagMode=filter.tagMode??'all';
+  if(!['all','any'].includes(tagMode))throw Error('Invalid tag logic');
+  const tags=tagIds.map(id=>tagPath(taxonomy,id));
+  // Missing IDs are never dropped and never convert a restrictive View
+  // into an unrestricted search. OR retains matching surviving branches.
+  if(tagIds.length&&!tags.some(Boolean))return [];
+  if(tagMode==='all'&&tags.some(path=>!path))return [];
+  const fallbackTag=normalizeTagPath(filter.tagPath||'');
   const seen=new Set(),results=[];
   for(const record of records){
     const root=roots.get(record?.sourceId);
@@ -48,7 +56,10 @@ export function catalogQueryResults(records,sources,taxonomy,filter={}){
     if(!segments.length||segments.some(s=>!s||s==='.'||s==='..'||/[\\\u0000-\u001f]/.test(s)))continue;
     if(scope.length&&scope.some((p,i)=>segments[i]!==p))continue;
     const paths=recordTagPaths(record,taxonomy);
-    if(tag&&!includesTagPath(paths,tag))continue;
+    if(tagIds.length){
+      const matches=tags.map(tag=>!!tag&&includesTagPath(paths,tag));
+      if(tagMode==='all'?!matches.every(Boolean):!matches.some(Boolean))continue;
+    }else if(fallbackTag&&!includesTagPath(paths,fallbackTag))continue;
     const name=segments.at(-1);
     if(fileType!=='all'&&catalogFileType({name,kind:record.kind})!==fileType)continue;
     if(!matchesResourceSearch(name,paths,filter.query||''))continue;

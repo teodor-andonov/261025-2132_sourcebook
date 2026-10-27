@@ -30,12 +30,20 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
     if(view)state.items=results({...view,fileType:state.fileType});
     state.selected.clear();render();
   }
-  function spec(){
+  function selectedTags(){
     const base=active(),path=state.catalogTagView||state.tagFilter;
-    const tagId=base?base.tagId:path?flattenedTagTree(state.taxonomy).find(t=>t.path===path)?.id||null:null;
-    if(path&&!tagId)throw Error('Tag no longer exists');
+    if(base)return {tagIds:[...(base.tagIds??(base.tagId?[base.tagId]:[]))],tagMode:base.tagMode??'all'};
+    const id=path?flattenedTagTree(state.taxonomy).find(t=>t.path===path)?.id:null;
+    if(path&&!id)throw Error('Tag no longer exists');
+    return {tagIds:id?[id]:[],tagMode:'all'};
+  }
+  function spec(tagSelection=null){
+    const base=active();
+    const tags=tagSelection??selectedTags();
     return {sourceId:base?base.sourceId:state.catalogTagView?null:state.sourceId,
-      folderPath:base?base.folderPath:state.catalogTagView?'':state.parts.join('/'),tagId,query:state.search,fileType:state.fileType,
+      folderPath:base?base.folderPath:state.catalogTagView?'':state.parts.join('/'),
+      tagId:tags.tagIds[0]??null,tagIds:[...tags.tagIds],tagMode:tags.tagMode,
+      query:state.search,fileType:state.fileType,
       presentation:{mode:state.view,size:state.size,sort:state.sort}};
   }
   async function mutate(edit){
@@ -54,8 +62,13 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
     }catch(e){toast('View save failed: '+(e?.message||String(e)),true);return false;}
     finally{state.viewSaving=false;render();}
   }
-  async function save(name){return mutate(v=>createSavedView(v,{...spec(),name},crypto.randomUUID()));}
-  async function update(){const id=state.activeViewId;if(!id)return false;return mutate(v=>updateSavedView(v,id,spec()));}
+  async function save(name,tagSelection=null){return mutate(v=>createSavedView(v,{...spec(tagSelection),name},crypto.randomUUID()));}
+  async function update(tagSelection=null){
+    const id=state.activeViewId;if(!id)return false;
+    const ok=await mutate(v=>updateSavedView(v,id,spec(tagSelection)));
+    if(ok&&state.activeViewId===id)open(id); // Refresh matching results after explicit save.
+    return ok;
+  }
   async function rename(name){const id=state.activeViewId;if(!id)return false;return mutate(v=>updateSavedView(v,id,{name}));}
   async function togglePin(id){
     const view=state.views.find(v=>v.id===id);
@@ -67,5 +80,5 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
     if(!view||!confirm('Delete View "'+view.name+'"? Files and tags remain unchanged.'))return;
     if(await mutate(v=>removeSavedView(v,id))&&state.activeViewId===id)await navigate(state.sourceId,[...state.parts]);
   }
-  return {active,inResults,title,open,refresh,requery,save,update,rename,remove,togglePin};
+  return {active,inResults,title,open,refresh,requery,save,update,rename,remove,togglePin,selectedTags};
 }

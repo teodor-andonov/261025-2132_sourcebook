@@ -1,3 +1,12 @@
+## 2026-10-27 — Compound nested-tag Views (V0.0.18 candidate)
+
+- Saved Views support up to 16 stable tag IDs with **All (AND)** or **Any (OR)** matching. Descendant tags satisfy their ancestor. Conditions combine with source/folder scope, filename search, file type and gallery/list presentation.
+- The existing Save View dialog includes searchable nested tag checkboxes and an All/Any selector. An active View exposes a compact **Tags** action for explicitly editing its tag conditions. Verified edits immediately refresh matching results; the normal Update button saves search/presentation without changing tags.
+- Missing/deleted tags remain visibly selectable. AND Views requiring missing tags produce zero matches; OR Views match surviving alternatives but never expand to all files when everything is missing. Earlier single `tagId` Views normalize to one-element `tagIds` in memory, without automatic migration.
+- Regression tests cover compound logic, hierarchy, missing IDs, validation, backwards compatibility and catalog-only persistence. Ordinary source files and resource records are not modified by View operations.
+- No additional permanent sidebar panels or Collections model. Screenshots and Pages remain manual-only. GitHub CI and physical Windows/Android interaction verification pending at commit time.
+- Future: richer expressions, grouping/table presentation and unobjectified filesystem search.
+
 ## 2026-10-27 — Saved View file-type filters and pinned shortcuts (V0.0.17 candidate)
 
 - Views now have an optional file-type predicate (All, Images, PDFs, Videos, Folders, Other) and optional pin state. A compact selector in the existing content toolbar changes file-type filtering; explicit View Save/Update persists it. Folder browsing can also filter locally without creating or editing files.
