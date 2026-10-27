@@ -23,9 +23,9 @@ export function planResourceIdentity(catalog,records,filename,siblingNames=[]) {
   if(own.length){
     const n=own[0].number;
     if(!Number.isSafeInteger(n)||n<1)throw Error('Invalid filename identity');
-    if(used.has(n)&&(!siblings.has(n)||siblings.get(n)!==filename))throw Error('Identity collision: '+code+n);
     // Records may use the same ID at a different path. Never overwrite them.
     if(records.some(r=>r.id===code+n))throw Error('Identity already belongs to another resource: '+code+n);
+    if(used.has(n)&&(!siblings.has(n)||siblings.get(n)!==filename))throw Error('Identity collision: '+code+n);
     return {id:code+n,nextSequence:Math.max(catalog.nextSequence||1,n+1),fromFilename:true};
   }
   let n=Math.max(1,Number.isSafeInteger(catalog.nextSequence)?catalog.nextSequence:1);
