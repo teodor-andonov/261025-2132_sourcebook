@@ -14,6 +14,7 @@ import {describeFileSymbol,sidePreviewKind} from './file-symbols.mjs';
 import {scanRegisteredFolders,scanRegisteredSubfolder,verifyCatalogRootReconnect,assertLiveSourceEntry} from './source-scan.mjs';
 import {sourceIndexKey,emptySourceIndex,restoreSourceIndex,refreshSourceIndex,refreshSourceSubtreeIndex,assertIndexedRootIdentity,sourceIndexOverlay} from './source-index.mjs';
 import {inspectIndexedRootOverlaps} from './source-overlap.mjs';
+import {createOverlapReviewUI} from './overlap-review-ui.mjs';
 import {validateViews,sortViewsForSidebar} from './views.mjs';
 import {createViewsController} from './views-controller.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
@@ -29,9 +30,10 @@ const state={
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
   tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false,resourceSaving:false,
-  scan:null,scanBusy:false,scanCommitting:false,scanGeneration:0,scanProgress:'',sourceIndex:null,indexFreshIds:new Set(),indexFreshSubtrees:[],scanRootId:'',scanFolderPath:'',indexProblem:'',pendingTransaction:null,catalogConflicts:null,conflictReport:null,backupBusy:false,backupRestorePlan:null,backupRestoreSource:null
+  scan:null,scanBusy:false,scanCommitting:false,scanGeneration:0,scanProgress:'',sourceIndex:null,indexFreshIds:new Set(),indexFreshSubtrees:[],scanRootId:'',scanFolderPath:'',indexProblem:'',pendingTransaction:null,catalogConflicts:null,conflictReport:null,backupBusy:false,backupRestorePlan:null,backupRestoreSource:null,overlapReport:null
 };
 const viewsUI=createViewsController({state,readJson,authorized,render,toast,forgetImages,navigate,refreshRecords,commitCatalogEdits,refreshPendingCatalog});
+const overlapUI=createOverlapReviewUI({state,openDialog,escapeHTML,icon,toast,errorText,revealCatalogResult});
 async function refreshPendingCatalog(){
   if(!state.catalogHandle||!state.catalog){state.pendingTransaction=null;state.catalogConflicts=null;return;}
   try{state.pendingTransaction=await inspectPendingCatalogTransaction(state.catalogHandle,state.catalog.id);}
@@ -214,7 +216,7 @@ async function restoreMissingBackupRecords(){
 }
 function invalidateScan(){
   ++state.scanGeneration;state.scan=null;state.scanBusy=false;state.scanCommitting=false;state.scanProgress='';
-  state.sourceIndex=null;state.indexFreshIds=new Set();state.indexFreshSubtrees=[];state.scanRootId='';state.scanFolderPath='';state.indexProblem='';
+  state.sourceIndex=null;state.overlapReport=null;state.indexFreshIds=new Set();state.indexFreshSubtrees=[];state.scanRootId='';state.scanFolderPath='';state.indexProblem='';
 }
 // Overlap proof is device-local and read-only. It must never turn matching
 // names or stale index paths into presumed physical identity. A failed check
@@ -967,7 +969,7 @@ function renderInspector(){
     const selected=state.selected.size===1?state.items.find(item=>state.selected.has(item.id)):null;
     if(!selected){host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' results selected':'Select a resource')+'</span></div>';return;}
     const tags=recordTagPaths(selected.record,state.taxonomy);
-    host.innerHTML='<h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.overlapConflict?'<div class="micro-hint" role="status">Verified overlapping Folders report competing metadata or inconsistent source state. Both entries remain visible; review each registered Folder before editing. No records were merged.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+(selected.staleIndex?'<div class="micro-hint">Cached index snapshot · refresh this Folder to verify its contents.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
+    host.innerHTML='<h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.overlapConflict?'<div class="micro-hint" role="status">Verified overlapping Folders report competing metadata or inconsistent source state. Both entries remain visible; review each registered Folder before editing. No records were merged.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+(selected.staleIndex?'<div class="micro-hint">Cached index snapshot · refresh this Folder to verify its contents.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div>'+(selected.overlapConflict?'<button class="secondary full" data-action="review-overlap-records">'+icon('search',15)+' Review overlapping records</button>':'')+'<button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
     return;
   }
   if(state.selected.size!==1){
@@ -1317,6 +1319,10 @@ document.addEventListener('click',async event=>{
     case 'export-catalog-backup':void exportCatalogBackup();break;
     case 'inspect-catalog-backup':chooseBackupForInspection();break;
     case 'inspect-catalog-conflicts':openCatalogConflictsDialog();break;
+    case 'review-overlap-records':overlapUI.open();break;
+    case 'refresh-overlap-review':void overlapUI.refresh();break;
+    case 'export-overlap-review':overlapUI.exportReport();break;
+    case 'reveal-overlap-record':void overlapUI.reveal(event.target.closest('[data-review-id]')?.dataset.reviewId).catch(error=>toast(errorText(error),true));break;
     case 'refresh-catalog-conflicts':void refreshCatalogConflictDialog();break;
     case 'export-catalog-conflict-report':exportCatalogConflictReport();break;
     case 'restore-missing-backup-records':void restoreMissingBackupRecords();break;
@@ -1342,7 +1348,7 @@ document.addEventListener('click',async event=>{
     case 'clear-selection':state.selected.clear();state.lastSelected=null;state.selectionMode=false;render();break;
     case 'bulk-add':void bulkTags('add');break;
     case 'bulk-remove':void bulkTags('remove');break;
-    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button> <button type="button" class="secondary" data-action="inspect-catalog-conflicts">Inspect conflicts</button></div>':'')+'<div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
+    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button> <button type="button" class="secondary" data-action="inspect-catalog-conflicts">Inspect conflicts</button> <button type="button" class="secondary" data-action="review-overlap-records">Review overlaps</button></div>':'')+'<div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
     case 'reset-accent':applyAccent('#5276bd');if($('#accent-color'))$('#accent-color').value='#5276bd';break;
     case 'save-resource':saveResource();break;
     case 'preview':showPreview();break;
