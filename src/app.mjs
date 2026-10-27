@@ -114,6 +114,7 @@ function rememberFolderTabs(){
   return tabPersistQueue;
 }
 async function setPlainFolder(handle,remember=true){
+  if(state.bulkSaving)throw Error('Finish bulk tagging before switching folders.');
   plainRoot(handle);
   const stayingPlain=!state.catalog;
   const restored=stayingPlain?null:loadFolderTabs(await getLocal('folder-tabs-v1').catch(()=>null));
@@ -204,6 +205,7 @@ async function refreshRecords(){
   state.records=records;
 }
 async function openDirectory(h){
+  if(state.bulkSaving)throw Error('Finish bulk tagging before switching catalogs.');
   const config=await readJson(h,'catalog.json');
   if(!config?.id||!CODE_PATTERN.test(config.code))throw Error('Choose a .sb directory containing catalog.json.');
   state.catalog=config;state.catalogHandle=h;
@@ -225,6 +227,7 @@ async function openDirectory(h){
   if(state.sourceId)await navigate(state.sourceId,[]);
 }
 async function addSource(){
+  if(state.bulkSaving)return toast('Finish bulk tagging before registering folders.',true);
   try{
     const h=await window.showDirectoryPicker({mode:'read'});
     const item={id:crypto.randomUUID(),name:h.name};
@@ -259,6 +262,7 @@ async function reconnect(){
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 async function navigate(id,parts,historyPosition=null){
+  if(state.bulkSaving)return toast('Finish bulk tagging before navigating.',true);
   state.sourceId=id;state.parts=parts;state.search='';state.selected.clear();state.pageCount=150;
   state.tagDraftItem=null;state.tagFilter=null;state.selectionMode=false;
   const request=++state.request;
@@ -292,6 +296,7 @@ function tagNavigationHTML(){
   return (pins?'<div class="tag-shortcuts">'+pins+'</div>':'')+rows;
 }
 async function togglePin(id){
+  if(state.bulkSaving)return toast('Finish bulk tagging before editing tags.',true);
   try{
     if(!state.catalogHandle||!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed to pin a tag.');
     const disk=await readJson(state.catalogHandle,'tags.json',[]);
@@ -475,6 +480,7 @@ function refreshSelectionUI(){
   if(status)status.textContent=state.selected.size?state.selected.size+' selected':'Local-first · '+state.items.length+' resources';
 }
 function select(item,event){
+  if(state.bulkSaving)return;
   if(event.shiftKey&&state.lastSelected){
     state.selected=new Set(selectionRangeIds(visibleItems(),state.lastSelected,item.id));
   }else if(event.ctrlKey||event.metaKey||state.selectionMode){if(state.selected.has(item.id))state.selected.delete(item.id);else state.selected.add(item.id);}
@@ -487,12 +493,13 @@ async function bulkTags(mode){
   if(!commitTagInput())return;
   const items=state.items.filter(item=>state.selected.has(item.id));
   if(items.length!==state.selected.size)return toast('Selection changed. Select again.',true);
+  const sourceId=state.sourceId,parts=[...state.parts],catalogHandle=state.catalogHandle,tags=[...state.tagDraft];
   state.bulkSaving=true;
   try{
     if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed.');
-    const root=sourceHandle();
+    const root=state.handles.get(sourceId);
     if(!root||!await authorized(root,'read'))throw Error('Reconnect the source.');
-    const folder=await nested(root,state.parts);
+    const folder=await nested(root,parts);
     for(const item of items){
       const live=item.kind==='directory'?await folder.getDirectoryHandle(item.name):await folder.getFileHandle(item.name);
       if(typeof live.isSameEntry==='function'&&typeof item.handle?.isSameEntry==='function'&&!await live.isSameEntry(item.handle))throw Error('Source entry changed: '+item.name);
@@ -500,12 +507,13 @@ async function bulkTags(mode){
     const previous=[...state.records.values()];
     await refreshRecords();
     const records=[...state.records.values()];
-    assertSelectedUnchanged(previous,records,items,state.sourceId,state.parts);
-    const latest=await readJson(state.catalogHandle,'catalog.json');
+    assertSelectedUnchanged(previous,records,items,sourceId,parts);
+    const latest=await readJson(catalogHandle,'catalog.json');
     if(!latest||latest.id!==state.catalog.id||latest.code!==state.catalog.code)throw Error('Catalog identity changed.');
-    const plan=planBulkTags({catalog:latest,taxonomy:state.taxonomy,records,items,sourceId:state.sourceId,parts:state.parts,paths:[...state.tagDraft],mode,siblingNames:state.items.map(item=>item.name)});
+    if(state.catalogHandle!==catalogHandle||state.sourceId!==sourceId||JSON.stringify(state.parts)!==JSON.stringify(parts)||items.some(item=>!state.selected.has(item.id)))throw Error('Selection or location changed during bulk edit.');
+    const plan=planBulkTags({catalog:latest,taxonomy:state.taxonomy,records,items,sourceId,parts,paths:tags,mode,siblingNames:state.items.map(item=>item.name)});
     if(!plan.changes.length){toast('No changes needed.');return;}
-    const count=await commitBulkTags({handle:state.catalogHandle,plan,expectedCatalog:latest,expectedTaxonomy:state.taxonomy});
+    const count=await commitBulkTags({handle:catalogHandle,plan,expectedCatalog:latest,expectedTaxonomy:state.taxonomy});
     toast('Updated '+count+' catalog records · source files unchanged');
     state.tagDraftItem=null;state.tagDraft=[];
   }catch(error){toast('Bulk tags failed: '+errorText(error),true);}
@@ -520,6 +528,7 @@ async function bulkTags(mode){
 }
 async function saveResource(){
   if(!state.catalog)return;
+  if(state.bulkSaving)return toast('Finish bulk tagging before saving another resource.',true);
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   if(!commitTagInput())return;
   const tags=[...state.tagDraft],notes=$('#notes')?.value||'';
