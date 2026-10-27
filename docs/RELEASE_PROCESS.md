@@ -27,3 +27,11 @@ There is no longer a nightly Pages deployment or nightly screenshot regeneration
 - The screenshot fixture uses a genuine Chromium browser on synthetic data; never present it as Windows or Android device validation.
 - Publishing code does not guarantee already-running PWAs have updated; the service worker may need to activate. Do not force-reload while a catalog write is in progress.
 - Pages source must remain **Settings → Pages → GitHub Actions**.
+
+## Multiple TA PWAs under GitHub Pages
+
+Sourcebook uses explicit manifest ID `/261025-2132_sourcebook/` and keeps `scope: "./"` / `start_url: "./"` relative to its hosted repository directory. Mindmap uses ID `/261019-1740_pwa-mindmap/`. These identities must remain different.
+
+A service worker must only remove caches bearing its own app-specific prefix. All TA PWAs on `teodor-andonov.github.io` share an origin-wide Cache Storage namespace; deleting all cache names on worker activation would erase sibling PWAs' offline shells. The app's existing offline caches may be repopulated after update, but no other app's data should be removed.
+
+If Chrome continues identifying both installed PWAs as one after both versions are manually published, close the apps, uninstall the old installed copies via `chrome://apps`, reopen each full GitHub Pages repository URL, and reinstall separately. **Do not clear site data blindly:** storage is origin-shared and doing so may remove unsaved local state in both apps.

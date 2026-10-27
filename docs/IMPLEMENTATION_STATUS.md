@@ -4,6 +4,14 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — PWA identity/cache isolation (V0.0.12 candidate)
+
+- Compared the Mindmap and Sourcebook GitHub Pages manifest/service-worker source. Both previously used a relative manifest `id: "./"`; they are path-distinct when each is served from its own repo path, but explicit distinct IDs remove installation-identity ambiguity.
+- Sourcebook manifest ID is now `/261025-2132_sourcebook/`; its worker only evicts caches starting `sourcebook-shell-`. Both workers previously deleted **every other Cache Storage cache on the same origin**, even those belonging to another PWA.
+- Added a focused activation test verifying Mindmap and other cache namespaces survive worker upgrade. This change does not clear browser IndexedDB, rewrite catalogs or change any source files.
+- The matching Mindmap patch lives on a separate review branch pending user-controlled merge; a browser with an older installed app may need to uninstall/reinstall **after manual publishing** to reconcile its previous install identity.
+- Neither PWA deployment nor screenshot generation was triggered. Actual installed-PWA coexistence on Windows/Pixel awaits manual validation.
+
 ## 2026-10-27 — Big development cycle: independent physical Folder Tabs (V0.0.11 candidate)
 
 - Browser-first read-only browsing now supports up to 32 independent physical folder Tabs, including opening folders through the directory picker or from a selected nested folder. Each Tab remembers its own root, current path, backward/forward history and active position.
