@@ -170,3 +170,17 @@
 .zoom[hidden]{display:none}
 @media(max-width:1100px){.grouped .group-contents.gallery{gap:10px}}
 @media(max-width:760px){#items.table{padding:0 8px 24px}.grouped .group-contents.gallery{gap:8px}}
+
+/* V0.0.21: neutral table-column visibility dialog and flexible table sizing. */
+.dialog .table-column-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 10px}
+.dialog .table-column-choice{display:flex;flex-direction:row;align-items:center;gap:9px;padding:6px 8px;font-size:12px;font-weight:500;border-radius:6px;cursor:pointer}
+.dialog .table-column-choice:hover{background:var(--panel2)}
+.dialog .table-column-choice input[type=checkbox]{flex:none;width:16px;height:16px;margin:0;padding:0;accent-color:var(--accent)}
+.dialog .table-column-choice input:disabled{opacity:.55}
+.view-table{table-layout:auto;min-width:max(610px,100%);}
+.view-table th:first-child{width:auto;min-width:174px}
+.view-table th:not(:first-child){width:auto;min-width:82px}
+.view-table td.table-notes{max-width:300px}
+.view-table td.table-tags{max-width:240px}
+.view-table td.table-location{max-width:320px}
+@media(max-width:760px){.dialog .table-column-options{grid-template-columns:repeat(2,minmax(0,1fr))}}

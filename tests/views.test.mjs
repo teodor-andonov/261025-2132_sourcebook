@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {catalogQueryResults,sortCatalogResults,sortBrowserItems} from '../src/catalog-search.mjs';
+import {catalogQueryResults,catalogQueryWithScan,sortCatalogResults,sortBrowserItems} from '../src/catalog-search.mjs';
 import {ensureTagPath} from '../src/tags.mjs';
 import {normalizeView,validateViews,createSavedView,updateSavedView,removeSavedView,assertViewsSnapshotUnchanged,sortViewsForSidebar} from '../src/views.mjs';
 const roots=[{id:'a',name:'Images'},{id:'b',name:'Papers'}];
@@ -127,7 +127,7 @@ test('table mode, grouping and location sort are saved and backwards compatible'
   assert.equal(legacy.presentation.groupBy,'none');
   assert.doesNotThrow(()=>assertViewsSnapshotUnchanged([legacy],[{...spec,id:'legacy'}]));
   const view=normalizeView({...spec,id:'v2',presentation:{mode:'table',size:150,sort:'location',groupBy:'folder'}});
-  assert.deepEqual(view.presentation,{mode:'table',size:150,sort:'location',groupBy:'folder'});
+  assert.deepEqual(view.presentation,{mode:'table',size:150,sort:'location',groupBy:'folder',columns:['name','type','location','tags','status']});
   const updated=updateSavedView([view],'v2',{presentation:{mode:'list',size:160,sort:'name',groupBy:'source'}});
   assert.equal(updated[0].presentation.groupBy,'source');
   assert.throws(()=>normalizeView({...spec,id:'bad',presentation:{mode:'grid',size:150,sort:'name'}}),/presentation/);
@@ -137,4 +137,33 @@ test('location sort is deterministic across registered roots and folder paths',(
   const r=catalogQueryResults(records,roots,roof.tags,{sort:'location'});
   assert.deepEqual(r.map(x=>x.path),['outside.png','gallery/beam.png','gallery/roof.png','notes/beam.pdf']);
   assert.deepEqual(sortCatalogResults([...r].reverse(),'location').map(x=>x.id),r.map(x=>x.id));
+});
+
+test('View columns default safely, retain fixed display order and reject invalid selections',()=>{
+  const old={...spec,id:'legacy-columns'};
+  const normalized=normalizeView(old);
+  assert.deepEqual(normalized.presentation.columns,['name','type','location','tags','status']);
+  assert.doesNotThrow(()=>assertViewsSnapshotUnchanged([normalized],[old]));
+  const custom=normalizeView({...old,presentation:{...old.presentation,mode:'table',columns:['status','name','notes','source']}});
+  assert.deepEqual(custom.presentation.columns,['name','source','notes','status']);
+  assert.throws(()=>normalizeView({...old,presentation:{...old.presentation,columns:['type']}}),/columns/);
+  assert.throws(()=>normalizeView({...old,presentation:{...old.presentation,columns:['name','name']}}),/columns/);
+  assert.throws(()=>normalizeView({...old,presentation:{...old.presentation,columns:['name','unknown']}}),/columns/);
+});
+test('View status predicates work on explicit scan results without treating incomplete roots as missing',()=>{
+  const scan={entries:[
+    {sourceId:'a',path:'gallery/beam.png',kind:'file'},
+    {sourceId:'a',path:'gallery/roof.png',kind:'directory'},
+    {sourceId:'a',path:'gallery/untracked.md',kind:'file'}
+  ],completeRootIds:['a'],problems:[{sourceId:'b'}]};
+  const query=fileStatus=>catalogQueryWithScan(records,roots,roof.tags,{fileStatus},scan);
+  assert.deepEqual(query('missing').map(x=>x.record.id),['x4']);
+  assert.deepEqual(query('changed').map(x=>x.record.id),['x3']);
+  assert.deepEqual(query('unobjectified').map(x=>x.name),['untracked.md']);
+  assert.equal(query('cataloged').length,records.length);
+  assert.equal(catalogQueryWithScan(records,roots,roof.tags,{fileStatus:'missing'},null).length,0);
+  assert.throws(()=>query('guessed'),/status filter/);
+  const old=normalizeView({...spec,id:'before-status'});
+  assert.equal(old.fileStatus,'all');
+  assert.throws(()=>normalizeView({...spec,id:'invalid-status',fileStatus:'offline'}),/status filter/);
 });

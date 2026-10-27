@@ -5,7 +5,7 @@ import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.m
 import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {catalogTagResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
-import {groupViewItems,viewTableMetadata} from './view-layout.mjs';
+import {groupViewItems,viewTableMetadata,TABLE_COLUMNS,DEFAULT_TABLE_COLUMNS,normalizeTableColumns} from './view-layout.mjs';
 import {scanRegisteredFolders,verifyCatalogRootReconnect,assertLiveSourceEntry} from './source-scan.mjs';
 import {validateViews,sortViewsForSidebar} from './views.mjs';
 import {createViewsController} from './views-controller.mjs';
@@ -14,7 +14,7 @@ import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagP
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
-  catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,activeViewId:null,views:[],viewSaving:false,sort:'name',groupBy:'none',fileType:'all',
+  catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,activeViewId:null,views:[],viewSaving:false,sort:'name',groupBy:'none',tableColumns:[...DEFAULT_TABLE_COLUMNS],fileType:'all',fileStatus:'all',
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,
   search:'', view:localStorage.getItem('sb-view')||'gallery',
   size:Number(localStorage.getItem('sb-size'))||164,
@@ -188,6 +188,11 @@ function viewTagOptionsHTML(){
   return '<label class="view-tag-mode">Match<select name="viewTagMode"><option value="all" '+(filter.tagMode==='all'?'selected':'')+'>All selected tags (AND)</option><option value="any" '+(filter.tagMode==='any'?'selected':'')+'>Any selected tag (OR)</option></select></label>'+
     '<input type="search" id="view-tag-search" placeholder="Find tags…" aria-label="Find tags" autocomplete="off"/>'+
     '<div class="view-tag-options" role="group" aria-label="Filter by tags">'+(rows+missing||'<span class="micro-hint">No catalog tags yet</span>')+'</div>';
+}
+function openTableColumnsDialog(){
+  const active=new Set(normalizeTableColumns(state.tableColumns));
+  const choices=TABLE_COLUMNS.map(col=>'<label class="table-column-choice"><input type="checkbox" name="tableColumn" value="'+col.key+'" '+(active.has(col.key)?'checked':'')+(col.key==='name'?' disabled':'')+'/><span>'+escapeHTML(col.label)+'</span></label>').join('');
+  openDialog('<h2>Table columns</h2><p>Choose visible columns. Name is always included.</p><form id="table-columns-form"><div class="table-column-options">'+choices+'</div><div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button><button class="primary">Apply</button></div></form>');
 }
 function viewFilterDialog(mode){
   const editing=mode==='tags',renaming=mode==='rename';
@@ -438,6 +443,8 @@ function render(){
   const fileActions=plain||viewsUI.inResults()?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
   const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="edit-view-tags" title="Edit View tags">'+icon('tag',15)+' <span>Tags</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
   const typeControl=plain?'':'<select id="file-type" class="sort-control type-control" aria-label="File type"><option value="all" '+(state.fileType==='all'?'selected':'')+'>All types</option><option value="image" '+(state.fileType==='image'?'selected':'')+'>Images</option><option value="pdf" '+(state.fileType==='pdf'?'selected':'')+'>PDFs</option><option value="video" '+(state.fileType==='video'?'selected':'')+'>Videos</option><option value="folder" '+(state.fileType==='folder'?'selected':'')+'>Folders</option><option value="other" '+(state.fileType==='other'?'selected':'')+'>Other</option></select>';
+  const statusControl=state.activeViewId?'<select id="file-status" class="sort-control" aria-label="Catalog status"><option value="all" '+(state.fileStatus==='all'?'selected':'')+'>All statuses</option><option value="cataloged" '+(state.fileStatus==='cataloged'?'selected':'')+'>Cataloged</option><option value="unobjectified" '+(state.fileStatus==='unobjectified'?'selected':'')+'>Not cataloged</option><option value="missing" '+(state.fileStatus==='missing'?'selected':'')+'>Missing (scan)</option><option value="changed" '+(state.fileStatus==='changed'?'selected':'')+'>Type changed (scan)</option></select>':'';
+  const columnsButton=state.view==='table'?'<button class="text-button" data-action="table-columns" title="Choose table columns" aria-label="Choose table columns">'+icon('table',15)+' <span>Columns</span></button>':'';
   const scanControls=state.activeViewId?'<button class="text-button" data-action="'+(state.scanBusy?'cancel-scan':'scan-folders')+'" title="Read-only scan of granted Catalog Folders">'+icon(state.scanBusy?'close':'search',15)+' <span>'+(state.scanBusy?'Cancel':'Scan')+'</span></button><span class="scan-status" id="scan-status" title="Scans are temporary snapshots; incomplete roots are not marked missing">'+escapeHTML(scanStatus())+'</span>':'';
   const sortControl=plain?'':'<select id="sort-mode" class="sort-control" aria-label="Sort"><option value="name" '+(state.sort==='name'?'selected':'')+'>Name ↑</option><option value="name-desc" '+(state.sort==='name-desc'?'selected':'')+'>Name ↓</option><option value="type" '+(state.sort==='type'?'selected':'')+'>Type</option><option value="location" '+(state.sort==='location'?'selected':'')+'>Location</option></select>';
   const groupControl=state.activeViewId?'<select id="group-mode" class="sort-control" aria-label="Group by"><option value="none" '+(state.groupBy==='none'?'selected':'')+'>No groups</option><option value="source" '+(state.groupBy==='source'?'selected':'')+'>By source</option><option value="folder" '+(state.groupBy==='folder'?'selected':'')+'>By folder</option><option value="type" '+(state.groupBy==='type'?'selected':'')+'>By type</option></select>':'';
@@ -447,7 +454,7 @@ function render(){
   const historyControls=plain
     ?'<button class="icon-button" title="Back" aria-label="Back" data-action="tab-back" '+(backward?'':'disabled')+'>'+icon('back')+'</button><button class="icon-button" title="Forward" aria-label="Forward" data-action="tab-forward" '+(nextward?'':'disabled')+'>'+icon('forward')+'</button>'
     :'';
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+sortControl+groupControl+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+statusControl+sortControl+groupControl+columnsButton+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML=viewsUI.inResults()?'<button data-action="exit-catalog-tag">'+icon('database',16)+' Catalog</button><span class="crumb">'+icon('chevron',13)+'</span><button>'+icon('tag',14)+' '+escapeHTML(viewsUI.title())+'</button>':'<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
@@ -478,11 +485,12 @@ function resourceCard(item){
 function resourceTableRow(item){
   const meta=viewTableMetadata(item,recordTagPaths(itemRecord(item),state.taxonomy));
   const kind=itemKind(item);
-  return '<tr class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" tabindex="0" aria-selected="'+state.selected.has(item.id)+'" title="'+escapeHTML(item.name)+'">'+
-    '<td class="table-name">'+icon(kind==='pdf'?'file':kind,16)+'<span>'+escapeHTML(cleanName(item.name))+'</span></td>'+
-    '<td>'+escapeHTML(meta.type)+'</td><td class="table-location" title="'+escapeHTML(meta.location)+'">'+escapeHTML(meta.location)+'</td>'+
-    '<td class="table-tags" title="'+escapeHTML(meta.tags.join(', '))+'">'+escapeHTML(meta.tags.map(x=>'#'+x).join(' '))+'</td>'+
-    '<td class="table-status">'+escapeHTML(meta.status)+'</td></tr>';
+  const columns=normalizeTableColumns(state.tableColumns);
+  return '<tr class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" tabindex="0" aria-selected="'+state.selected.has(item.id)+'" title="'+escapeHTML(item.name)+'">'+columns.map(key=>{
+    if(key==='name')return '<td class="table-name">'+icon(kind==='pdf'?'file':kind,16)+'<span>'+escapeHTML(cleanName(item.name))+'</span></td>';
+    const value=key==='tags'?meta.tags.map(tag=>'#'+tag).join(' '):meta[key]??'';
+    return '<td class="table-'+key+'" title="'+escapeHTML(String(value))+'">'+escapeHTML(String(value))+'</td>';
+  }).join('')+'</tr>';
 }
 function renderItems(){
   const host=$('#items');if(!host)return;
@@ -499,15 +507,17 @@ function renderItems(){
   const groups=groupViewItems(shown,grouped?state.groupBy:'none');
   const more=items.length>state.pageCount?'<button class="show-more" data-action="show-more">Show more ('+(items.length-state.pageCount)+')</button>':'';
   if(state.view==='table'){
+    const columns=normalizeTableColumns(state.tableColumns);
     const groupRows=groups.map(group=>
-      (grouped?'<tr class="table-group"><th colspan="5">'+escapeHTML(group.label)+' <span>'+group.items.length+'</span></th></tr>':'')+
+      (grouped?'<tr class="table-group"><th colspan="'+columns.length+'">'+escapeHTML(group.label)+' <span>'+group.items.length+'</span></th></tr>':'')+
       group.items.map(resourceTableRow).join('')
     ).join('');
-    host.innerHTML='<table class="view-table"><thead><tr>'+
-      '<th scope="col"><button data-table-sort="name" title="Sort by name">Name</button></th>'+
-      '<th scope="col"><button data-table-sort="type" title="Sort by type">Type</button></th>'+
-      '<th scope="col"><button data-table-sort="location" title="Sort by location">Location</button></th>'+
-      '<th scope="col">Tags</th><th scope="col">Status</th></tr></thead><tbody>'+groupRows+'</tbody></table>'+more;
+    const headers=columns.map(key=>{
+      const col=TABLE_COLUMNS.find(entry=>entry.key===key);
+      const sortable=['name','type','location'].includes(key);
+      return '<th scope="col">'+(sortable?'<button data-table-sort="'+key+'" title="Sort by '+escapeHTML(col.label)+'">'+escapeHTML(col.label)+'</button>':escapeHTML(col.label))+'</th>';
+    }).join('');
+    host.innerHTML='<table class="view-table"><thead><tr>'+headers+'</tr></thead><tbody>'+groupRows+'</tbody></table>'+more;
   }else if(grouped){
     host.classList.add('grouped');
     host.innerHTML=groups.map(group=>'<section class="resource-group"><h3 class="resource-group-title">'+escapeHTML(group.label)+' <span>'+group.items.length+'</span></h3><div class="group-contents '+state.view+'">'+group.items.map(resourceCard).join('')+'</div></section>').join('')+more;
@@ -809,6 +819,14 @@ async function importFiles(){
 }
 document.addEventListener('submit',event=>{
   if(event.target.id==='catalog-form'){event.preventDefault();submitCatalog(event.target);}
+  if(event.target.id==='table-columns-form'){
+    event.preventDefault();
+    try{
+      const columns=[...event.target.querySelectorAll('input[name="tableColumn"]:checked')].map(input=>input.value);
+      state.tableColumns=normalizeTableColumns(columns);
+      $('#dialog')?.remove();render();
+    }catch(error){toast(errorText(error),true);}
+  }
   if(event.target.id==='view-form'){
     event.preventDefault();
     const form=event.target;
@@ -833,6 +851,11 @@ document.addEventListener('input',event=>{
   if(event.target.id==='search-input'){state.search=event.target.value;state.pageCount=150;state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;renderItems();renderInspector();}
   if(event.target.id==='sort-mode'){state.sort=event.target.value;renderItems();}
   if(event.target.id==='group-mode'){state.groupBy=event.target.value;state.pageCount=150;renderItems();}
+  if(event.target.id==='file-status'){
+    state.fileStatus=event.target.value;
+    state.selected.clear();state.lastSelected=null;state.pageCount=150;
+    if(state.activeViewId)viewsUI.requery();
+  }
   if(event.target.id==='file-type'){
     state.fileType=event.target.value;state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;state.pageCount=150;
     if(state.activeViewId)viewsUI.requery();else {renderItems();renderInspector();}
@@ -886,6 +909,7 @@ document.addEventListener('click',async event=>{
     case 'rename-view':viewFilterDialog('rename');break;
     case 'edit-view-tags':viewFilterDialog('tags');break;
     case 'update-view':void viewsUI.update();break;
+    case 'table-columns':openTableColumnsDialog();break;
     case 'gallery':case 'list':case 'table':state.view=action;localStorage.setItem('sb-view',action);render();break;
     case 'inspector':state.inspector=!state.inspector;render();break;
     case 'sidebar':state.sidebar=!state.sidebar;$('#sidebar')?.classList.toggle('open');break;

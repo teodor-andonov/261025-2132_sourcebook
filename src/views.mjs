@@ -1,3 +1,4 @@
+import {normalizeTableColumns} from './view-layout.mjs';
 // Catalog-local saved Views: stable IDs, scope/query and presentation together.
 export function normalizeView(value){
   if(!value||typeof value!=='object')throw Error('Invalid View');
@@ -19,13 +20,16 @@ export function normalizeView(value){
   if(!['all','image','pdf','video','folder','other'].includes(fileType))throw Error('Invalid View file type');
   const pinned=value.pinned===true;
   if(value.pinned!==undefined&&typeof value.pinned!=='boolean')throw Error('Invalid View pin');
+  const fileStatus=value.fileStatus??'all';
+  if(!['all','cataloged','unobjectified','missing','changed'].includes(fileStatus))throw Error('Invalid View status filter');
   const query=value.query??'';
   if(typeof query!=='string'||query.length>200||/[\u0000-\u001f]/.test(query))throw Error('Invalid View query');
   const p=value.presentation;
   if(!p||!['gallery','list','table'].includes(p.mode)||!Number.isInteger(p.size)||p.size<110||p.size>280||!['name','name-desc','type','location'].includes(p.sort))throw Error('Invalid View presentation');
   const groupBy=p.groupBy??'none';
   if(!['none','source','folder','type'].includes(groupBy))throw Error('Invalid View grouping');
-  return {id,name:name.trim(),sourceId,folderPath,tagId:tagIds[0]??null,tagIds:[...tagIds],tagMode,query,fileType,pinned,presentation:{mode:p.mode,size:p.size,sort:p.sort,groupBy}};
+  const columns=normalizeTableColumns(p.columns);
+  return {id,name:name.trim(),sourceId,folderPath,tagId:tagIds[0]??null,tagIds:[...tagIds],tagMode,query,fileType,fileStatus,pinned,presentation:{mode:p.mode,size:p.size,sort:p.sort,groupBy,columns}};
 }
 export function validateViews(value){
   if(!Array.isArray(value)||value.length>200)throw Error('Invalid views.json');

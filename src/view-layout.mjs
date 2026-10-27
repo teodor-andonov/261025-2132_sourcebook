@@ -1,4 +1,15 @@
 import {catalogFileType} from './catalog-search.mjs';
+export const TABLE_COLUMNS=[
+  {key:'name',label:'Name'},{key:'type',label:'Type'},{key:'source',label:'Source'},
+  {key:'location',label:'Location'},{key:'tags',label:'Tags'},
+  {key:'notes',label:'Notes'},{key:'status',label:'Status'},{key:'id',label:'ID'}
+];
+export const DEFAULT_TABLE_COLUMNS=['name','type','location','tags','status'];
+export function normalizeTableColumns(columns=DEFAULT_TABLE_COLUMNS){
+  if(!Array.isArray(columns)||!columns.includes('name')||columns.length>TABLE_COLUMNS.length||new Set(columns).size!==columns.length||columns.some(key=>!TABLE_COLUMNS.some(column=>column.key===key)))throw Error('Invalid View table columns');
+  return TABLE_COLUMNS.filter(col=>columns.includes(col.key)).map(col=>col.key);
+}
+
 // Pure presentation grouping. Never alters catalog records or source files.
 export const VIEW_GROUPS=['none','source','folder','type'];
 export function groupViewItems(items,groupBy='none'){
@@ -30,5 +41,5 @@ export function viewTableMetadata(item,paths=[]){
   const location=item?.location||'—';
   const tags=[...paths].map(x=>String(x).split(' / ').at(-1)).filter(Boolean);
   const status=item?.changedKind?'Type changed':item?.missing?'Missing':item?.unobjectified?'Not cataloged':'';
-  return {type:label,location,tags,status};
+  return {type:label,location,tags,status,source:String(item?.sourceName||'—'),notes:String(item?.record?.notes||''),id:String(item?.record?.id||'')};
 }

@@ -81,12 +81,18 @@ export function catalogTagResults(records,sources,taxonomy,selectedTag){
 }
 
 
+export function filterCatalogStatus(items,status='all'){
+  if(!['all','cataloged','unobjectified','missing','changed'].includes(status))throw Error('Invalid View status filter');
+  if(!Array.isArray(items))throw Error('Invalid catalog results');
+  return items.filter(item=>status==='all'||(status==='cataloged'?!item.unobjectified:status==='unobjectified'?!!item.unobjectified:status==='missing'?!!item.missing:!!item.changedKind));
+}
+
 // Overlay an explicit, disposable disk scan onto catalog records. Tag conditions
 // naturally exclude unobjectified entries; unfiltered Views include them.
 // Missing is asserted only for roots whose traversal completed without errors.
 export function catalogQueryWithScan(records,sources,taxonomy,filter={},scan=null){
   const originals=[...records];
-  if(!scan)return catalogQueryResults(originals,sources,taxonomy,filter).map(item=>({...item,unobjectified:false,missing:false}));
+  if(!scan)return filterCatalogStatus(catalogQueryResults(originals,sources,taxonomy,filter).map(item=>({...item,unobjectified:false,missing:false,changedKind:false})),filter.fileStatus??'all');
   const recordKeys=new Set(originals.filter(r=>r&&typeof r.sourceId==='string'&&typeof r.path==='string').map(r=>r.sourceId+'\u0000'+r.path));
   const found=new Map(),extra=[];
   for(const entry of Array.isArray(scan.entries)?scan.entries:[]){
@@ -97,11 +103,12 @@ export function catalogQueryWithScan(records,sources,taxonomy,filter={},scan=nul
     if(!recordKeys.has(k))extra.push({id:null,sourceId:entry.sourceId,path:entry.path,kind:entry.kind,tagIds:[]});
   }
   const complete=new Set(Array.isArray(scan.completeRootIds)?scan.completeRootIds:[]);
-  return catalogQueryResults([...originals,...extra],sources,taxonomy,filter).map(item=>{
+  const results=catalogQueryResults([...originals,...extra],sources,taxonomy,filter).map(item=>{
     const unobjectified=item.record?.id===null;
     const k=item.sourceId+'\u0000'+item.path;
     const missing=!unobjectified&&complete.has(item.sourceId)&&!found.has(k);
     const changedKind=!unobjectified&&found.has(k)&&found.get(k)!==item.kind;
     return {...item,record:unobjectified?null:item.record,unobjectified,missing,changedKind};
   });
+  return filterCatalogStatus(results,filter.fileStatus??'all');
 }

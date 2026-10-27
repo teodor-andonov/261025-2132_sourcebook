@@ -141,9 +141,41 @@ test('table layout and grouping are restored on View open and saved by Update',a
   assert.equal(f.state.view,'table');
   assert.equal(f.state.groupBy,'source');
   assert.equal(f.state.sort,'location');
+  assert.deepEqual(f.state.tableColumns,['name','type','location','tags','status']);
   f.state.groupBy='type';
   assert.equal(await f.ui.update(),true);
   assert.equal(f.disk['views.json'][0].presentation.groupBy,'type');
   assert.equal(f.disk['views.json'][0].presentation.mode,'table');
+  assert.deepEqual(f.writes,['views.json']);
+});
+
+test('View table columns persist to views.json only, and restore on reopen',async()=>{
+  const f=fixture();
+  f.ui.open('v1');
+  f.state.view='table';
+  f.state.tableColumns=['name','source','notes','status'];
+  assert.equal(await f.ui.update(),true);
+  assert.deepEqual(f.disk['views.json'][0].presentation.columns,['name','source','notes','status']);
+  assert.deepEqual(f.writes,['views.json']);
+  f.state.tableColumns=['name'];
+  f.ui.open('v1');
+  assert.deepEqual(f.state.tableColumns,['name','source','notes','status']);
+});
+test('status filter requery is preview-only until saved View Update',async()=>{
+  const f=fixture();
+  f.state.scan={entries:[
+    {sourceId:'a',path:'gallery/beam.png',kind:'file'},
+    {sourceId:'a',path:'gallery/new.txt',kind:'file'}
+  ],completeRootIds:['a'],problems:[]};
+  f.state.views[0].query='';
+  f.state.views[0].tagId=null;
+  f.state.views[0].tagIds=[];
+  f.disk['views.json']=structuredClone(f.state.views);
+  f.ui.open('v1');
+  f.state.fileStatus='unobjectified';f.ui.requery();
+  assert.deepEqual(f.state.items.map(x=>x.name),['new.txt']);
+  assert.deepEqual(f.writes,[]);
+  assert.equal(await f.ui.update(),true);
+  assert.equal(f.disk['views.json'][0].fileStatus,'unobjectified');
   assert.deepEqual(f.writes,['views.json']);
 });

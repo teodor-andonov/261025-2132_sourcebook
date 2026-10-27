@@ -1,5 +1,5 @@
 import {catalogQueryWithScan} from './catalog-search.mjs';
-import {validateViews,createSavedView,updateSavedView,removeSavedView,assertViewsSnapshotUnchanged} from './views.mjs';
+import {normalizeView,validateViews,createSavedView,updateSavedView,removeSavedView,assertViewsSnapshotUnchanged} from './views.mjs';
 import {flattenedTagTree} from './tags.mjs';
 
 // Glue for explicit, catalog-only View writes. Caller owns the UI and navigation.
@@ -10,16 +10,17 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
   const results=view=>catalogQueryWithScan([...state.records.values()],state.sources,state.taxonomy,{...view,query:''},state.scan).map(x=>({...x,catalogResult:true,handle:null}));
   function open(id){
     if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving)return;
-    const view=state.views.find(v=>v.id===id);if(!view)return toast('View not found',true);
+    const raw=state.views.find(v=>v.id===id);if(!raw)return toast('View not found',true);
+    const view=normalizeView(raw);
     state.activeViewId=id;state.catalogTagView=null;state.tagFilter=null;state.search=view.query;
-    state.view=view.presentation.mode;state.size=view.presentation.size;state.sort=view.presentation.sort;state.groupBy=view.presentation.groupBy??'none';state.fileType=view.fileType;
+    state.view=view.presentation.mode;state.size=view.presentation.size;state.sort=view.presentation.sort;state.groupBy=view.presentation.groupBy??'none';state.tableColumns=[...view.presentation.columns];state.fileType=view.fileType;state.fileStatus=view.fileStatus;
     state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;state.selectionMode=false;state.pageCount=150;
     ++state.request;forgetImages();state.loading=false;state.items=results(view);render();
   }
   function requery(){
     const view=active();
     if(!view)return;
-    state.items=results({...view,fileType:state.fileType});
+    state.items=results({...view,fileType:state.fileType,fileStatus:state.fileStatus});
     state.selected.clear();state.lastSelected=null;state.pageCount=150;
     render();
   }
@@ -27,7 +28,7 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
     if(!inResults())return;
     await refreshRecords();
     const view=active();
-    if(view)state.items=results({...view,fileType:state.fileType});
+    if(view)state.items=results({...view,fileType:state.fileType,fileStatus:state.fileStatus});
     state.selected.clear();render();
   }
   function selectedTags(){
@@ -43,8 +44,8 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
     return {sourceId:base?base.sourceId:state.catalogTagView?null:state.sourceId,
       folderPath:base?base.folderPath:state.catalogTagView?'':state.parts.join('/'),
       tagId:tags.tagIds[0]??null,tagIds:[...tags.tagIds],tagMode:tags.tagMode,
-      query:state.search,fileType:state.fileType,
-      presentation:{mode:state.view,size:state.size,sort:state.sort,groupBy:state.groupBy??'none'}};
+      query:state.search,fileType:state.fileType,fileStatus:state.fileStatus??'all',
+      presentation:{mode:state.view,size:state.size,sort:state.sort,groupBy:state.groupBy??'none',columns:state.tableColumns}};
   }
   async function mutate(edit){
     if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving)return false;

@@ -1,13 +1,13 @@
 # Sourcebook
 
-> **Implementation underway — V0.0.20 Table and Grouping for Views (2026-10-27).** Browser-first read-only Folder Tabs, portable `.sb` catalogs, registered-root Folders, nested stable-ID Tags, bulk Add/Remove, catalog-wide tag discovery and saved Views are working prototype features. A View can explicitly scan granted roots to include unobjectified files in a temporary read-only search index. **104 earlier Node tests and syntax checks passed** in [CI run 40531308487](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40531308487). **CI for V0.0.20 is pending; physical Windows/Android testing remains outstanding.** Pages and screenshots are manual only. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+> **Implementation underway — V0.0.21 Column visibility and status filters for Views (2026-10-27).** Browser-first read-only Folder Tabs, portable `.sb` catalogs, registered-root Folders, nested stable-ID Tags, bulk Add/Remove, catalog-wide tag discovery and saved Views are working prototype features. A View can explicitly scan granted roots to include unobjectified files in a temporary read-only search index. **104 earlier Node tests and syntax checks passed** in [CI run 40531308487](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40531308487). **CI for V0.0.20 is pending; physical Windows/Android testing remains outstanding.** Pages and screenshots are manual only. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 **A beautiful, fast, local-first file browser with optional portable reference catalogs for ordinary files, folders and URLs.**
 
 Sourcebook lets you point a portable **Catalog** at existing folders, browse everything immediately, generate previews, and selectively enrich resources with metadata — without requiring a proprietary managed library.
 
 **Platforms:** Windows + Android; same product and feature set, responsive layout only.  
-**Status:** V0.0.20 Table/Grouping candidate (2026-10-27); automated tests run in GitHub Actions, and an earlier hosted release succeeded. Real-device verification remains outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
+**Status:** V0.0.21 table-column/status-filter candidate (2026-10-27); automated tests run in GitHub Actions, and an earlier hosted release succeeded. Real-device verification remains outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
 
 ## Start here
 

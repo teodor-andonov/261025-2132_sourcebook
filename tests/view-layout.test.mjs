@@ -40,8 +40,18 @@ test('table metadata displays provenance, tags and scan health without a write',
   const input={name:'render.pdf',kind:'file',location:'Documents / studies',missing:true,unobjectified:false};
   const before=JSON.stringify(input);
   const row=viewTableMetadata(input,['Architecture / Facades','Materials / Timber']);
-  assert.deepEqual(row,{type:'PDF',location:'Documents / studies',tags:['Facades','Timber'],status:'Missing'});
+  assert.deepEqual(row,{type:'PDF',location:'Documents / studies',tags:['Facades','Timber'],status:'Missing',source:'—',notes:'',id:''});
   assert.equal(JSON.stringify(input),before);
   assert.equal(viewTableMetadata({name:'raw.xyz',kind:'file',unobjectified:true}).status,'Not cataloged');
   assert.equal(viewTableMetadata({name:'folder',kind:'directory',changedKind:true}).type,'Folder');
+});
+
+test('table metadata keeps notes and ID from the catalog record without mutations',()=>{
+  const item={name:'Drawing.pdf',kind:'file',sourceName:'Drawing Set',record:{id:'ab17',notes:'Recheck section'}};
+  const before=JSON.stringify(item);
+  const row=viewTableMetadata(item,[]);
+  assert.equal(row.source,'Drawing Set');
+  assert.equal(row.notes,'Recheck section');
+  assert.equal(row.id,'ab17');
+  assert.equal(JSON.stringify(item),before);
 });

@@ -1,3 +1,12 @@
+## 2026-10-27 — Configurable table columns and scan-aware View status filters (V0.0.21 candidate)
+
+- Table Views now offer a compact **Columns** dialog to show/hide Type, Source, Location, Tags, Notes, Status and ID; Name is always shown. The renderer derives headings/cells and group heading spans from the chosen columns, retaining selection, keyboard preview, sorting and the same inspector. Order remains a fixed, predictable schema order; column drag/reorder and custom widths are not yet implemented.
+- Added **Catalog status** filtering for active saved Views: All, Cataloged, Not cataloged, Missing (scan), and Type changed (scan). The predicate acts on the existing explicit read-only scan overlay and never silently triggers a scan. Only fully scanned roots produce missing signals; unscanned/disconnected roots are not assumed missing.
+- Table-column selection and status changes update the current View in memory; **Update** writes them to the existing `views.json` only after optimistic concurrency checks and readback verification. Previously saved Views default to All statuses and the original five columns without automatic migration writes. Plain files and source-folder contents are unchanged.
+- Added pure metadata/filter validation and integration/controller tests for legacy defaults, missing vs incomplete roots, column safety, and persistence/restoration. Compact neutral controls preserve the one-accent visual contract.
+- Service-worker shell updated to `sourcebook-shell-0.0.21-view-columns-status`. Screenshot capture and Pages publishing remain **explicitly manual only** and were not triggered. GitHub Actions CI and physical Windows/Android validation are still pending at commit time.
+- Further work: user-defined table column order/widths, additional predicate composition, high-volume rendering and recoverable catalog writes.
+
 ## 2026-10-27 — Saved Views table and grouping presentation (V0.0.20 candidate)
 
 - Added **Table** as a third presentation alongside Gallery and List, available from the same top-bar view controls. Table rows show Name, Type, Location, Tags and the explicit read-only scan Status; selectable rows preserve the existing inspector, reveal and preview behaviours. Column headings can sort by Name, Type or Location using the shared sorter.
