@@ -76,7 +76,12 @@ export async function planMissingResourceRestore(handle,backup,{selectedPaths}={
   // later batch. Otherwise new objectification could steal a restorable ID.
   for(const path of missing){
     const token=RESOURCE.exec(path)?.[1];
-    const match=new RegExp('^'+catalog.code+'([1-9][0-9]*)
+    const match=new RegExp('^'+catalog.code+'([1-9][0-9]*)$').exec(token);
+    if(!match||!Number.isSafeInteger(Number(match[1])))
+      throw Error('Backup contains an unsafe resource ID: '+path);
+    highest=Math.max(highest,Number(match[1]));
+  }
+  const selected=(selectedPaths??missing.slice(0,MAX_BATCH)).slice();
   if(selected.length>MAX_BATCH)throw Error('Restore at most 250 missing records per batch');
   const restored=[],locations=new Set(occupied);
   for(const path of selected){
