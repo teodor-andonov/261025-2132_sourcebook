@@ -102,3 +102,8 @@
 
 /* Catalog Folders: real, derived relative ancestors; no virtual collections. */
 .catalog-folder{padding-left:calc(7px + var(--depth,0)*13px);font-size:11px}
+
+/* Explicit selection mode and bulk tag controls; one accent only. */
+.text-button.active{background:var(--tint);color:var(--text)}
+.full:disabled{opacity:.45;cursor:wait}
+.inspector .hint{line-height:1.5}

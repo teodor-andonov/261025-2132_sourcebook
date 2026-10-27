@@ -1,6 +1,7 @@
 import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.mjs';
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
+import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.mjs';
 import {nextSelectionIndex} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
@@ -14,7 +15,7 @@ const state={
   size:Number(localStorage.getItem('sb-size'))||164,
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
-  tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1
+  tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false
 };
 let tabPersistQueue=Promise.resolve();
 const glyphs={
@@ -259,7 +260,7 @@ async function reconnect(){
 }
 async function navigate(id,parts,historyPosition=null){
   state.sourceId=id;state.parts=parts;state.search='';state.selected.clear();state.pageCount=150;
-  state.tagDraftItem=null;state.tagFilter=null;
+  state.tagDraftItem=null;state.tagFilter=null;state.selectionMode=false;
   const request=++state.request;
   state.loading=true;state.items=[];forgetImages();render();
   try{
@@ -321,6 +322,7 @@ function render(){
     ?'<div class="section-head"><span>CATALOG</span></div><nav><button class="nav-item" data-action="open-catalog">'+icon('database',16)+'<span>Open catalog</span></button><button class="nav-item" data-action="create-catalog">'+icon('plus',16)+'<span>New catalog</span></button></nav>'
     :'<div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav>';
   const header='<button class="catalog-chip" data-action="home">'+icon(plain?'folder':'database',16)+'<span>'+escapeHTML(plain?'Browse':state.catalog.name)+'</span>'+icon('chevron',13)+'</button>';
+  const selectionActions=plain?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+(state.selected.size?'<button class="text-button" data-action="clear-selection" title="Clear selection">'+icon('close',15)+' <span>Clear</span></button>':'');
   const fileActions=plain?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
   const activeTab=activeFolderTab();
   const backward=activeTab&&activeTab.position>0;
@@ -328,15 +330,11 @@ function render(){
   const historyControls=plain
     ?'<button class="icon-button" title="Back" aria-label="Back" data-action="tab-back" '+(backward?'':'disabled')+'>'+icon('back')+'</button><button class="icon-button" title="Forward" aria-label="Forward" data-action="tab-forward" '+(nextward?'':'disabled')+'>'+icon('forward')+'</button>'
     :'';
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML='<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
-function renderItems(){
-  const host=$('#items');if(!host)return;
-  state.observer?.disconnect();state.observer=null;
-  host.className=state.view;
-  host.style.setProperty('--size',state.size+'px');
+function visibleItems(){
   const query=state.search.trim();
   const plainQuery=query&&!query.startsWith('#')?query.toLocaleLowerCase():null;
   // Resolve catalog records once per render, rather than scanning all records per item.
@@ -346,13 +344,20 @@ function renderItems(){
       if(record.sourceId===state.sourceId&&!recordsByPath.has(record.path))recordsByPath.set(record.path,record);
     }
   }
-  const items=state.items.filter(item=>{
+  return state.items.filter(item=>{
     const name=cleanName(item.name);
     if(!state.tagFilter&&(!query||(plainQuery&&name.toLocaleLowerCase().includes(plainQuery))))return true;
     const path=[...state.parts,item.name].join('/');
     const paths=recordTagPaths(recordsByPath.get(path),state.taxonomy);
     return matchesResourceSearch(name,paths,query)&&(!state.tagFilter||includesTagPath(paths,state.tagFilter));
   });
+}
+function renderItems(){
+  const host=$('#items');if(!host)return;
+  state.observer?.disconnect();state.observer=null;
+  host.className=state.view;
+  host.style.setProperty('--size',state.size+'px');
+  const items=visibleItems();
   $('#item-count').textContent=items.length+(state.loading?'+':'')+' items';
   if(!state.sourceId){host.innerHTML='<div class="empty">'+icon('folder',38)+'<h3>Your files, one click away</h3><p>Choose a folder to browse.</p><button class="primary" data-action="'+(state.catalog?'add-source':'open-folder')+'">Open folder</button></div>';return;}
   if(!state.handles.has(state.sourceId)){host.innerHTML='<div class="empty">'+icon('alert',35)+'<h3>Reconnect your folder</h3><p>Renew this folder permission to continue.</p><button class="primary" data-action="reconnect">Reconnect source</button></div>';return;}
@@ -438,6 +443,12 @@ function commitTagInput(){
 function renderInspector(){
   const host=$('#inspector-data');if(!host)return;
   if(state.selected.size!==1){
+    if(state.catalog&&state.selected.size>1){
+      const key='bulk:'+([...state.selected].sort().join('|'));
+      if(state.tagDraftItem!==key){state.tagDraftItem=key;state.tagDraft=[];}
+      host.innerHTML='<h4>'+state.selected.size+' selected</h4><div class="detail"><div class="label">BULK TAGS</div><div class="tag-editor"><div class="tag-pills" id="tag-pills"></div><input id="tag-input" aria-label="Bulk tags" placeholder="# Add tag…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="tag-suggestions" aria-expanded="false"/></div><div class="tag-suggestions" id="tag-suggestions" role="listbox" aria-label="Existing tags" hidden></div><div class="micro-hint">Add preserves other tags. Remove matches exact tag paths, not descendants. Maximum 250 per operation.</div></div><button class="primary full" data-action="bulk-add" '+(state.bulkSaving?'disabled':'')+'>'+icon('plus',16)+' Add tags</button><button class="secondary full" data-action="bulk-remove" '+(state.bulkSaving?'disabled':'')+'>'+icon('close',16)+' Remove tags</button><div class="hint">Only catalog JSON changes. Interrupted batches may partially save.</div>';
+      renderTagPills();return;
+    }
     state.tagDraftItem=null;state.tagDraft=[];
     host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' selected':'Select a resource')+'</span></div>';return;
   }
@@ -466,10 +477,46 @@ function select(item,event){
   if(event.shiftKey&&state.lastSelected){
     const a=state.items.findIndex(i=>i.id===state.lastSelected),b=state.items.findIndex(i=>i.id===item.id);
     if(a>=0&&b>=0){state.selected.clear();for(let x=Math.min(a,b);x<=Math.max(a,b);x++)state.selected.add(state.items[x].id);}
-  }else if(event.ctrlKey||event.metaKey){if(state.selected.has(item.id))state.selected.delete(item.id);else state.selected.add(item.id);}
+  }else if(event.ctrlKey||event.metaKey||state.selectionMode){if(state.selected.has(item.id))state.selected.delete(item.id);else state.selected.add(item.id);}
   else{state.selected.clear();state.selected.add(item.id);}
   state.lastSelected=item.id;
   refreshSelectionUI();renderInspector();
+}
+async function bulkTags(mode){
+  if(!state.catalog||state.bulkSaving||state.selected.size<2)return;
+  if(!commitTagInput())return;
+  const items=state.items.filter(item=>state.selected.has(item.id));
+  if(items.length!==state.selected.size)return toast('Selection changed. Select again.',true);
+  state.bulkSaving=true;
+  try{
+    if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed.');
+    const root=sourceHandle();
+    if(!root||!await authorized(root,'read'))throw Error('Reconnect the source.');
+    const folder=await nested(root,state.parts);
+    for(const item of items){
+      const live=item.kind==='directory'?await folder.getDirectoryHandle(item.name):await folder.getFileHandle(item.name);
+      if(typeof live.isSameEntry==='function'&&typeof item.handle?.isSameEntry==='function'&&!await live.isSameEntry(item.handle))throw Error('Source entry changed: '+item.name);
+    }
+    const previous=[...state.records.values()];
+    await refreshRecords();
+    const records=[...state.records.values()];
+    assertSelectedUnchanged(previous,records,items,state.sourceId,state.parts);
+    const latest=await readJson(state.catalogHandle,'catalog.json');
+    if(!latest||latest.id!==state.catalog.id||latest.code!==state.catalog.code)throw Error('Catalog identity changed.');
+    const plan=planBulkTags({catalog:latest,taxonomy:state.taxonomy,records,items,sourceId:state.sourceId,parts:state.parts,paths:[...state.tagDraft],mode,siblingNames:state.items.map(item=>item.name)});
+    if(!plan.changes.length){toast('No changes needed.');return;}
+    const count=await commitBulkTags({handle:state.catalogHandle,plan,expectedCatalog:latest,expectedTaxonomy:state.taxonomy});
+    toast('Updated '+count+' catalog records · source files unchanged');
+    state.tagDraftItem=null;state.tagDraft=[];
+  }catch(error){toast('Bulk tags failed: '+errorText(error),true);}
+  finally{
+    try{
+      state.taxonomy=await readJson(state.catalogHandle,'tags.json',[]);
+      state.catalog=await readJson(state.catalogHandle,'catalog.json');
+      await refreshRecords();
+    }catch(error){toast('Catalog refresh failed: '+errorText(error),true);}
+    state.bulkSaving=false;render();
+  }
 }
 async function saveResource(){
   if(!state.catalog)return;
@@ -484,7 +531,7 @@ async function saveResource(){
     await refreshRecords();
     const current=itemRecord(item);
     if(!previous&&current)throw Error('This resource was cataloged on disk since selection. Reopen the catalog before saving.');
-    if(previous && (!current||previous.updatedAt!==current.updatedAt)){
+    if(previous && (!current||JSON.stringify(previous)!==JSON.stringify(current))){
       throw Error('This resource changed on disk. Reopen the catalog before saving.');
     }
     const diskTags=await readJson(state.catalogHandle,'tags.json',[]);
@@ -587,7 +634,7 @@ document.addEventListener('submit',event=>{
 document.addEventListener('input',event=>{
   if(event.target.id==='tag-input')showTagSuggestions();
   if(event.target.id==='accent-color')applyAccent(event.target.value);
-  if(event.target.id==='search-input'){state.search=event.target.value;state.pageCount=150;renderItems();}
+  if(event.target.id==='search-input'){state.search=event.target.value;state.pageCount=150;state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;renderItems();renderInspector();}
   if(event.target.id==='density'){state.size=Number(event.target.value);localStorage.setItem('sb-size',state.size);$('#items')?.style.setProperty('--size',state.size+'px');}
 });
 document.addEventListener('click',async event=>{
@@ -597,7 +644,7 @@ document.addEventListener('click',async event=>{
   const pin=event.target.closest('[data-toggle-tag-pin]');
   if(pin){await togglePin(pin.dataset.toggleTagPin);return;}
   const tagNav=event.target.closest('[data-tag-filter]');
-  if(tagNav){state.tagFilter=state.tagFilter===tagNav.dataset.tagFilter?null:tagNav.dataset.tagFilter;render();return;}
+  if(tagNav){state.tagFilter=state.tagFilter===tagNav.dataset.tagFilter?null:tagNav.dataset.tagFilter;state.selected.clear();state.lastSelected=null;render();return;}
   const removeTag=event.target.closest('[data-remove-tag]');
   if(removeTag){state.tagDraft.splice(Number(removeTag.dataset.removeTag),1);renderTagPills();$('#tag-input')?.focus();return;}
   const crumb=event.target.closest('[data-crumb]');if(crumb){return navigate(state.sourceId,state.parts.slice(0,Number(crumb.dataset.crumb)+1));}
@@ -624,7 +671,11 @@ document.addEventListener('click',async event=>{
     case 'inspector':state.inspector=!state.inspector;render();break;
     case 'sidebar':state.sidebar=!state.sidebar;$('#sidebar')?.classList.toggle('open');break;
     case 'show-more':state.pageCount+=150;renderItems();break;
-    case 'clear-tag-filter':state.tagFilter=null;render();break;
+    case 'clear-tag-filter':state.tagFilter=null;state.selected.clear();state.lastSelected=null;render();break;
+    case 'toggle-selection':state.selectionMode=!state.selectionMode;render();break;
+    case 'clear-selection':state.selected.clear();state.lastSelected=null;state.selectionMode=false;render();break;
+    case 'bulk-add':void bulkTags('add');break;
+    case 'bulk-remove':void bulkTags('remove');break;
     case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label><div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
     case 'reset-accent':applyAccent('#5276bd');if($('#accent-color'))$('#accent-color').value='#5276bd';break;
     case 'save-resource':saveResource();break;
@@ -676,6 +727,7 @@ document.addEventListener('keydown',event=>{
   if(event.key==='Escape'){closePreview();$('#dialog')?.remove();$('#folder-context')?.remove();return;}
   if(state.previewId){if(event.key==='ArrowRight')previewStep(1);if(event.key==='ArrowLeft')previewStep(-1);return;}
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('#search-input')?.focus();return;}
+  if(state.catalog&&(event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='a'&&!event.target.matches('input,textarea')){event.preventDefault();const items=visibleItems();state.selected=new Set(items.map(item=>item.id));state.lastSelected=items.at(-1)?.id||null;state.selectionMode=true;render();return;}
   if(!state.catalog&&event.ctrlKey&&event.key==='Enter'){const selected=state.items.find(item=>item.id===state.lastSelected);if(selected?.kind==='directory'){event.preventDefault();openSelectedFolderTab().catch(e=>toast(errorText(e),true));}return;}
   if(event.target.matches('input,textarea')||event.ctrlKey||event.metaKey||event.altKey)return;
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key)){

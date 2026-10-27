@@ -4,6 +4,14 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — Bulk nested Tags and safe catalog-only writes (V0.0.14 candidate)
+
+- Added touch-friendly Select mode, Ctrl/Cmd-click, Shift range and Ctrl/Cmd+A (current filtered folder results). The multi-resource inspector now supports Add/Remove nested tags using hashtag pills and keyboard suggestions, with a limit of 250 selected resources per operation.
+- Add preserves unrelated tags and notes; Remove matches exact paths rather than descendants. Legacy string tags migrate only on explicitly changed records. Stable IDs are reused; new resource identities are allocated without renaming or writing ordinary files.
+- Catalog identity, taxonomy and selected records are preflight-checked; source entries are revalidated read-only. Catalog JSON writes are read back and verified, with stale checks during the batch. **Not atomic:** interrupted batches can partially save; errors report verified record count and the catalog refreshes afterward.
+- Single-resource save now compares the entire previous record rather than only `updatedAt`; changing search/tag filters clears hidden selection.
+- Added pure planner and simulated FileSystemHandle integration tests. **CI and Windows/Android testing are pending at commit authoring time.** No screenshots or Pages deployment were triggered.
+
 ## 2026-10-27 — Catalog Folder hierarchy for registered roots (V0.0.13 candidate)
 
 - Catalog FOLDERS now lists registered real source roots and automatically derived ancestor folders of objectified resource paths. An objectified `images/gallery/img1.png` appears as `Images / gallery` when `Images` is the registered root; no drive-wide absolute path is displayed or stored.
