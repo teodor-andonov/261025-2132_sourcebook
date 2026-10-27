@@ -1,3 +1,4 @@
+import {assertNoCatalogConflictCopies,conflictCanonicalPath,inspectCatalogConflictCopies} from './catalog-conflicts.mjs';
 // Portable, read-only metadata snapshots. Deliberately NO restore/write API.
 // Backups contain catalog JSON and the pending recovery journal, not ordinary
 // source files, preview caches or device-local directory permissions.
@@ -32,6 +33,8 @@ async function resourcePaths(handle){
   for await(const [name,entry] of dir.entries()){
     if(entry.kind!=='file'||!name.endsWith('.json'))continue;
     const path='resources/'+name;
+    // Read-only inspection may skip conflict copies; export is guarded separately.
+    if(conflictCanonicalPath(path))continue;
     if(!RESOURCE.test(path))throw Error('Unexpected catalog resource JSON filename: '+name);
     names.push(path);
     if(names.length>MAX_FILES-ROOT_FILES.length)throw Error('Catalog has too many resource records for a backup');
@@ -75,7 +78,9 @@ function catalogFromFiles(files){
 }
 export async function createCatalogBackup(handle){
   if(!handle)throw Error('Choose a catalog first');
+  await assertNoCatalogConflictCopies(handle);
   const files=await snapshot(handle);
+  await assertNoCatalogConflictCopies(handle);
   const catalog=catalogFromFiles(files);
   return {format:FORMAT,formatVersion:1,createdAt:new Date().toISOString(),
     catalogId:catalog.id,catalogCode:catalog.code,
@@ -119,7 +124,8 @@ export async function inspectCatalogBackup(handle,value){
     const a=saved.get(path),b=live.get(path);
     entries.push({path,status:!a?'added-since-backup':!b?'missing-now':a.sha256===b.sha256?'unchanged':'changed'});
   }
-  return {catalogId:catalog.id,entries,
+  const conflictCopies=await inspectCatalogConflictCopies(handle,{expectedCatalogId:catalog.id});
+  return {catalogId:catalog.id,entries,conflictCopies,
     counts:Object.fromEntries(['unchanged','changed','missing-now','added-since-backup']
       .map(status=>[status,entries.filter(entry=>entry.status===status).length])),
     hasPendingJournal:saved.has('.sourcebook-pending.json'),

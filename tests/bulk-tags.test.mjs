@@ -41,6 +41,7 @@ class Dir{
       let content;return {write:async x=>{content=x;},close:async()=>{dir.files.set(name,content);dir.writes.push(name);},abort:async()=>{}};
     }};
   }
+  async *entries(){for(const name of this.files.keys())yield [name,{kind:'file'}];if(this.resources)yield ['resources',{kind:'directory'}];}
   async removeEntry(name){if(!this.files.delete(name))throw Object.assign(Error('missing'),{name:'NotFoundError'});}
   async getDirectoryHandle(name,{create=false}={}){
     if(!this[name]){if(!create)throw Object.assign(new Error('missing'),{name:'NotFoundError'});this[name]=new Dir();}

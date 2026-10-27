@@ -2,6 +2,7 @@
 // directory; ordinary registered source folders are never opened for writing.
 // This is NOT a cross-device lock or a filesystem-wide atomic commit.
 import {readJson,writeJson} from './storage.mjs';
+import {assertNoCatalogConflictCopies} from './catalog-conflicts.mjs';
 
 export const CATALOG_JOURNAL='.sourcebook-pending.json';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -86,6 +87,7 @@ export async function inspectPendingCatalogTransaction(handle,catalogId){
     conflicts:journal.changes.filter((_,i)=>status[i]==='conflict').map(x=>x.path)};
 }
 async function applyJournal(handle,catalogId,journal){
+  await assertNoCatalogConflictCopies(handle);
   await assertIdentity(handle,catalogId);
   const initial=await statuses(handle,journal);
   if(initial.includes('conflict'))throw Error('Catalog transaction conflicts with external edits: '+
@@ -109,6 +111,7 @@ async function applyJournal(handle,catalogId,journal){
   const current=await readJournal(handle,catalogId);
   if(!current||!same(current,journal))throw Error('Pending transaction changed before completion');
   if((await statuses(handle,journal)).some(x=>x!=='applied'))throw Error('Catalog transaction is incomplete');
+  await assertNoCatalogConflictCopies(handle); // Keep journal if a sync copy appeared during the write.
   if(typeof handle.removeEntry!=='function')throw Error('Catalog cannot clear its recovery journal');
   await handle.removeEntry(CATALOG_JOURNAL);
   if(await readJson(handle,CATALOG_JOURNAL,null)!==null)throw Error('Catalog recovery journal could not be cleared');
@@ -123,6 +126,7 @@ export async function commitCatalogTransaction({handle,catalogId,changes,transac
   if(inFlight.has(handle))throw Error('Another catalog write is already in progress');
   inFlight.add(handle);
   try{
+    await assertNoCatalogConflictCopies(handle);
     await assertIdentity(handle,catalogId);
     if(await readJournal(handle,catalogId))throw Error('An interrupted catalog save needs recovery first');
     for(const change of checked){
@@ -141,6 +145,7 @@ export async function resumeCatalogTransaction(handle,catalogId){
   if(inFlight.has(handle))throw Error('Another catalog write is already in progress');
   inFlight.add(handle);
   try{
+    await assertNoCatalogConflictCopies(handle);
     const journal=await readJournal(handle,catalogId);
     if(!journal)throw Error('No pending catalog save to recover');
     return await applyJournal(handle,catalogId,journal);
