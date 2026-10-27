@@ -1,14 +1,13 @@
 # Sourcebook
 
-> **Implementation underway — V0.0.13 catalog-folder cycle (2026-10-27).** Local-folder gallery, portable `.sb` catalogs, stable-ID nested tags and current-folder tag-aware search are implemented. GitHub Pages publishing succeeded on 2026-10-27; subsequent app changes are published **manually only**, by explicit request. Physical Windows/Pixel 8 verification remains outstanding. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
-
+> **Implementation underway — V0.0.14 bulk-tagging cycle (2026-10-27).** Browser-first read-only Folder Tabs, portable `.sb` catalogs, registered-root Folder navigation, nested stable-ID Tags, current-folder tag search and safe catalog-only bulk Add/Remove are implemented as prototype features. Code CI is passing; **physical Windows/Pixel 8 testing remains outstanding**. Pages publishing and screenshot capture are **manual only**, by explicit request. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 **A beautiful, fast, local-first file browser with optional portable reference catalogs for ordinary files, folders and URLs.**
 
 Sourcebook lets you point a portable **Catalog** at existing folders, browse everything immediately, generate previews, and selectively enrich resources with metadata — without requiring a proprietary managed library.
 
 **Platforms:** Windows + Android; same product and feature set, responsive layout only.  
-**Status:** V0.0.13 catalog-folder implementation candidate (2026-10-27); automated tests run in GitHub Actions, and an earlier hosted release succeeded. Real-device verification remains outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
+**Status:** V0.0.14 bulk-tag implementation candidate (2026-10-27); automated tests run in GitHub Actions, and an earlier hosted release succeeded. Real-device verification remains outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
 
 ## Start here
 
@@ -38,7 +37,7 @@ Full details: [Release and CI policy](docs/RELEASE_PROCESS.md). Pages is configu
 
 ## Current design direction
 
-**27 Oct 2026 product decision:** Browser-first: ordinary folder browsing without a catalog now supports multiple **read-only physical Tabs**, independent history and device-local restoration (commit pending CI verification). Catalog root-tree navigation remains planned. Sidebar: physical folder **Tabs** and optional **Catalog** with linked root Folders, nested Tags and saved **Views**. Pin tags for manual collections. Defer image editing; preserve files.
+**27 Oct 2026 product decision:** Browser-first: ordinary folder browsing without a catalog supports multiple **read-only physical Tabs**, independent history and device-local restoration. Catalog Folders now show registered physical roots and derived ancestor directories of cataloged resources. Catalog Tags support bulk Add/Remove for selected resources; catalog-wide filtering and saved Views remain planned. Sidebar: physical folder **Tabs** and optional **Catalog** with linked root Folders, nested Tags and saved **Views**. Pin tags for manual collections. Defer image editing; preserve files.
 
 
 
