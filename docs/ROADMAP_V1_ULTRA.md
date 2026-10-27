@@ -7,6 +7,8 @@
 > **Reference DNA:** Eagle.cool × refern.app × File Pilot  
 > **Short form:** Existing files. Beautiful previews. Portable catalogs. Delightful organization.
 
+> **Superseding product decision (27 Oct 2026):** Sourcebook is a general file browser first, with optional portable catalogs. Two main sidebar areas: physical folder **Tabs** and **Catalog** (registered-root Folders, nested Tags, saved **Views**). Manual Collections are just tags, optionally pinned; dynamic Smart Folders are **Views**, which save scope/filter *and* display settings. Don't build separate manual Collection or Smart Folder databases. Image editing and annotations are outside V1. The existing prototype still requires a catalog; folder-first launch and new sidebar are planned, not shipped. Historical backlog wording below is subordinate to this decision.
+
 ## 00 — Executive product promise
 
 **Sourcebook makes ordinary folders feel like a beautifully curated, searchable, visual library — without taking the files hostage.**
@@ -96,29 +98,30 @@ Design for a feeling: opening Sourcebook should feel like entering a beautifully
 
 ## 04 — Core mental model
 
-**Catalog** — portable Name.sb folder: settings, catalog code, sources, resources, metadata, tags, collections, smart queries, views, previews.  
-**Source** — a logical mounted user-granted filesystem folder; separate mapping to actual local folder handle per browser/device.  
-**Resource** — a file, folder or URL, present as a browse entry even before objectification.  
-**Objectification** — attaching durable catalog-specific ID and metadata; compatible writable files may be renamed with a bracketed suffix.  
-**Physical folder** — real directory where files exist; moving into it may mutate filesystem.  
-**Tag** — hierarchical label associated with resources; no physical move.  
-**Collection** — manual membership independent of file paths.  
-**Smart folder** — named dynamic filter/query; no copied items.  
-**View** — saved presentation (gallery/list/table), sort, group, density, visible fields and optional scope/filter.  
-**Preview** — derivative asset, regenerable; metadata survives even when preview is missing.
+**Browser workspace** — ordinary user-granted physical folders can be opened without a catalog. Folder Tabs hold independent locations and histories. Initial Tabs are folders only; selecting a tag or View changes the main browsing results without spawning tabs.
 
-**Invariant:** Source files and their actual path operations are distinguishable from catalog-only metadata operations.
+**Catalog** — optional portable Name.sb directory with registered physical source roots, catalog-specific resource IDs, tags, Views, metadata and previews.
+
+**Catalog Folder** — manually registering an existing directory establishes a source root, with no copy, move, rename or automatic objectification. Objectified resources create a *derived catalog tree* of their ancestor folders down to the nearest/deepest registered root. Example: `C:/tedi/docs/images/gallery/img1.jpg` registered under `images/` appears as `images/gallery/img1.jpg`, never a full Windows drive path. Overlapping registered roots require deterministic deepest-root choice and duplicate protection. Device-specific root grants remain local.
+
+**Resource** — file, directory or URL, browseable whether or not objectified.
+**Objectification** — catalog metadata identity assignment. Physical filename changes are explicit optional operations, never a side effect of tagging.
+**Tag** — stable-ID nested classification and manual grouping; pinning is a shortcut to the *same tag ID*, not new membership.
+**View** — one saved scope/filter/query with gallery/list/table settings such as sort, group and density. Results are dynamic.
+**Preview** — regenerable derivative, not a new master file.
+
+**Invariant:** No silent source-file changes when opening folders, registering roots, tagging, pinning or navigating catalog results.
 
 ## 05 — First 60 seconds (onboarding test)
 
 1. User visits HTTPS app, chooses Install, opens standalone PWA.
-2. Landing: **Open Catalog** / **New Catalog** / recent catalogs. Nothing else visually dominant.
+2. Landing (planned): **Open Folder** / **Open Catalog** / **New Catalog** / recent workspaces.
 3. User creates Research.sb in a selected writable parent folder; chooses suggested catalog code e.g. ab.
 4. User adds a source folder via Chrome directory picker, grants read (and write only when needed).
 5. File names appear *before* thumbnails complete, with calm layout and progressive preview loading.
 6. User resizes gallery thumbnails; opens a preview; adds a tag to a reference.
 7. Metadata writes to Research.sb and, if user permits rename-on-objectify, file becomes Figure[ab1].jpg.
-8. A saved smart folder can now display that tagged resource.
+8. A saved View can dynamically display the tagged resource.
 
 **UX target:** novice obtains value without learning the words “objectification,” “schema” or “query language.”
 
@@ -152,10 +155,10 @@ Avoid “home dashboards” at V1 unless they actually save the user work.
 
 ### 08.1 Sidebar
 - Catalog picker at top; compact current name.
-- Sources with expandable folders; collections; nested tags; smart folders; pinned locations.
+- Two main areas: folder Tabs, and optional Catalog with root-linked Folders, nested Tags and saved Views. Pinned tags appear as shortcuts.
 - Section collapse, reorder and optional favorites.
 - Desktop resizable; narrow-screen sheet/drawer; same information architecture.
-- Drag onto physical folder = file operation confirmation; onto tag/collection = metadata operation.
+- Drag onto physical folder = confirmed file operation; onto tag = catalog-only metadata operation.
 - Optional sidebar tabs/rail for switching views rather than an always-present extra panel.
 
 ### 08.2 Main toolbar
@@ -173,7 +176,7 @@ Breadcrumbs with click-to-jump, back/forward; title/path; global search; sort/fi
 - Single click/tap select. Double click/Enter opens folder or quick look depending user preference; Space always Quick Look on keyboard.
 - Shift range, Ctrl/Cmd toggle, select-all, drag multi-selection; mobile long press then tap multi-select.
 - Forward/back restores scroll, selection and sort in previous location.
-- Tabs for multiple folders/collections/views and context “open in new tab.”
+- Folder Tabs first, including “Open in new tab.” Tag and View results reuse the main browser without creating tabs.
 - Scroll position persists when opening/closing quick look or inspector.
 - Explorer-like path handling but no desktop-only affordance essential to basic use.
 
@@ -186,7 +189,7 @@ Breadcrumbs with click-to-jump, back/forward; title/path; global search; sort/fi
 ## 09 — Selection and bulk actions
 
 - Selections survive sorting/filtering only when coherent; show selection count and scope.
-- Fixed toolbar appears when multiple selected, with Tag, Add to collection, Rate, Copy/Move, Objectify, Preview/More.
+- Contextual multi-selection actions: Tag, Copy/Move, Objectify, Preview/More; no parallel manual Collection membership control.
 - One inspector can display common/mixed values across selection.
 - Assign same tag to 250 images without 250 modal prompts.
 - Progress, cancellation and recovery visible for physical operations; optimistic immediate UI only when rollback is possible.
@@ -233,9 +236,7 @@ Research.sb/
   sources.json                 # logical sources and relative roots, no global device paths
   properties.json              # typed property definitions
   tags.json                    # hierarchy; stable tag IDs
-  collections.json             # manual collection definitions
-  smart-folders.json           # query definitions
-  views.json                   # named presentation definitions
+  views.json                   # named query/scope + display settings (not yet implemented)
   resources/
     ab1.json                   # per-resource records: sync-friendly, versioned
     ab2.json
@@ -352,38 +353,27 @@ Controls: fit/fill, viewer background light/dark/checker, rotate/zoom/pan for im
 
 Failures have fallback cover and a non-intrusive retry, never infinite spinner or app crash.
 
-## 16 — Properties, tags, collections, smart folders and views
+## 16 — Registered roots, Tags, Views and deferred properties
 
-### Properties
-Defaults: display name, notes, status/objectified, file type, path, source, tags, rating, creation/modified dates, dimensions/pages/duration, size, source URL. Custom types: text, multiline, number, checkbox, date, URL, single/multi-select, color; relations beyond resources are unnecessary in V1.
+### Root-linked catalog Folders
+- Register existing physical directories manually without importing, moving or objectifying their contents.
+- Auto-expose only ancestors between an objectified resource and its nearest registered root. Never include drive-wide absolute paths in portable records.
+- Where roots overlap, choose deepest safely resolving root; reject ambiguous identity collisions and keep per-device handle mappings separate.
 
-Inline inspector editing, single/bulk edit, quick add from gallery context. Track schema migrations; don't silently destroy values if a type changes.
+### Nested Tags (manual grouping)
+- Stable IDs and parent links in tags.json; resources store tagIds.
+- Compact hashtag pills, existing-tag suggestions and keyboard selection, tag search/descendant filtering, safe bulk edit and eventual rename/reparent/merge.
+- Pinning a tag adds an optional persisted shortcut by the same ID, preserving full hierarchy and resource membership. `#Collections/Temp-01` is a perfectly adequate manual collection.
+- Later: catalog-wide tag browsing, safe sync-conflict reconciliation. No independent manual Collection memberships.
 
-### Nested tags
-- Infinite practical hierarchy (subject to UI virtualization), color optionally inherited.
-- New, rename, reorder, reparent, merge, remove.
-- Search a tag and descendants with predictable toggle.
-- Assign via typing, contextual multi-select, drag onto tag in sidebar.
-- When tags renamed, resource references remain stable through tag IDs.
+### Views (dynamic query + display)
+- A named View saves scope/filter conditions **and** gallery/list/table settings (sort, group, density, optional columns).
+- Predicates progressively cover filename/type/source/path, tag and descendants, dates/size, offline/objectified status and later optional properties.
+- Rename, edit, pin, delete Views without copying underlying files. Do not implement separate Smart Folder data.
 
-### Collections
-- Named manually curated sets, no physical copy, can include URLs + files across sources.
-- Single item may belong to many collections; optional custom order, cover, description.
-- Drag into/out of collection; bulk add; keyboard-first picker.
-- Catalog can nest collections visually later, independent of physical folder hierarchy.
-
-### Smart folders
-- Saved filter/query returning live results.
-- Query predicates: name/type/path/source, tag/descendant, property values, date/size/rating, missing/offline, objectified, URL domain.
-- AND/OR groups, match-any/match-all, preview result count, saved query rename and order.
-- Present filter chips in browser; no separate “database query” UI for simple cases.
-
-### Views
-- Gallery (adaptive uniform + optional masonry), list, table; saved sort, group, hidden columns, card aspect ratio and density.
-- View is presentation, smart folder is selection. A named saved view may contain both as a convenience but internals remain distinct.
-- Multiple views of same resource set; default saved per catalog and location.
-- Gallery can group by tag, type, source, date and custom select property.
-- Filters visible and quickly clearable.
+### Deferred custom fields
+- Use derived basic file metadata automatically; notes remain optional.
+- Full custom-property schemas and ratings come only after nested tagging, browsing and persistence work reliably. Image editing/annotation is deferred.
 
 ## 17 — Search / command layer
 
@@ -456,13 +446,13 @@ Measure p50/p95, long tasks, frame drops, input latency, memory pressure, thumbn
 ## 21 — Information architecture and persistence
 
 ### Catalog-level
-Name/code, source definitions, resource records, custom property schema, tags, collections, smart-folder definitions, saved views, catalog-level preferences.
+Name/code, registered source roots, resource records, stable-ID tags with pin flags, saved Views and optional later custom properties.
 
 ### Device-level
 Handles to chosen catalog and source folders, granted permissions, local mapping, transient operation log, local index and cache, recent catalogs, panel sizes and UI settings. Stored in IndexedDB/OPFS.
 
 ### Resource-level
-ID, source identifier, current relative path/URL, optional fingerprint, preview revision, metadata fields, note, tags, collection IDs, timestamp/revision information.
+ID, source identifier, relative path/URL, optional fingerprint, preview revision, notes, stable tag IDs, optional metadata and timestamps.
 
 ### Privacy
 No mandatory telemetry, upload, external indexing, account or tracking. URL metadata fetching obeys origin/CORS limits; no covert proxy. Opening remote URLs may make network requests as expected; mark optional external services clearly if ever introduced.
@@ -520,7 +510,7 @@ src/
   catalog/         # format, metadata, migration, save/reload
   identity/        # token parser, sequence allocator, dedupe
   filesystem/      # handle picker, permissions, read, copy/move/trash policy
-  organization/    # tags, properties, collections, smart queries, views
+  organization/    # registered roots, tags and Views; optional later properties
   capture/         # drag/drop, clipboard, share-target, URL
   preview/         # adapters by MIME/type, cache, quick-look
   search/          # local index, query execution, command search
@@ -578,8 +568,8 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 | **V0.0** | Technical proof | PWA installs; folder picker; real browse/read/write on Windows + Android |
 | **V0.1** | Beautiful explorer | Gallery, navigation, previews, inspector, list, tabs, dark/light, offline shell |
 | **V0.2** | Portable catalog | *.sb persistence, source mappings, objectify/filename IDs, reconnection |
-| **V0.3** | Intelligent organization | Nested tags, custom typed properties, collections, multi-edit |
-| **V0.4** | Discovery | Search, smart folders, saved views, grouping, query builder |
+| **V0.3** | Tag-first organization | Nested stable tags, pin shortcuts and safe bulk tagging |
+| **V0.4** | Discovery | Catalog-wide search, saved Views (query + presentation), grouping |
 | **V0.5** | Collect anything | Drag/drop, import destination, clipboard, URL bookmarks, Android share fallback |
 | **V0.6** | File-manager quality | Safe copy/move/rename/create/delete semantics, tabs, history, keyboard commands |
 | **V0.7** | Rich media | PDF multipage, image zoom, better videos/text/SVG, cache refinements |
@@ -612,8 +602,8 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 
 **Goal:** Before clever catalog metadata, Sourcebook should be a superior visual browser.
 
-- [ ] App chrome, recent catalog welcome, folder sources.
-- [ ] Sidebar tree, breadcrumbs, back/forward, tabs and remembered state.
+- [ ] Browser-first Open Folder without catalog; optional Open/New Catalog and recent workspaces.
+- [ ] Two-part sidebar (physical folder Tabs and optional Catalog Folders/Tags/Views), breadcrumbs and persistent folder history.
 - [ ] Gallery uniform adjustable grid + list; optional compact tile mode.
 - [ ] Resizable desktop panes; collapsible inspector/drawer on Android.
 - [ ] Image/SVG/PDF-first-page thumbnails, safe fallbacks for others.
@@ -632,7 +622,7 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 
 - [ ] Portable *.sb schema v1 and migrations.
 - [ ] Catalog switcher and recent catalogs.
-- [ ] Multiple logical source roots per catalog and source exclusion rules.
+- [ ] Existing registered physical roots, derived nearest-root ancestor tree, overlapping root resolution and source exclusion.
 - [ ] Device-private source mapping; sync folder reconnect.
 - [ ] Sequential catalog resource allocation, token parser and display clean name.
 - [ ] Safe objectify flow with ask-first/auto/never rename preferences.
@@ -644,33 +634,24 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 
 **Gate:** File[ab1][c1].pdf can be annotated in two catalogs; both identities persist through ordinary browsing and source regrant.
 
-## 30 — V0.3: Tags + custom properties
+## 30 — V0.3: Tags as the only manual grouping
+- [x] Early V0.0 previews: stable nested taxonomy, hashtag pills, keyboard suggestions and current-folder tag search (CI passed; device validation pending).
+- [ ] Persistent pin/unpin shortcuts using stable tag IDs (V0.0.8 candidate; mark verified only after CI).
+- [ ] Bulk assign/remove tags with safe writes and conflict checks.
+- [ ] Tag rename/reparent/merge by ID, catalog-wide tag browsing, pinned discovery.
+- [ ] Keep original files untouched; no manual Collections database or early custom-property framework.
 
-- [ ] Nested tag tree, tag picker autocomplete and drag assign.
-- [ ] Colors optional / quiet; rename/reparent/merge hierarchy.
-- [ ] Rating/favorite, description and inline notes.
-- [ ] Custom property types and schema editor.
-- [ ] Inspector inline editing, property defaults and empty fields.
-- [ ] Bulk edit across 100+ resources.
-- [ ] Manual collections and collection picker.
-- [ ] Collection cover / sorting / counts.
-- [ ] Undo for catalog-only metadata changes.
+**Gate:** Curate, pin, reopen and search a nested tag without changing ordinary source files.
 
-**Gate:** Build a reference classification system faster than you could move physical files into corresponding folders.
+## 31 — V0.4: Saved Views
+- [ ] Safe catalog-wide metadata search, source filtering, offline/missing-file handling.
+- [ ] Scope/query builder for names, types, dates, sources and tag descendants, with lightweight filter chips.
+- [ ] Save named **Views** as one object combining query/filter and presentation (gallery/list/table, sort/group/density).
+- [ ] Rename, edit, pin and delete Views; no separate Smart Folder records.
+- [ ] Clicking Views changes the content area, not the physical folder Tabs; jump to source folder available.
+- [ ] Keyboard navigation and reuse of the same preview/inspector.
 
-## 31 — V0.4: Search + smart views
-
-- [ ] Metadata index with incremental rebuild.
-- [ ] Fast text search, path/source scope and fuzzy matching.
-- [ ] Filter chips for type/source/tags/rating/properties/date/size.
-- [ ] AND/OR query builder with nested groups.
-- [ ] Smart folder save, rename, delete and organize.
-- [ ] Saved gallery/list/table view configs with sorting and grouping.
-- [ ] Table column visibility/width, optional inline property editing.
-- [ ] Keyboard result selection, quick jump to containing folder.
-- [ ] Missing-file results show metadata with reconnect affordance.
-
-**Gate:** Any useful subset of indexed files can become a persistent, visually meaningful saved view.
+**Gate:** Reopening a synced catalog reproduces a View and its current live results.
 
 ## 32 — V0.5: Capture / import
 
@@ -682,7 +663,7 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 - [ ] Android PWA share-target handling of URL/text.
 - [ ] File-share capability test + fallback import path for Chrome regression.
 - [ ] Batch file ingest with progress and safe cancellation.
-- [ ] Optional tags/collection during capture.
+- [ ] Optional tags during capture.
 - [ ] One-click quick capture with recent destination after initial setup.
 
 **Gate:** Save a reference from phone or laptop in moments without opening a big workflow.
@@ -719,12 +700,12 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 ## 35 — V0.8: Power features with restraint
 
 - [ ] Command palette commands and global quick navigation.
-- [ ] Multi-select bulk tag/collection/property/rename actions.
+- [ ] Multi-select bulk tags and safe physical operations; custom properties deferred.
 - [ ] Quick filter combinations and saved presets.
 - [ ] Gallery aspect-ratio options, variable card metadata, density controls.
-- [ ] Pin/favorite sources and views.
+- [ ] Pin registered source folders, stable-ID tags and Views.
 - [ ] Thumbnail cover picker and file/folder custom cover metadata.
-- [ ] URL collection improvements (extension-assisted metadata capture **if** no backend).
+- [ ] URL capture improvements (extension-assisted metadata **if** needed).
 - [ ] Keyboard shortcut overlay and contextual command hints.
 - [ ] Smoothness audits, motion refinement, keyboard accessibility.
 - [ ] Optional viewer side-by-side comparison if performance remains excellent.
@@ -759,7 +740,7 @@ V1 is not “we implemented every possible file type.” It is a complete, consi
 - [ ] First-rate gallery/list/table; navigation/tabs/preview/inspector.
 - [ ] Images/SVG/PDF/video/text/URLs with graceful fallbacks.
 - [ ] Catalog-specific bracket IDs and safe identity reconciliation.
-- [ ] Custom typed properties, nested tags, collections, smart folders and saved views.
+- [ ] Nested stable-ID tags with pin shortcuts; registered catalog roots; saved Views; optional restrained custom fields after tagging.
 - [ ] Fast full-catalog metadata search + command palette.
 - [ ] Drag/drop + file picker + clipboard + Android URL share/capture.
 - [ ] Destination-selectable import, safe file operations and clear supported-limit disclosure.
@@ -779,7 +760,7 @@ A. Open 3 existing folders with mixed files, zero source mutations, gallery star
 B. Objectify one file in catalog ab, then in catalog c; verify tokens [ab1][c1], separate metadata and no accidental overwrite.  
 C. Move/rename objectified file within granted roots; catalog finds it via token or produces clear manual reconnect when operation is unsupported.  
 D. Tag 120 files “Facades/Timber,” bulk rate, store custom year number; relaunch and verify.  
-E. Create manual collection “Daylight Study” and smart folder “PDFs tagged Timber after 2024”; show same records in different saved views.  
+E. Pin #Collections/Daylight-Study and save a View “Recent Timber PDFs” with a tag/type/date query plus gallery settings.  
 F. Save a URL, see an immediate useful bookmark card even if no web metadata image can be fetched.  
 G. Import photo/URL from Pixel 8 with share target where available, or file-picker/clipboard fallback; catalog/source mapping survives reinstall/grant.  
 H. Syncthing transfers catalog to Windows with different file paths; regrant source, same metadata works.  
@@ -876,7 +857,7 @@ Count actions, time, hesitation, errors and “I don't know what happened” mom
 - Chrome PWA-first, full desktop and Android functionality.
 - User-chosen portable *.sb catalog directory + sources outside it.
 - Catalog-specific terminal bracket IDs and sequential numbers.
-- Existing folder browsing, nested tags, custom properties, smart folders, views, previews, flexible capture/import.
+- Folder-first browsing, optional registered catalog roots, stable nested tags and pins, Views, previews and flexible capture/import.
 - Smooth, minimal, beautiful, high-functionality application.
 
 ### Provisional engineering
@@ -900,7 +881,7 @@ Potential future areas:
 - AI-assisted tagging / image similarity and natural-language search, opt-in.
 - Browser extension with one-click clip page/image/PDF, full-page screenshot, tab metadata.
 - Reference comparison/contact sheets/boards.
-- Rich file annotations and multi-page PDF markup.
+- Rich file annotations and multi-page PDF markup (deferred outside V1).
 - Auto generated folder previews and semantic color search.
 - Powerful rules/automation engine.
 - Optional app packaging if web capability limits prove chronic, while preserving PWA as source.

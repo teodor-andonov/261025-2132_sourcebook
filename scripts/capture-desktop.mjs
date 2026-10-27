@@ -135,6 +135,15 @@ try{
     return JSON.parse(await (await (await dir.getFileHandle('tags.json')).getFile()).text());
   });
   if(catalogTags.length!==3)throw Error('Nested tag taxonomy did not persist.');
+  // Actual browser fixture: pin a stable nested tag and verify catalog-only persistence.
+  await page.locator('.tag-row').filter({hasText:'#Geometry'}).locator('[data-toggle-tag-pin]').click();
+  if(await page.locator('.tag-shortcuts [data-tag-filter]').count()!==1)throw Error('Pinned tag shortcut missing.');
+  const pinnedTags=await page.evaluate(async()=>{
+    const dir=await window.__sourcebookFixture.parent.getDirectoryHandle('Architecture Research.sb');
+    return JSON.parse(await (await (await dir.getFileHandle('tags.json')).getFile()).text());
+  });
+  if(pinnedTags.filter(t=>t.pinned).length!==1||pinnedTags.find(t=>t.pinned)?.name!=='Geometry')throw Error('Pin did not persist in tags.json');
+  if(!await page.evaluate(()=>window.__sourcebookFixture.source.files.has('Kinetic Facade Study.svg')))throw Error('Pinning changed source file');
   // Browser fixture: search persisted stable IDs without touching the original file.
   const search=page.locator('#search-input');
   await search.fill('#geometry');

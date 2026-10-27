@@ -78,3 +78,12 @@
 
 /* Keyboard-active suggestion: the only color cue is the configured accent. */
 .tag-suggestion.active{background:var(--panel2);box-shadow:inset 2px 0 0 var(--accent)}
+
+/* Persistent pinned tag shortcuts; the original hierarchy stays visible. */
+.tag-row{display:flex;align-items:center;min-width:0}
+.tag-row .tag-nav{flex:1;min-width:0;width:auto}
+.tag-pin{width:24px;min-width:24px;height:27px;display:grid;place-items:center;border-radius:6px;color:var(--muted);opacity:.56}
+.tag-pin:hover,.tag-pin:focus-visible{opacity:1;background:var(--panel2)}
+.tag-pin[aria-pressed="true"]{opacity:1;color:var(--accent)}
+.tag-shortcuts{border-bottom:1px solid var(--border);padding-bottom:5px;margin-bottom:5px}
+.tag-shortcuts .tag-nav{min-width:0;font-size:11px}

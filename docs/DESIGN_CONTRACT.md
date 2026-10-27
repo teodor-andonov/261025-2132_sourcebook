@@ -15,6 +15,15 @@ Sourcebook should be an unusually capable **visual file utility**, not a decorat
 - Content is the hero. Resizable/collapsible navigation and inspector; do not cover mobile gallery by default.
 - No surprise file mutations when browsing or saving metadata.
 
+## Browser-first + optional catalog contract
+
+- Sidebar: **Tabs** (physical folder workspaces) and **Catalog** (registered existing root Folders, nested Tags and saved Views).
+- An ordinary folder should be browsable without a catalog; the current prototype still requires a catalog. Tabs hold physical folders only initially.
+- Catalog Folders reference registered disk roots; objectified items appear under their nearest registered root via derived relative ancestors. Registration must not copy/rename/import.
+- Nested tags provide manual grouping; a pinned tag is only a shortcut to the same stable ID, not a separate manual Collection record.
+- **Views** combines saved resource scope/filter/query with view settings; avoid independent Smart Folders and Collection schemas.
+- Do not implement an image editor/annotation engine in V1. Preserve files and prioritize previews and tag integrity.
+
 ## Tags first
 
 The first polished editable property is a **tag**. Avoid constructing a generic custom-properties database until this interaction works brilliantly.
@@ -24,7 +33,7 @@ The first polished editable property is a **tag**. Avoid constructing a generic 
 - Typing slash-separated paths creates nested tags; existing tags appear as selectable suggestions.
 - Tags have stable catalog-local IDs and parent links, stored in \`tags.json\`.
 - Resource metadata stores \`tagIds\` in \`resources/*.json\`, so future tag renames/reparenting won't require rewriting every resource record.
-- Sidebar shows the nested hierarchy with indentation. Selecting a tag filters the **currently browsed folder** and includes descendants. Full catalog-wide tag browsing is later work.
+- Sidebar preserves the nested hierarchy while optional pinned shortcuts appear above it. Selecting a tag filters the **currently browsed folder**, including descendants; full catalog-wide tag browsing comes later.
 - Older resource records containing plain string \`tags\` remain readable. Their tags convert to stable IDs on explicit save.
 - Tags aren't metadata colors: use the active accent only to indicate UI selection/focus, not permanent different colors for every tag.
 - Keep "Save" explicit while the prototype lacks robust write queue / undo. Later aim for low-friction auto-save after safe transactional catalog writes.

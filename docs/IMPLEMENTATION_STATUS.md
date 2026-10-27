@@ -4,6 +4,14 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — Folder-first plan and tag-pin shortcut (V0.0.8 candidate)
+
+- Master plan and design contract now specify physical folder Tabs plus optional Catalog containing registered-root Folders, nested Tags and **Views**. No independent manual Collections/Smart Folders; defer image editing and custom properties.
+- Existing stable-ID tags can be pinned/unpinned from the sidebar. Pin flags persist in `tags.json`, pinned shortcuts are compact, and the original full hierarchy remains. Tags and resource records retain the same IDs.
+- Catalog write permission is requested; on-disk taxonomy divergence prevents overwrite, and the result is read back. These are not crash-atomic/multi-writer transactions; no ordinary source files are modified.
+- Node unit tests and the actual 1440×900 Chromium fixture have been extended (fixture files only). **CI and screenshot workflow results pending as this commit is authored**; no physical Windows or Pixel 8 validation.
+- Folder browsing without a catalog, persisted folder Tabs, catalog root tree, catalog-wide tag Views and bulk tagging are still future work.
+
 ## 2026-10-27 — Keyboard-first nested hashtag discovery (V0.0.7)
 
 - Existing catalog tags are suggested while typing `#` or a nested path, with case-insensitive and slash-normalized matching. Already-assigned paths are excluded; choosing a suggestion reuses its stable tag ID on save rather than creating another taxonomy node.
@@ -116,7 +124,7 @@
 1. Verify hosted installability, offline shell and folder picker on physical devices (Pages publishing is configured).
 2. Test user-granted Syncthing directory on Pixel 8 and desktop Chrome; record versions and results.
 3. Fix actual device/runtime regressions; do not assume Chrome's FileSystemHandle.move works on arbitrary external files.
-4. Make reference tags first-class entities and add collection persistence.
+4. Prioritize pinned/bulk nested tags, folder-first browsing and registered root trees rather than manual Collection persistence.
 5. Improve progressive gallery rendering and safe metadata handling.
 
 The current master plan is [ROADMAP_V1_ULTRA.md](ROADMAP_V1_ULTRA.md); technical details are in [PWA_ARCHITECTURE.md](PWA_ARCHITECTURE.md).

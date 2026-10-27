@@ -59,3 +59,26 @@ test('tag-only search supports legacy labels and excludes untagged files',()=>{
   assert.equal(matchesResourceSearch('Study.pdf',[],'study'),true);
   assert.equal(matchesResourceSearch('Study.pdf',[],' '),true);
 });
+
+import {toggleTagPin,pinnedTagShortcuts} from '../src/tags.mjs';
+test('pinning nested tags retains IDs and never creates separate memberships',()=>{
+  let n=0;
+  const original=ensureTagPath([],'Collections / Temp-01',()=> 'id-'+(++n));
+  const pinned=toggleTagPin(original.tags,original.id);
+  assert.equal(original.tags.some(x=>x.pinned),false);
+  assert.equal(pinned.length,original.tags.length);
+  assert.deepEqual(pinnedTagShortcuts(pinned).map(t=>[t.id,t.path]),[[original.id,'Collections / Temp-01']]);
+  assert.deepEqual(toggleTagPin(pinned,original.id),original.tags);
+});
+test('pin shortcuts preserve hierarchy, resource tag references and legacy catalogs',()=>{
+  let n=0;
+  const a=ensureTagPath([],'Architecture / Facades / Timber',()=> 'p-'+(++n));
+  const b=ensureTagPath(a.tags,'Architecture / Roofs',()=> 'p-'+(++n));
+  const pinned=toggleTagPin(toggleTagPin(b.tags,a.id),b.id);
+  assert.deepEqual(recordTagPaths({tagIds:[a.id]},pinned),['Architecture / Facades / Timber']);
+  assert.deepEqual(pinnedTagShortcuts(pinned).map(t=>t.path),['Architecture / Facades / Timber','Architecture / Roofs']);
+  assert.deepEqual(flattenedTagTree(pinned).map(t=>t.id),flattenedTagTree(b.tags).map(t=>t.id));
+  assert.deepEqual(pinnedTagShortcuts(b.tags),[]);
+  assert.throws(()=>toggleTagPin(pinned,'missing'));
+  assert.throws(()=>toggleTagPin([{id:'duplicate'},{id:'duplicate'}],'duplicate'));
+});

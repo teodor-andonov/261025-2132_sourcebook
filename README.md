@@ -3,7 +3,7 @@
 > **Implementation underway — V0.0.6 preview (2026-10-27).** Local-folder gallery, portable `.sb` catalogs, stable-ID nested tags and current-folder tag-aware search are implemented. GitHub Pages publishing succeeded on 2026-10-27; subsequent app changes deploy only nightly-on-change or manually. Physical Windows/Pixel 8 verification remains outstanding. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 
-**A beautiful, fast, local-first visual explorer and reference catalog for ordinary files, folders and URLs.**
+**A beautiful, fast, local-first file browser with optional portable reference catalogs for ordinary files, folders and URLs.**
 
 Sourcebook lets you point a portable **Catalog** at existing folders, browse everything immediately, generate previews, and selectively enrich resources with metadata — without requiring a proprietary managed library.
 
@@ -38,6 +38,10 @@ Full details: [Release and CI policy](docs/RELEASE_PROCESS.md). Pages is configu
 
 ## Current design direction
 
+**27 Oct 2026 product decision:** Browser-first (ordinary folders without requiring catalog; **planned, not yet implemented**). Sidebar: physical folder **Tabs** and optional **Catalog** with linked root Folders, nested Tags and saved **Views**. Pin tags for manual collections. Defer image editing; preserve files.
+
+
+
 **Minimal and utilitarian:** grayscale surfaces, compact spacing, subtle corners, one configurable blue highlight color, icon-first controls. **Tags first:** small hashtag pills and a nested tag taxonomy; no large custom-property system yet. See [Design contract](docs/DESIGN_CONTRACT.md).
 
 ## Product principles
@@ -46,7 +50,7 @@ Full details: [Release and CI policy](docs/RELEASE_PROCESS.md). Pages is configu
 2. Create/open any portable *.sb catalog directory, stored wherever the user chooses.
 3. Multiple catalogs can independently point to the same sources.
 4. Objectified files receive catalog-specific bracket IDs before the extension, e.g. Facade[ab967][c5].pdf.
-5. Nested tags, custom properties, collections, smart folders, saved views, previews and choice of copy/move destination are essential.
+5. Stable-ID nested tags offer manual grouping, with pin shortcuts; **Views** save query/scope and display settings. No separate manual Collections or Smart Folders. Custom fields later.
 6. Capture references from desktop, browser and Android share.
 7. No required cloud account, sync backend or proprietary file storage; user handles folder synchronization separately.
 8. UX smoothness, visual restraint and responsive file navigation are release criteria.
@@ -58,8 +62,8 @@ Begin at [V0.0: PWA feasibility](docs/ROADMAP_V1_ULTRA.md#27--v00-pwa--filesyste
 - V0.0 — PWA filesystem proof (Chrome Windows + Android)
 - V0.1 — beautiful visual explorer
 - V0.2 — portable catalogs and IDs
-- V0.3 — nested tags, properties and collections
-- V0.4 — smart folders, search and saved views
+- V0.3 — nested tags, pin shortcuts, bulk tagging; custom properties deferred
+- V0.4 — catalog-wide search and Views (saved query + presentation)
 - V0.5 — imports, URL/clipboard/mobile capture
 - V0.6 — safe file operations
 - V0.7 — rich media previews

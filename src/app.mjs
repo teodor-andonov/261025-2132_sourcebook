@@ -2,7 +2,7 @@ import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {nextSelectionIndex} from './navigation.mjs';
-import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex} from './tags.mjs';
+import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
@@ -29,6 +29,7 @@ const glyphs={
   refresh:'M20 11a8 8 0 0 0-14-5L4 8 M4 4v4h4 M4 13a8 8 0 0 0 14 5l2-2 M20 20v-4h-4',
   upload:'M12 16V3 M7 8l5-5 5 5 M4 17v4h16v-4',
   tag:'M3 3h9l9 9-9 9-9-9z M8 8h.01',
+  pin:'M16 3l5 5-3 1-3 3v5l-1 1-5-5-4 4-1-1 4-4-5-5 1-1h5z',
   close:'M18 6 6 18 M6 6l12 12',
   back:'M15 18l-6-6 6-6',
   chevron:'M9 18l6-6-6-6',
@@ -198,12 +199,35 @@ async function navigate(id,parts){
   }catch(e){if(request===state.request){state.loading=false;render();toast(errorText(e),true);}}
 }
 function sort(items){return [...items].sort((a,b)=>((a.kind==='directory'?-1:1)-(b.kind==='directory'?-1:1))||a.name.localeCompare(b.name,undefined,{numeric:true}));}
+function tagNavigationHTML(){
+  const tree=flattenedTagTree(state.taxonomy);
+  const pins=pinnedTagShortcuts(state.taxonomy).map(t=>
+    '<button class="nav-item tag-nav pinned-shortcut '+(state.tagFilter===t.path?'selected':'')+'" data-tag-filter="'+escapeHTML(t.path)+'" title="Filter current folder: '+escapeHTML(t.path)+'">'+icon('pin',13)+'<span>#'+escapeHTML(t.path.replaceAll(' / ','/'))+'</span></button>'
+  ).join('');
+  const rows=tree.map(t=>
+    '<div class="tag-row"><button class="nav-item tag-nav '+(state.tagFilter===t.path?'selected':'')+'" data-tag-filter="'+escapeHTML(t.path)+'" style="--depth:'+Math.min(t.depth,6)+'" title="'+escapeHTML(t.path)+'">'+icon('tag',14)+'<span>#'+escapeHTML(t.name)+'</span></button>'+
+    '<button type="button" class="tag-pin" data-toggle-tag-pin="'+escapeHTML(t.id)+'" aria-label="'+(t.pinned?'Unpin':'Pin')+' tag '+escapeHTML(t.path)+'" title="'+(t.pinned?'Unpin':'Pin')+' '+escapeHTML(t.path)+'" aria-pressed="'+(t.pinned?'true':'false')+'">'+icon('pin',13)+'</button></div>'
+  ).join('');
+  return (pins?'<div class="tag-shortcuts">'+pins+'</div>':'')+rows;
+}
+async function togglePin(id){
+  try{
+    if(!state.catalogHandle||!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed to pin a tag.');
+    const disk=await readJson(state.catalogHandle,'tags.json',[]);
+    if(!Array.isArray(disk)||JSON.stringify(disk)!==JSON.stringify(state.taxonomy))throw Error('Tags changed on disk. Reopen the catalog before pinning.');
+    const updated=toggleTagPin(disk,id);
+    await writeJson(state.catalogHandle,'tags.json',updated);
+    if(JSON.stringify(await readJson(state.catalogHandle,'tags.json'))!==JSON.stringify(updated))throw Error('Tag pin could not be verified on disk.');
+    state.taxonomy=updated;
+    const nav=$('#tag-nav');if(nav)nav.innerHTML=tagNavigationHTML();
+  }catch(error){toast('Pin failed: '+errorText(error),true);}
+}
 function render(){
   if(!state.catalog)return landing();
   document.title=(state.parts.at(-1)||currentSource()?.name||state.catalog.name)+' — Sourcebook';
   const sources=state.sources.map(source=>'<button class="nav-item '+(source.id===state.sourceId?'selected':'')+'" data-source="'+escapeHTML(source.id)+'">'+icon('folder',16)+'<span>'+escapeHTML(source.name)+'</span>'+(!state.handles.has(source.id)?icon('alert',13):'')+'</button>').join('');
-  const tags=flattenedTagTree(state.taxonomy).map(t=>'<button class="nav-item tag-nav '+(state.tagFilter===t.path?'selected':'')+'" data-tag-filter="'+escapeHTML(t.path)+'" style="--depth:'+Math.min(t.depth,6)+'" title="'+escapeHTML(t.path)+'">'+icon('tag',14)+'<span>#'+escapeHTML(t.name)+'</span></button>').join('');
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div><button class="catalog-chip" data-action="home">'+icon('database',16)+'<span>'+escapeHTML(state.catalog.name)+'</span>'+icon('chevron',13)+'</button><div class="section-head"><span>SOURCES</span>'+button('Add source','plus','add-source')+'</div><nav>'+sources+'</nav><div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav>'+ (tags||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="sidebar-footer">Local catalog</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(state.parts.at(-1)||currentSource()?.name||'Sources')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label><button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button></div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>Sourcebook preview</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>Properties</h3><div id="inspector-data"></div></aside>':'')+'</div>';
+  const tags=tagNavigationHTML();
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div><button class="catalog-chip" data-action="home">'+icon('database',16)+'<span>'+escapeHTML(state.catalog.name)+'</span>'+icon('chevron',13)+'</button><div class="section-head"><span>SOURCES</span>'+button('Add source','plus','add-source')+'</div><nav>'+sources+'</nav><div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+ (tags||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="sidebar-footer">Local catalog</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(state.parts.at(-1)||currentSource()?.name||'Sources')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label><button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button></div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>Sourcebook preview</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>Properties</h3><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML='<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Sources')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
@@ -462,6 +486,8 @@ document.addEventListener('input',event=>{
 document.addEventListener('click',async event=>{
   const suggestion=event.target.closest('[data-tag-suggestion]');
   if(suggestion){chooseTagSuggestion(Number(suggestion.dataset.tagSuggestion));$('#tag-input')?.focus();return;}
+  const pin=event.target.closest('[data-toggle-tag-pin]');
+  if(pin){await togglePin(pin.dataset.toggleTagPin);return;}
   const tagNav=event.target.closest('[data-tag-filter]');
   if(tagNav){state.tagFilter=state.tagFilter===tagNav.dataset.tagFilter?null:tagNav.dataset.tagFilter;render();return;}
   const removeTag=event.target.closest('[data-remove-tag]');

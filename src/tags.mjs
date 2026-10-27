@@ -130,3 +130,17 @@ export function nextTagSuggestionIndex(current,direction,count){
   if(!Number.isInteger(current)||current<0||current>=count)return direction===1?0:count-1;
   return (current+direction+count)%count;
 }
+
+// Pins are catalog-local shortcuts to tag IDs, never collection memberships.
+export function toggleTagPin(tags,id){
+  if(!Array.isArray(tags)||typeof id!=='string'||tags.filter(t=>t?.id===id).length!==1)throw Error('Unknown or ambiguous tag ID');
+  return tags.map(tag=>{
+    if(tag.id!==id)return tag;
+    if(tag.pinned){const {pinned,...rest}=tag;return rest;}
+    return {...tag,pinned:true};
+  });
+}
+export function pinnedTagShortcuts(tags){
+  return flattenedTagTree(tags).filter(tag=>tag.pinned===true)
+    .sort((a,b)=>a.path.localeCompare(b.path,undefined,{numeric:true,sensitivity:'base'}));
+}
