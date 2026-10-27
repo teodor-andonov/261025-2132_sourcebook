@@ -2,7 +2,7 @@ import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {nextSelectionIndex} from './navigation.mjs';
-import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath} from './tags.mjs';
+import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
@@ -212,7 +212,22 @@ function renderItems(){
   state.observer?.disconnect();state.observer=null;
   host.className=state.view;
   host.style.setProperty('--size',state.size+'px');
-  const items=state.items.filter(x=>cleanName(x.name).toLowerCase().includes(state.search.toLowerCase())&&(!state.tagFilter||includesTagPath(recordTagPaths(itemRecord(x),state.taxonomy),state.tagFilter)));
+  const query=state.search.trim();
+  const plainQuery=query&&!query.startsWith('#')?query.toLocaleLowerCase():null;
+  // Resolve catalog records once per render, rather than scanning all records per item.
+  const recordsByPath=new Map();
+  if(query||state.tagFilter){
+    for(const record of state.records.values()){
+      if(record.sourceId===state.sourceId&&!recordsByPath.has(record.path))recordsByPath.set(record.path,record);
+    }
+  }
+  const items=state.items.filter(item=>{
+    const name=cleanName(item.name);
+    if(!state.tagFilter&&(!query||(plainQuery&&name.toLocaleLowerCase().includes(plainQuery))))return true;
+    const path=[...state.parts,item.name].join('/');
+    const paths=recordTagPaths(recordsByPath.get(path),state.taxonomy);
+    return matchesResourceSearch(name,paths,query)&&(!state.tagFilter||includesTagPath(paths,state.tagFilter));
+  });
   $('#item-count').textContent=items.length+(state.loading?'+':'')+' items';
   if(!state.sourceId){host.innerHTML='<div class="empty">'+icon('folder',38)+'<h3>Your files, one click away</h3><p>Add a source folder to begin browsing.</p><button class="primary" data-action="add-source">Add folder</button></div>';return;}
   if(!state.handles.has(state.sourceId)){host.innerHTML='<div class="empty">'+icon('alert',35)+'<h3>Reconnect your folder</h3><p>This catalog source needs a folder permission on this device.</p><button class="primary" data-action="reconnect">Reconnect source</button></div>';return;}

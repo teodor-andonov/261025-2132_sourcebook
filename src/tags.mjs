@@ -93,3 +93,17 @@ export function mergeTagInput(existing,input){
   }
   return result;
 }
+
+/** Search filenames and resolved tag paths without changing resource metadata.
+ * A leading # restricts search to tags; # alone matches tagged resources.
+ */
+export function matchesResourceSearch(filename,paths,query){
+  const raw=String(query??'').trim();
+  if(!raw)return true;
+  const tagsOnly=raw.startsWith('#');
+  const needle=(tagsOnly?raw.slice(1):raw).trim().replace(/\s*\/\s*/g,' / ').toLocaleLowerCase();
+  const tagPaths=Array.isArray(paths)?paths:[];
+  if(!needle)return tagsOnly?tagPaths.length>0:true;
+  if(!tagsOnly&&String(filename??'').toLocaleLowerCase().includes(needle))return true;
+  return tagPaths.some(path=>String(path).replace(/\s*\/\s*/g,' / ').toLocaleLowerCase().includes(needle));
+}

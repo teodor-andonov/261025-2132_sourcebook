@@ -1,6 +1,6 @@
 # Sourcebook
 
-> **Implementation underway — V0.0 preview (2026-10-26).** The first Chrome PWA code, real-folder gallery, `.sb` catalog creation and simple metadata editing are in the repository. Automated syntax and filename-ID unit tests pass. The app has **not** yet been verified on Windows/Pixel 8. GitHub Pages publication still needs the repository's Pages source set to **GitHub Actions** under Settings → Pages; publishing now uses a separate nightly/manual workflow. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+> **Implementation underway — V0.0.6 preview (2026-10-27).** Local-folder gallery, portable `.sb` catalogs, stable-ID nested tags and current-folder tag-aware search are implemented. GitHub Pages publishing succeeded on 2026-10-27; subsequent app changes deploy only nightly-on-change or manually. Physical Windows/Pixel 8 verification remains outstanding. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 
 **A beautiful, fast, local-first visual explorer and reference catalog for ordinary files, folders and URLs.**
@@ -8,7 +8,7 @@
 Sourcebook lets you point a portable **Catalog** at existing folders, browse everything immediately, generate previews, and selectively enrich resources with metadata — without requiring a proprietary managed library.
 
 **Platforms:** Windows + Android; same product and feature set, responsive layout only.  
-**Status:** V0.0.5 implementation preview (2026-10-27); automated tests run in GitHub Actions, but real-device verification and hosted deployment remain outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
+**Status:** V0.0.6 implementation preview (2026-10-27); automated tests run in GitHub Actions, and an earlier hosted release succeeded. Real-device verification remains outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
 
 ## Start here
 
@@ -34,7 +34,7 @@ These are **real Chromium browser captures** of Sourcebook with synthetic local 
 - **Nightly:** publish only if web app assets changed since the last successful deployment (03:17 UTC).
 - **Anytime:** trigger **Actions → Publish Sourcebook → Run workflow** to publish immediately.
 
-Full details: [Release and CI policy](docs/RELEASE_PROCESS.md). Pages must first be enabled from repository Settings → Pages → GitHub Actions.
+Full details: [Release and CI policy](docs/RELEASE_PROCESS.md). Pages is configured for GitHub Actions; publishing is intentionally separate from development CI.
 
 ## Current design direction
 

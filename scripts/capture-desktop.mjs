@@ -135,6 +135,17 @@ try{
     return JSON.parse(await (await (await dir.getFileHandle('tags.json')).getFile()).text());
   });
   if(catalogTags.length!==3)throw Error('Nested tag taxonomy did not persist.');
+  // Browser fixture: search persisted stable IDs without touching the original file.
+  const search=page.locator('#search-input');
+  await search.fill('#geometry');
+  if(await page.locator('#items .resource').count()!==1)throw Error('Nested tag search missed a tagged file.');
+  await search.fill('#generative/geometry');
+  if(await page.locator('#items .resource').count()!==1)throw Error('Slash-path tag search did not normalize spacing.');
+  await search.fill('#missing');
+  if(await page.locator('#items .resource').count()!==0)throw Error('Unknown tag search returned files.');
+  await search.fill('Kinetic');
+  if(await page.locator('#items .resource').count()!==1)throw Error('Filename search regressed.');
+  await search.fill('');
   await page.screenshot({path:resolve(snapshots,'desktop-gallery.png')});
   console.log('Captured 1440×900: desktop-launcher.png and desktop-gallery.png');
   await context.close();

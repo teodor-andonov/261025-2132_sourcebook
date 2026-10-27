@@ -4,6 +4,14 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — Current-folder tag-aware search (V0.0.6)
+
+- Search matches filenames or nested tag paths resolved from stable catalog `tagIds`; a leading `#` searches tags only, and `#` alone finds tagged entries.
+- Case-insensitive matching supports slash paths with or without spaces. Legacy string tags remain searchable without migration. Search combines with the selected sidebar tag filter and remains scoped to the current folder.
+- Build a record lookup once per filtered render, avoiding a full catalog scan for every visible file.
+- Added pure tests for stable-ID paths, legacy tags, name search and tag-only exclusions. The 1440×900 real-Chromium **fixture** now checks persisted tag search, slash paths, missing tags and filename search; next nightly/manual screenshot run will exercise it.
+- No new filesystem mutations, automatic renames, catalog-wide search index or device validation.
+
 ## 2026-10-27 — Compact hashtag pill editor (V0.0.5)
 
 - Inspector tags now use compact neutral hashtag pills: Enter/comma adds, Backspace removes the last, × removes a pill, and Save commits pending input.
@@ -68,22 +76,23 @@
 - Real source folder enumeration and nested-folder navigation, breadcrumbs and source switching.
 - Responsive gallery/list UI, image lazy previews, adjustable thumbnail density, selection and optional inspector.
 - Quick look: image, browser-embedded PDF, video and plain text/Markdown/code; file-type fallback.
-- Metadata: save notes + comma-separated tags in resources/<code><sequence>.json; sequence recorded in catalog.json.
+- Metadata: save notes and stable tag IDs in resources/<code><sequence>.json; taxonomy in tags.json; legacy string tags remain readable.
 - Catalog-aware terminal filename tokens [ab967][c5]; **no implicit source rename** during metadata saving (explicit, verified rename remains a future feature).
 - Basic current-folder filename search, file picker import with collision-resistant copy, new folder action.
 - Light/dark using operating system preferences; keyboard Space quick look, Backspace parent, Ctrl/Cmd+K search.
 - Automated Node syntax/ID-navigation tests: **passed** on 2026-10-27; screenshot capture workflow **passed**.
 
-## Blocker
+## Release and device verification
 
-GitHub Actions **verify** job is passing. **Deploy** job failed in actions/configure-pages@v5; GitHub Pages likely needs enabling for this newly created repository.
-
-**User action:** Repository → Settings → Pages → Build and deployment → Source = **GitHub Actions**. Then run **Actions → Publish Sourcebook → Run workflow** or use the next nightly release. Normal code commits deliberately do not publish. Do not claim the hosted app is live until deployment succeeds.
+- GitHub Pages was enabled; **Publish Sourcebook** succeeded on 2026-10-27 (Actions run `40485889974`). This V0.0.6 development commit is **not** automatically deployed: live publishing remains nightly-on-change or manual.
+- Previous **Sourcebook CI** run `40481999049` passed. CI for this change needs checking after commit.
+- Last **Sourcebook Desktop Screenshots** run `40474583662` passed, but predates the latest tag UI; refreshed fixture screenshots await the nightly/manual workflow.
+- Actual Windows Chrome and Pixel 8 filesystem/permission acceptance tests remain outstanding. Do not claim the hosted app is live until deployment succeeds.
 
 ## Not done / do not overclaim
 
-- No successful hosted PWA deployment or actual Windows/Android device acceptance test yet.
-- Current metadata editor uses free-text tags only; nested tag taxonomy is not implemented.
+- Hosted Pages deployment succeeded; actual Windows/Android device acceptance tests are still outstanding.
+- Nested stable-ID taxonomy and current-folder tag search exist; catalog-wide search, rename/reparent and bulk tagging are not implemented.
 - No catalog-wide index/search, smart folders, collections, custom typed properties, saved views or keyboard command palette.
 - No PDF first-page *gallery thumbnails*: PDF opens in browser quick look instead.
 - No native Android incoming share-target or browser extension.
@@ -96,7 +105,7 @@ GitHub Actions **verify** job is passing. **Deploy** job failed in actions/confi
 
 ## Next engineering milestone
 
-1. Enable GitHub Pages and verify hosted installability, offline shell and file picker.
+1. Verify hosted installability, offline shell and folder picker on physical devices (Pages publishing is configured).
 2. Test user-granted Syncthing directory on Pixel 8 and desktop Chrome; record versions and results.
 3. Fix actual device/runtime regressions; do not assume Chrome's FileSystemHandle.move works on arbitrary external files.
 4. Make reference tags first-class entities and add collection persistence.
