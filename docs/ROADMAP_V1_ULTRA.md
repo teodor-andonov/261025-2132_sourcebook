@@ -24,6 +24,8 @@
 
 > **Safety implementation update (27 Oct 2026, V0.0.22 candidate):** Catalog-only metadata writes now use a verified, recoverable `.sourcebook-pending.json` journal. Catalog opening detects an interrupted save without replaying it; the user must explicitly resume. Divergent snapshots block recovery. This is **not** cross-device locking, atomic multi-file replacement, Syncthing conflict merging, backup/restore or physical-device acceptance. See [implementation status](IMPLEMENTATION_STATUS.md) and [development log](../logs/development/2026-10-27-catalog-recovery.md).
 
+> **Overlap review implementation update (28 Oct 2026, V0.0.30 candidate):** Catalog metadata with competing records under live-verified overlapping registered Folders can be compared read-only from Settings or a conflicted saved View result. Individual descendant file handles are rechecked with `isSameEntry` and reported as same/different/missing/unverified; differences in Tags, notes, kinds and other fields are exposed, with explicit JSON export and Show in folder. **No automatic reconciliation, deletion or record reassignment.** See implementation status for verification and limits.
+
 ## 00 — Executive product promise
 
 **Sourcebook makes ordinary folders feel like a beautifully curated, searchable, visual library — without taking the files hostage.**
