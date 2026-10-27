@@ -13,6 +13,17 @@
 - Prevented overwrite when another writer creates a resource record after selection. No source file rename/write added.
 - Stable-ID taxonomy helpers and unit tests exist, but are not yet wired to tag persistence or the UI; descendant filtering, bulk tagging and custom properties remain pending. No Windows/Pixel device validation.
 
+## 2026-10-27 — Minimal tag-first design slice
+
+- Committed [minimal utility design contract](DESIGN_CONTRACT.md): compact neutral UI, rounded corners, one selectable accent color, icon-first commands, no unnecessary annotations.
+- Default highlight is muted blue; Settings exposes a color picker and stores the selection in browser local settings. Neutral surfaces and folder tiles do not use category colors.
+- Added portable `tags.json` hierarchy with stable catalog-local tag IDs and `parentId` links. Resources now save `tagIds`; old plain-string `tags` records remain readable and migrate when saved.
+- Inspector uses compact `#` pills, slash-separated nested paths, existing-tag suggestions and removal. Raw filename/ID are in a collapsible File information section.
+- Sidebar shows nested tag hierarchy; selecting a parent filters the **current folder**, including descendant tags. Full catalog-wide tag search comes later.
+- Tightened desktop spacing, toolbars and sidebar without changing overall desktop/mobile information architecture.
+- Screenshot fixture updated to expect stable ID tags and to validate `tags.json`, not legacy strings. Screenshot workflow remains nightly/manual; no refreshed screenshot has yet been verified for this code.
+- **Outstanding:** no device-level validation, tag rename/reparent UI, tag bulk editing or multi-writer concurrency protection.
+
 ## 2026-10-27 — CI and live deployment split
 
 - Code commits trigger lightweight **Sourcebook CI** tests, not Pages publishing.
