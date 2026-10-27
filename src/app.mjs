@@ -2,11 +2,11 @@ import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {nextSelectionIndex} from './navigation.mjs';
-import {mergeTagInput} from './tags.mjs';
+import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
-  catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(),
+  catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null,
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,
   search:'', view:localStorage.getItem('sb-view')||'gallery',
   size:Number(localStorage.getItem('sb-size'))||164,
@@ -53,6 +53,13 @@ function toast(text,warning=false){
 }
 function forgetImages(){state.observer?.disconnect();state.observer=null;for(const url of state.imageUrls)URL.revokeObjectURL(url);state.imageUrls.clear();state.thumbnailUrls.clear();}
 function cleanName(name){return parseFilename(name).displayName;}
+function tagLeaf(name){return String(name).split(' / ').at(-1);}
+function applyAccent(hex){
+  const value=/^#[0-9a-fA-F]{6}$/.test(hex)?hex:'#5276bd';
+  document.documentElement.style.setProperty('--accent',value);
+  localStorage.setItem('sb-accent',value);
+}
+applyAccent(localStorage.getItem('sb-accent')||'#5276bd');
 function currentSource(){return state.sources.find(x=>x.id===state.sourceId);}
 function sourceHandle(){return state.handles.get(state.sourceId);}
 function itemKind(item){
@@ -133,6 +140,9 @@ async function openDirectory(h){
   if(!config?.id||!CODE_PATTERN.test(config.code))throw Error('Choose a .sb directory containing catalog.json.');
   state.catalog=config;state.catalogHandle=h;
   state.sources=await readJson(h,'sources.json',[]);
+  const savedTags=await readJson(h,'tags.json',[]);
+  if(!Array.isArray(savedTags))throw Error('Invalid tags.json catalog taxonomy');
+  state.taxonomy=savedTags;state.tagFilter=null;
   state.handles.clear();state.records.clear();
   for(const s of state.sources){
     try{const v=await getLocal('source:'+config.id+':'+s.id);if(v)state.handles.set(s.id,v);}
@@ -170,6 +180,7 @@ async function reconnect(){
 }
 async function navigate(id,parts){
   state.sourceId=id;state.parts=parts;state.search='';state.selected.clear();state.pageCount=150;
+  state.tagDraftItem=null;state.tagFilter=null;
   const request=++state.request;
   state.loading=true;state.items=[];forgetImages();render();
   try{
@@ -190,8 +201,9 @@ function sort(items){return [...items].sort((a,b)=>((a.kind==='directory'?-1:1)-
 function render(){
   if(!state.catalog)return landing();
   document.title=(state.parts.at(-1)||currentSource()?.name||state.catalog.name)+' — Sourcebook';
-  const sources=state.sources.map(s=>'<button class="nav-item '+(s.id===state.sourceId?'selected':'')+'" data-source="'+escapeHTML(s.id)+'">'+icon('folder',17)+'<span>'+escapeHTML(s.name)+'</span>'+(!state.handles.has(s.id)?icon('alert',14):'')+'</button>').join('');
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',23)+'<strong>Sourcebook</strong></div><button class="catalog-chip" data-action="home">'+icon('database')+'<span>'+escapeHTML(state.catalog.name)+'</span>'+icon('chevron',13)+'</button><div class="section-head"><span>SOURCES</span>'+button('Add source','plus','add-source')+'</div><nav>'+sources+'</nav><div class="section-head"><span>ORGANIZE</span></div><div class="nav-item disabled">'+icon('tag',17)+' Nested tags <small>upcoming</small></div><div class="nav-item disabled">'+icon('bookmark',17)+' Collections <small>upcoming</small></div><div class="sidebar-footer"><span class="status-light"></span> Local catalog · early preview</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search this folder" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Inspector','info','inspector',state.inspector)+'</header><div class="contentbar"><h2>'+escapeHTML(state.parts.at(-1)||currentSource()?.name||'Sources')+'</h2><span class="count" id="item-count"></span><div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label><button class="text-button" data-action="create-folder">'+icon('plus')+' <span>New folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button></div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>V0.0 preview</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>Details</h3><div id="inspector-data"></div></aside>':'')+'</div>';
+  const sources=state.sources.map(source=>'<button class="nav-item '+(source.id===state.sourceId?'selected':'')+'" data-source="'+escapeHTML(source.id)+'">'+icon('folder',16)+'<span>'+escapeHTML(source.name)+'</span>'+(!state.handles.has(source.id)?icon('alert',13):'')+'</button>').join('');
+  const tags=flattenedTagTree(state.taxonomy).map(t=>'<button class="nav-item tag-nav '+(state.tagFilter===t.path?'selected':'')+'" data-tag-filter="'+escapeHTML(t.path)+'" style="--depth:'+Math.min(t.depth,6)+'" title="'+escapeHTML(t.path)+'">'+icon('tag',14)+'<span>#'+escapeHTML(t.name)+'</span></button>').join('');
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div><button class="catalog-chip" data-action="home">'+icon('database',16)+'<span>'+escapeHTML(state.catalog.name)+'</span>'+icon('chevron',13)+'</button><div class="section-head"><span>SOURCES</span>'+button('Add source','plus','add-source')+'</div><nav>'+sources+'</nav><div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav>'+ (tags||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="sidebar-footer">Local catalog</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(state.parts.at(-1)||currentSource()?.name||'Sources')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label><button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button></div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>Sourcebook preview</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>Properties</h3><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML='<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Sources')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
@@ -200,11 +212,11 @@ function renderItems(){
   state.observer?.disconnect();state.observer=null;
   host.className=state.view;
   host.style.setProperty('--size',state.size+'px');
-  const items=state.items.filter(x=>cleanName(x.name).toLowerCase().includes(state.search.toLowerCase()));
+  const items=state.items.filter(x=>cleanName(x.name).toLowerCase().includes(state.search.toLowerCase())&&(!state.tagFilter||includesTagPath(recordTagPaths(itemRecord(x),state.taxonomy),state.tagFilter)));
   $('#item-count').textContent=items.length+(state.loading?'+':'')+' items';
   if(!state.sourceId){host.innerHTML='<div class="empty">'+icon('folder',38)+'<h3>Your files, one click away</h3><p>Add a source folder to begin browsing.</p><button class="primary" data-action="add-source">Add folder</button></div>';return;}
   if(!state.handles.has(state.sourceId)){host.innerHTML='<div class="empty">'+icon('alert',35)+'<h3>Reconnect your folder</h3><p>This catalog source needs a folder permission on this device.</p><button class="primary" data-action="reconnect">Reconnect source</button></div>';return;}
-  if(!items.length){host.innerHTML='<div class="empty">'+icon('folder',32)+'<h3>'+(state.loading?'Reading files…':state.search?'No matches':'Nothing here yet')+'</h3></div>';return;}
+  if(!items.length){host.innerHTML='<div class="empty">'+icon('folder',32)+'<h3>'+(state.loading?'Reading files…':state.search||state.tagFilter?'No matches':'Nothing here yet')+'</h3></div>';return;}
   host.innerHTML=items.slice(0,state.pageCount).map(item=>{
     const kind=itemKind(item);
     return '<button class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" title="'+escapeHTML(item.name)+'" aria-selected="'+state.selected.has(item.id)+'"><span class="art '+kind+'">'+icon(kind==='pdf'?'file':kind,kind==='folder'?37:31)+(kind==='image'?'<img loading="lazy" alt="" class="thumbnail"/>':'')+'</span><span class="filename">'+escapeHTML(cleanName(item.name))+'</span><span class="filetype">'+(kind==='folder'?'Folder':kind)+'</span></button>';
