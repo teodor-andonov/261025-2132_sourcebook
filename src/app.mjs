@@ -306,8 +306,10 @@ async function addSource(){
   try{
     const h=await window.showDirectoryPicker({mode:'read'});
     const item={id:crypto.randomUUID(),name:h.name};
-    const nextSources=[...state.sources,item];
-    await writeJson(state.catalogHandle,'sources.json',nextSources);
+    const before=await readJson(state.catalogHandle,'sources.json',null),disk=before??[];
+    if(JSON.stringify(disk)!==JSON.stringify(state.sources))throw Error('Catalog Folders changed on disk. Reopen the catalog.');
+    const nextSources=[...disk,item];
+    await commitCatalogEdits([{path:'sources.json',before,after:nextSources}]);
     state.sources=nextSources;invalidateScan();
     try{await setLocal('source:'+state.catalog.id+':'+item.id,h);}
     catch(e){console.warn('Source handle will need reconnecting after reload',e);toast('Source added, but this device cannot remember its permission.',true);}
@@ -378,14 +380,13 @@ async function togglePin(id){
   if(state.bulkSaving||state.resourceSaving)return toast('Finish metadata editing before changing tags.',true);
   try{
     if(!state.catalogHandle||!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed to pin a tag.');
-    const disk=await readJson(state.catalogHandle,'tags.json',[]);
+    const before=await readJson(state.catalogHandle,'tags.json',null),disk=before??[];
     assertTagSnapshotUnchanged(state.taxonomy,disk);
     const updated=toggleTagPin(disk,id);
-    await writeJson(state.catalogHandle,'tags.json',updated);
-    if(JSON.stringify(await readJson(state.catalogHandle,'tags.json'))!==JSON.stringify(updated))throw Error('Tag pin could not be verified on disk.');
+    await commitCatalogEdits([{path:'tags.json',before,after:updated}]);
     state.taxonomy=updated;
     const nav=$('#tag-nav');if(nav)nav.innerHTML=tagNavigationHTML();
-  }catch(error){toast('Pin failed: '+errorText(error),true);}
+  }catch(error){await refreshPendingCatalog();toast('Pin failed: '+errorText(error),true);render();}
 }
 async function catalogResultHandle(item){
   const root=state.handles.get(item.sourceId);
@@ -706,11 +707,13 @@ async function bulkTags(mode){
     if(state.catalogHandle!==catalogHandle||state.sourceId!==sourceId||JSON.stringify(state.parts)!==JSON.stringify(parts)||items.some(item=>!state.selected.has(item.id)))throw Error('Selection or location changed during bulk edit.');
     const plan=planBulkTags({catalog:latest,taxonomy:state.taxonomy,records,items,sourceId,parts,paths:tags,mode,siblingNames:state.items.map(item=>item.name)});
     if(!plan.changes.length){toast('No changes needed.');return;}
+    if(state.pendingTransaction)throw Error('Recover the interrupted catalog save before bulk tagging.');
     const count=await commitBulkTags({handle:catalogHandle,plan,expectedCatalog:latest,expectedTaxonomy:state.taxonomy});
     toast('Updated '+count+' catalog records · source files unchanged');
     state.tagDraftItem=null;state.tagDraft=[];
   }catch(error){toast('Bulk tags failed: '+errorText(error),true);}
   finally{
+    await refreshPendingCatalog();
     try{
       state.taxonomy=await readJson(state.catalogHandle,'tags.json',[]);
       state.catalog=await readJson(state.catalogHandle,'catalog.json');
@@ -739,48 +742,43 @@ async function saveResource(){
     if(previous && (!current||JSON.stringify(previous)!==JSON.stringify(current))){
       throw Error('This resource changed on disk. Reopen the catalog before saving.');
     }
-    const diskTags=await readJson(state.catalogHandle,'tags.json',[]);
+    const rawTags=await readJson(state.catalogHandle,'tags.json',null),diskTags=rawTags??[];
     assertTagSnapshotUnchanged(state.taxonomy,diskTags);
     let taxonomy=diskTags,tagIds=[];
     for(const path of tags){
       const result=ensureTagPath(taxonomy,path);
       taxonomy=result.tags;tagIds.push(result.id);
     }
-    if(taxonomy.length!==diskTags.length){
-      await writeJson(state.catalogHandle,'tags.json',taxonomy);
-      if(JSON.stringify(await readJson(state.catalogHandle,'tags.json'))!==JSON.stringify(taxonomy))throw Error('Tag write could not be verified');
+    const changes=[];
+    if(JSON.stringify(taxonomy)!==JSON.stringify(diskTags))
+      changes.push({path:'tags.json',before:rawTags,after:taxonomy});
+    let saved;
+    if(current){
+      const prior=Date.parse(current.updatedAt||'');
+      const updatedAt=new Date(Math.max(Date.now(),Number.isFinite(prior)?prior+1:0)).toISOString();
+      saved={...current,tagIds,notes,updatedAt};
+      delete saved.tags;
+      changes.push({path:'resources/'+saved.id+'.json',before:current,after:saved});
+    }else{
+      // Identity is catalog-local; ordinary source filenames are never changed.
+      const plan=planResourceIdentity(latest,[...state.records.values()],item.name,state.items.map(i=>i.name));
+      saved={formatVersion:1,id:plan.id,kind:item.kind,sourceId,path:[...parts,item.name].join('/'),tagIds,notes,renamed:false,updatedAt:new Date().toISOString()};
+      if(plan.nextSequence>(latest.nextSequence||1))
+        changes.push({path:'catalog.json',before:latest,after:{...latest,nextSequence:plan.nextSequence}});
+      changes.push({path:'resources/'+saved.id+'.json',before:null,after:saved});
     }
     await assertLiveSourceEntry(root,parts,item);
+    await commitCatalogEdits(changes);
     state.taxonomy=taxonomy;
-    const dir=await state.catalogHandle.getDirectoryHandle('resources',{create:true});
-    if(current){
-      const updated={...current,tagIds,notes,updatedAt:new Date().toISOString()};
-      delete updated.tags;
-      await writeJson(dir,updated.id+'.json',updated);
-      if(JSON.stringify(await readJson(dir,updated.id+'.json'))!==JSON.stringify(updated))throw Error('Resource write could not be verified');
-      state.records.set(updated.id,updated);
-      toast('Properties saved in catalog');
-    }else{
-      // Source files are NEVER renamed as a side effect of saving metadata.
-      const plan=planResourceIdentity(latest,[...state.records.values()],item.name,state.items.map(i=>i.name));
-      if(await readJson(dir,plan.id+'.json'))throw Error('Identity already exists. Reopen the catalog and retry.');
-      const record={formatVersion:1,id:plan.id,kind:item.kind,sourceId:state.sourceId,path:[...state.parts,item.name].join('/'),tagIds,notes,renamed:false,updatedAt:new Date().toISOString()};
-      await writeJson(dir,record.id+'.json',record);
-      if(JSON.stringify(await readJson(dir,record.id+'.json'))!==JSON.stringify(record))throw Error('Resource write could not be verified');
-      state.records.set(record.id,record);
-      if(plan.nextSequence>latest.nextSequence){
-        const next={...latest,nextSequence:plan.nextSequence};
-        await writeJson(state.catalogHandle,'catalog.json',next);
-        if(JSON.stringify(await readJson(state.catalogHandle,'catalog.json'))!==JSON.stringify(next))throw Error('Catalog sequence write could not be verified');
-        state.catalog=next;
-      }
-      toast('Saved to catalog · original file unchanged');
-    }
+    state.records.set(saved.id,saved);
+    if(!current)state.catalog=await readJson(state.catalogHandle,'catalog.json');
+    toast(current?'Properties saved in catalog':'Saved to catalog · original file unchanged');
     state.tagDraftItem=null;
     render();
   }catch(e){
     toast('Save failed: '+errorText(e),true);
     try{
+      await refreshPendingCatalog();
       state.taxonomy=await readJson(state.catalogHandle,'tags.json',[]);
       state.catalog=await readJson(state.catalogHandle,'catalog.json');
       await refreshRecords();render();
