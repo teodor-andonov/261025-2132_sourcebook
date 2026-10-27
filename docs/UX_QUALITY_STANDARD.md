@@ -34,19 +34,23 @@ Avoid a fixed dense material-design look on desktop or a cartoonishly padded mob
 
 ## Layout: big-screen baseline
 
+Conceptual hierarchy; no extra permanent panels:
+
 ~~~text
-+----------------------------------------------------------------+
-| Catalog ▾ | ← → | Sources / References / Facades   Search  ⌕   |
-+------------+---------------------------------------+-----------+
-| SOURCES    | Gallery/list/table | Sort | Filter   | INSPECTOR |
-| References |---------------------------------------|  Preview  |
-|   Projects | [ image ][ image ][ image ][ image ]  |  Name     |
-| COLLECTIONS [ image ][ image ][ image ][ image ]   |  Tags     |
-| TAGS       | [ image ][ image ][ image ][ image ]  |  Fields   |
-| SMART      |                                       |  Info     |
-+------------+---------------------------------------+-----------+
-| Zoom  –━━━━●━━━━+ | 152 items | 3 selected | offline/cached   |
-+----------------------------------------------------------------+
++---------------------------------------------------------------+
+|   ← → | Folder / subfolder                    Search / Views  |
++-----------+------------------------------------+--------------+
+| TABS      | Gallery/list/table  Sort  Filter  |  INSPECTOR   |
+| Folder A  | [image] [image] [image] [image]    | Preview      |
+| Folder B  | [image] [image] [image] [image]    | Tags/Notes   |
+|-----------|                                    | File info    |
+| CATALOG   |                                    |              |
+| Folders   |                                    |              |
+| Tags      |                                    |              |
+| Views     |                                    |              |
++-----------+------------------------------------+--------------+
+| Density | 152 items | 3 selected                              |
++---------------------------------------------------------------+
 ~~~
 
 The top/status bars should remain **very thin**. Main surface fills the window.
@@ -79,14 +83,14 @@ The top/status bars should remain **very thin**. Main surface fills the window.
 - Top area only one hero preview, no redundant title.
 - Editable title and metadata inline; auto-save safe catalog fields.
 - Tags autocomplete allows keyboard return, immediate chips.
-- Custom fields reveal editor on click; support mixed state for multi-select.
+- Custom fields are deferred; keep the inspector focused on previews, Tags, notes and compact file information.
 - Physical path and full raw filename visible without cluttering gallery.
 
-### Tags/collections/smart folders
+### Registered catalog Folders, Tags and Views
 - User sees physical vs virtual differences via icon + action hint, not explanatory popups.
-- Dragging items onto tag = attach tag; onto collection = add membership; onto physical folder = confirm exact move/copy.
+- Drag onto Tag = catalog-only assignment; onto physical Folder = explicit move/copy confirmation. Pinned tags add no separate membership.
 - Nested tag affordance clear with indentation, search and hover/touch drag alternatives.
-- Saved smart folder clearly indicates filter conditions via chips.
+- A saved View captures scope/filter **and** presentation settings; show active filters with quiet, removable chips.
 - View switch should not reset underlying filter/sort unintentionally.
 
 ### Feedback
@@ -115,7 +119,7 @@ The top/status bars should remain **very thin**. Main surface fills the window.
 | Back | Alt+Left / back button | hardware/system back |
 | Rename | F2 | context Rename |
 | Tags | inspector/autocomplete | inspector sheet |
-| Drag to collection | drag | selection + Add to collection |
+| Tag selection | drag onto tag / Tag action | selection + Tag |
 | Copy/move | Ctrl/Cmd+C/X/V or context | selection actions / destination picker |
 | Edit density | slider/wheel if assigned | slider/pinch optional |
 
@@ -129,7 +133,7 @@ These are target measurements, not guarantees.
 | Open preview from gallery | 1 action |
 | Tag selected file | <=2 direct interactions if inspector is open |
 | Tag 20 files | select + one bulk-tag action |
-| Switch between source and smart view | 1 click/tap when sidebar visible |
+| Switch between Folder and View | 1 click/tap when sidebar visible |
 | Add resource from Android share | one-tap confirmation with remembered destination after first setup |
 | Restore last browser state on reopening | automatic |
 | Adjust card size | one slider, instant feedback |

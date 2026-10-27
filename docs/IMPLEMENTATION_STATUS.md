@@ -4,6 +4,13 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — Consistent active specifications
+
+- Cleaned the roadmap, UX quality standard, README and design contract around **Tabs, Folders, Tags, Views, Catalog**.
+- Allusion is an external inspiration for visual filesystem indexing, hierarchical tags and search composition, not a vocabulary or architecture source.
+- Previous Collection/Smart Folder proposals are superseded by nested tag grouping and saved Views. Preserved dated implementation history.
+- Browser-first Open Folder is the next vertical slice; physical multi-tabs, root-derived Catalog Folders and catalog-wide Views remain later work.
+
 ## 2026-10-27 — Folder-first plan and tag-pin shortcut (V0.0.8 candidate)
 
 - Master plan and design contract now specify physical folder Tabs plus optional Catalog containing registered-root Folders, nested Tags and **Views**. No independent manual Collections/Smart Folders; defer image editing and custom properties.

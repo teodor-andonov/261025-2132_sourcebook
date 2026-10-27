@@ -1,6 +1,6 @@
 # Sourcebook — Minimal Utility Design Contract
 
-**Accepted product direction, 27 October 2026.**
+**Accepted product direction, 27 October 2026.** Reference applications (Allusion, Fold, Eagle, File Pilot) inform interaction quality only; **our terminology and architecture remain authoritative**.
 
 Sourcebook should be an unusually capable **visual file utility**, not a decorated dashboard.
 

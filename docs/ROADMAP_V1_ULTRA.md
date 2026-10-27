@@ -4,7 +4,7 @@
 > **Status:** Strategic implementation roadmap (not a shipped feature claim)  
 > **Created:** 2026-10-26  
 > **Scope:** V0.1 → V1.0 · Windows Chrome + Android Chrome · PWA-first, no required backend/native shell  
-> **Reference DNA:** Eagle.cool × refern.app × File Pilot  
+> **Reference DNA:** Allusion × Eagle.cool × refern.app × File Pilot × Fold — inspiration only, not naming/architecture  
 > **Short form:** Existing files. Beautiful previews. Portable catalogs. Delightful organization.
 
 > **Superseding product decision (27 Oct 2026):** Sourcebook is a general file browser first, with optional portable catalogs. Two main sidebar areas: physical folder **Tabs** and **Catalog** (registered-root Folders, nested Tags, saved **Views**). Manual Collections are just tags, optionally pinned; dynamic Smart Folders are **Views**, which save scope/filter *and* display settings. Don't build separate manual Collection or Smart Folder databases. Image editing and annotations are outside V1. The existing prototype still requires a catalog; folder-first launch and new sidebar are planned, not shipped. Historical backlog wording below is subordinate to this decision.
@@ -13,9 +13,9 @@
 
 **Sourcebook makes ordinary folders feel like a beautifully curated, searchable, visual library — without taking the files hostage.**
 
-Point at a folder; see it immediately. Choose to make a resource richer with tags, typed properties, collections and previews. Keep originals in place. Store each independent catalog wherever you wish as a portable *.sb directory; access that catalog on desktop or Android using the same installed PWA.
+Open any granted folder and browse immediately. Optionally attach a portable catalog to enrich selected resources with stable nested tags, notes and previews. Keep originals in place. Store each independent catalog wherever you wish as a portable *.sb directory; access that catalog on desktop or Android using the same installed PWA.
 
-**At V1 a typical person can:** install in Chrome; create a catalog; grant one or more source folders; browse 10,000+ mixed files as effortlessly as a photo library; preview images, PDF, SVG, video and web references; tag in bulk; filter, search and save smart folders; arrange collections; drop/import/copy/move resources; capture URLs and shared files; switch between catalogs; take data offline; recover safely from sync/permission conflicts.
+**At V1 a typical person can:** install in Chrome; create a catalog; grant one or more source folders; browse 10,000+ mixed files as effortlessly as a photo library; preview images, PDF, SVG, video and web references; tag in bulk; filter, search and save Views; pin curated tag groups; drop/import/copy/move resources; capture URLs and shared files; switch between catalogs; take data offline; recover safely from sync/permission conflicts.
 
 **Qualitative V1 bar:** it should be a *joy* to use, not merely a feature checklist. Discoverable without tutorials, powerful without persistent UI clutter, fast without flashy animation, and trustworthy when operating on irreplaceable user files.
 
@@ -23,9 +23,11 @@ Point at a folder; see it immediately. Choose to make a resource richer with tag
 
 | Reference | Steal the good idea | Avoid |
 |---|---|---|
-| Eagle.cool | Immediate visual satisfaction, beautifully legible gallery, collection gestures, quick look, rich previews, efficient tagging | Proprietary mandatory import/copy flow; feature bloat |
+| [Allusion](https://allusion-app.github.io/) | Existing-folder visual library, hierarchical tags and combined metadata filtering | Image-focused scope, desktop watchers/database assumptions, its terminology |
+| Eagle.cool | Immediate visual satisfaction, beautifully legible gallery, quick look, rich previews and efficient tagging | Proprietary mandatory import/copy flow; feature bloat |
 | refern.app | Existing-folder indexing, rich metadata, powerful reference organisation, smart queries | Trying to replicate every specialized mode and canvas upfront |
 | File Pilot | Fast navigation, tabs, compact breadcrumbs, keyboard interaction, high-quality contextual menus | UI overengineering and desktop-only interaction assumptions |
+| [Fold](https://github.com/teodor-andonov/261013-1633_pwa-file-explorer) | Folder-tab navigation, keyboard interactions, previews, safe transfer concepts | Blind code/UI transplant; desktop-only assumptions |
 
 Do not copy layouts, brand assets or proprietary implementation. Use them as *quality benchmarks*.
 
@@ -33,8 +35,8 @@ Do not copy layouts, brand assets or proprietary implementation. Use them as *qu
 
 1. **Browse** — native-feeling folders + visually excellent files.
 2. **Collect** — instant references from files, links, drops, clipboard and Android share.
-3. **Enrich** — catalog-aware identity, custom properties, tags, previews, annotations.
-4. **Rediscover** — search, saved views, smart folders and collections.
+3. **Enrich** — catalog-aware identity, hierarchical tags, notes and previews; custom fields later.
+4. **Rediscover** — search, pinned tags and saved Views.
 
 A fifth cross-cutting pillar underpins all four: **reliability and polished speed.**
 
@@ -67,7 +69,7 @@ A fifth cross-cutting pillar underpins all four: **reliability and polished spee
 - Objectified file naming convention: Name[ab967][c5].pdf = catalog ab, sequence 967; catalog c, sequence 5. New catalog appends its own trailing token; keep others.
 - Catalog prefix is user-set and persisted. Resource numbering is sequential *within the catalog*.
 - Nonobjectified filesystem entries still appear in browsing, and opening a folder never auto-renames files.
-- Folder browsing, custom properties, nested tags, smart folders, saved views, previews and destination-selectable imports are essential.
+- Folder-first browsing, catalog root links, nested Tags and saved Views are essential; custom fields follow polished tagging.
 - Experience is minimal, beautiful, exceptionally smooth.
 
 **Engineering proposals, subject to M0 validation:**
@@ -134,7 +136,7 @@ Open a folder with papers, images and simulation outputs. Preview quickly. Tag s
 Share URL or image from Android, choose catalog, optionally choose physical destination for a copy. Later open same catalog on Windows, find it via cover/tag/source, collect into a gallery.
 
 ### The file organizer
-Open several source directories, navigate with tabs/breadcrumbs, use keyboard/drag, rename/copy/move safely, create real folders, add virtual collections without altering physical organisation.
+Open ordinary folders as Tabs, navigate and use safe file operations, optionally linking existing roots into catalogs for non-destructive tagging and Views.
 
 ## 07 — Product screens and hierarchy
 
@@ -143,7 +145,7 @@ Open several source directories, navigate with tabs/breadcrumbs, use keyboard/dr
 3. **Quick Look:** large immediate media/document view, navigation between selection, minimal floating actions.
 4. **Properties inspector:** resource preview + inline property editor, tags, notes, file details, operations.
 5. **Search/command palette:** fast jump to resources, commands, locations and saved searches.
-6. **Collection management:** virtual grouping with drag add/remove and optional custom ordering.
+6. **View management:** save and pin dynamic filters together with presentation settings; use tags for manual groups.
 7. **Settings:** catalogs, sources, storage, theme, preview/cache, objectification, shortcuts, privacy, recovery.
 8. **Import chooser:** link vs copy vs move, exact target folder, tags, single quick-save default.
 9. **Problems/recovery panel:** missing folder, denied permission, duplicates, sync conflicts, corrupted preview, failed operation.
@@ -159,7 +161,7 @@ Avoid “home dashboards” at V1 unless they actually save the user work.
 - Section collapse, reorder and optional favorites.
 - Desktop resizable; narrow-screen sheet/drawer; same information architecture.
 - Drag onto physical folder = confirmed file operation; onto tag = catalog-only metadata operation.
-- Optional sidebar tabs/rail for switching views rather than an always-present extra panel.
+- A single compact sidebar with folder Tabs and catalog organisation; no extra permanent rail.
 
 ### 08.2 Main toolbar
 Breadcrumbs with click-to-jump, back/forward; title/path; global search; sort/filter/group; view switch; density slider; add/import; inspector toggle. Trim into overflow on small widths, retaining same commands.
@@ -322,7 +324,7 @@ URLs use same resource store and catalog-assigned record IDs, but without embedd
 2. Choose Catalog (recent default).
 3. Choose **Reference in place / Copy into / Move into / Bookmark URL** depending type and permission.
 4. When physical file is written, choose exact destination folder; remembered last choice for speed.
-5. Optional tags/collection; save instantly; notification “Added to X” with Undo where supported.
+5. Optionally tag in the catalog; persist with verification and provide Undo only where truly supported.
 
 **Quick capture**: one-tap/one-click after defaults set; extended drawer when choices matter.
 
@@ -385,7 +387,7 @@ Fast search with suggestions, fuzzy basename matches, keyboard selection, filter
 
 Initial index in memory/IndexedDB; don't reread 50k files on each keystroke. Update incrementally when source refreshes, records change or a sync conflict is resolved.
 
-V1 “spotlight” overlay: type a few letters to jump to folder, file, smart folder, tag or command.
+V1 “spotlight” overlay: type a few letters to jump to folder, file, View, tag or command.
 
 ## 18 — Android is a full first-class client
 
@@ -881,7 +883,7 @@ Potential future areas:
 - AI-assisted tagging / image similarity and natural-language search, opt-in.
 - Browser extension with one-click clip page/image/PDF, full-page screenshot, tab metadata.
 - Reference comparison/contact sheets/boards.
-- Rich file annotations and multi-page PDF markup (deferred outside V1).
+- Image/file annotations remain deferred beyond V1.
 - Auto generated folder previews and semantic color search.
 - Powerful rules/automation engine.
 - Optional app packaging if web capability limits prove chronic, while preserving PWA as source.

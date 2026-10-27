@@ -1,6 +1,6 @@
 # Sourcebook
 
-> **Implementation underway — V0.0.6 preview (2026-10-27).** Local-folder gallery, portable `.sb` catalogs, stable-ID nested tags and current-folder tag-aware search are implemented. GitHub Pages publishing succeeded on 2026-10-27; subsequent app changes deploy only nightly-on-change or manually. Physical Windows/Pixel 8 verification remains outstanding. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+> **Implementation underway — V0.0.8 prototype (2026-10-27).** Local-folder gallery, portable `.sb` catalogs, stable-ID nested tags and current-folder tag-aware search are implemented. GitHub Pages publishing succeeded on 2026-10-27; subsequent app changes deploy only nightly-on-change or manually. Physical Windows/Pixel 8 verification remains outstanding. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 
 **A beautiful, fast, local-first file browser with optional portable reference catalogs for ordinary files, folders and URLs.**
@@ -73,7 +73,9 @@ Begin at [V0.0: PWA feasibility](docs/ROADMAP_V1_ULTRA.md#27--v00-pwa--filesyste
 
 ## Inspirations
 
-- [Eagle](https://eagle.cool/) — collection and visual preview quality
+- [Allusion](https://allusion-app.github.io/) — existing folder/tag/search ideas only, not its terminology
+- [Eagle](https://eagle.cool/) — visual preview quality
+- [Fold](https://github.com/teodor-andonov/261013-1633_pwa-file-explorer) — folder navigation and reliability patterns
 - [refern](https://www.refern.app/) — in-place indexing
 - [File Pilot](https://filepilot.tech/) — performance and interaction detail
 
