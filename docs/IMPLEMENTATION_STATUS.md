@@ -1,3 +1,10 @@
+## 2026-10-28 — Roadmap acceptance scoreboard and dev-branch cleanup policy
+
+- Added [ROADMAP_STATUS.md](ROADMAP_STATUS.md): a concise, evidence-backed 3-stage matrix separating **code implementation**, **actual Windows/Pixel 8 acceptance** and **successful deployment/acceptance**. Broader unchecked ULTRA V1 milestone checkboxes remain requirements, not an accurate implementation tally.
+- Established an explicit M0 real-device test matrix (real Folders/Catalogs, permissions, Syncthing, offline, 500-file browsing and Android capture fallback), all initially **Not tested**. Automated CI does not count as physical device acceptance.
+- Prioritized M0 feasibility, V0.5 URL/clipboard/Android capture and V0.6 safe filesystem operations ahead of further speculative index/Views additions; kept catalog identity/conflict safety as cross-cutting priorities.
+- Updated release guidance and automation to remove merged same-repository `dev/*` branches only after checking the PR is merged and the ref still equals its PR head SHA. Added an independent, permissions-scoped GitHub Actions cleanup workflow; merge history in `main` remains intact. Actual branch deletion must be confirmed from workflow results, not assumed from a code change.
+
 ## 2026-10-28 00:23 Europe/Madrid — Overlapping Catalog record review (V0.0.30 candidate)
 
 - **Implemented in source:** Settings → **Review overlaps** and a saved View inspector shortcut open a read-only comparison of all competing Catalog resource records under live-verified overlapping registered Folder relationships, not just the current View filter. Tags, notes, kinds, missing Tag references and other metadata differences remain visible; no automatic winner is selected.
