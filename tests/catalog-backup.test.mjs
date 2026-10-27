@@ -72,12 +72,13 @@ test('a pending or malformed recovery journal is backed up verbatim, never repla
 });
 test('concurrent metadata edit during export fails instead of yielding a mixed snapshot',async()=>{
   const h=root();let changed=false;
-  h.onRead=(name,dir)=>{if(name==='tags.json'&&!changed){changed=true;dir.files.set('tags.json','[]');}};
+  let reads=0;
+  h.onRead=(name,dir)=>{if(name==='tags.json'&&++reads===2){changed=true;dir.files.set('tags.json','[]');}};
   await assert.rejects(createCatalogBackup(h),/changed during backup/);
 });
 test('resource enumeration detects a new JSON record during snapshot',async()=>{
   const h=root();let changed=false;
-  h.onRead=(name)=>{if(name==='catalog.json'&&!changed){changed=true;h.dirs.get('resources').files.set('ab2.json','{}');}};
+  h.dirs.get('resources').onRead=(name)=>{if(name==='ab1.json'&&!changed){changed=true;h.dirs.get('resources').files.set('ab2.json','{}');}};
   await assert.rejects(createCatalogBackup(h),/resource list changed/);
 });
 test('unrecognized resource JSON paths are rejected rather than silently excluded',async()=>{
