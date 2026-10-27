@@ -1,3 +1,13 @@
+## 2026-10-27 — Fold-inspired file identity and side-preview refinement (V0.0.23 candidate)
+
+- Audited Fold `teodor-andonov/261013-1633_pwa-file-explorer` (its file extension palette and badges, neutral root rail, layout controls, preview pane and resizer). Ported design principles rather than Fold's edit/write/delete operations or code architecture.
+- Added `src/file-symbols.mjs` with short, extension-first symbols and subtle category-specific hues for common images, code, PDFs, documents, videos, archives and CAD/BIM formats (`.dwg`, `.ifc`, `.3dm`, `.rvt`, etc). Icons are reused by Gallery, List and Table; unknown extensions remain neutral. Interaction selections, tags and panels remain grayscale plus one configurable blue accent.
+- Reorganized Gallery/List/Table view buttons as one compact group; refined the sidebar rail, headings, tab and View row density, neutral active backgrounds and quiet pin/delete controls. No new collections or metadata concepts.
+- Upgraded the **right inspector to include a read-only side preview** for single selections: image, PDF, video, audio, capped text/code or a format glyph; catalog metadata and tag/notes editing remain below. Existing full-screen viewer is available via `Open preview`. The side preview does not request write access, start video playback automatically or touch ordinary files.
+- Sidebar and inspector can be resized on desktop by pointer or keyboard separators; sizes live in local browser preferences. On narrow screens the existing slide-out patterns are retained, with no desktop grip in the touch layout. Object URLs for side previews are revoked when selection/view changes, and stale async loads are ignored.
+- New unit tests cover type labels, CAD/BIM mapping, unknown extensions and preview-size safety. **CI and physical Windows/Android testing remain pending** until externally verified. Pages and screenshot workflows were not triggered.
+- Follow-up: richer Markdown/code rendering inside the side preview, fully tested pointer-resize ergonomics, and actual real-device UX validation.
+
 ## 2026-10-27 — Recoverable catalog JSON transactions (V0.0.22 candidate)
 
 - **Implemented in source:** Metadata writes for resource objectification/editing, bulk nested Tags, Tag pinning, registered Catalog Folders and saved Views now use a catalog-local `.sourcebook-pending.json` write-ahead journal. The journal records exact before/after JSON snapshots, is verified before metadata writes, and is removed only after all changed catalog files are verified. Ordinary source folders are never written by this mechanism.

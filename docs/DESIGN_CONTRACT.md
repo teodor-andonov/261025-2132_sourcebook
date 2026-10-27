@@ -7,7 +7,7 @@ Sourcebook should be an unusually capable **visual file utility**, not a decorat
 ## Visual rules
 
 - Neutral surfaces only: light/dark gray, white and black; no tinted panels or colorful folder icons.
-- Exactly **one highlight color** at a time, applied to focused, selected and active states. Muted blue by default; adjustable in Settings, persisted per browser/device.
+- Exactly **one interaction highlight color** at a time, applied to focused, selected and active states. Muted blue by default; adjustable in Settings, persisted per browser/device. Semantic file-type icon tint is permitted **inside the symbol only** (Fold reference); avoid coloring background panels, tags or View categories.
 - Rounded corners stay, but restrained: approximately 6–8px standard.
 - Compact spacing, toolbars, buttons and filenames. Show more resources per screen; maintain touch targets on mobile.
 - Prefer familiar Lucide icons before or instead of labels where the meaning remains clear. Add accessible labels and tooltip titles for icon-only actions.

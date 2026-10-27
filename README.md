@@ -1,13 +1,13 @@
 # Sourcebook
 
-> **Implementation underway — V0.0.22 recoverable Catalog metadata saves (2026-10-27).** Browser-first read-only Folder Tabs, optional `.sb` Catalogs, registered-root Folders, nested stable-ID Tags, bulk tagging and saved Views remain prototype features. Views can explicitly scan granted roots into a temporary read-only index. A verified `.sourcebook-pending.json` journal now supports explicit recovery of interrupted Catalog JSON writes; it is **not** a cross-device lock or fully atomic transaction. **127 Node tests and syntax checks passed** in [CI run 40542514229](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40542514229) for the final code commit. Physical Windows/Android testing remains outstanding. Pages and screenshots are manual only. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+> **Implementation underway — V0.0.23 Fold-informed file identity and side-preview UX (2026-10-27).** Browser-first read-only Folder Tabs, optional `.sb` Catalogs, registered-root Folders, nested stable-ID Tags, bulk tagging and saved Views remain prototype features. Views can explicitly scan granted roots into a temporary read-only index. A verified `.sourcebook-pending.json` journal now supports explicit recovery of interrupted Catalog JSON writes; it is **not** a cross-device lock or fully atomic transaction. **127 earlier Node tests and syntax checks passed** in [CI run 40542514229](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40542514229) for the final code commit. New UX commit CI and physical Windows/Android validation remain outstanding. Pages and screenshots are manual only. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 **A beautiful, fast, local-first file browser with optional portable reference catalogs for ordinary files, folders and URLs.**
 
 Sourcebook lets you point a portable **Catalog** at existing folders, browse everything immediately, generate previews, and selectively enrich resources with metadata — without requiring a proprietary managed library.
 
 **Platforms:** Windows + Android; same product and feature set, responsive layout only.  
-**Status:** V0.0.22 Catalog recovery candidate (2026-10-27); automated tests run in GitHub Actions, and an earlier hosted release succeeded. Real-device verification remains outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
+**Status:** V0.0.23 Fold-informed icon and side-preview UX candidate (2026-10-27); automated tests run in GitHub Actions, and an earlier hosted release succeeded. Real-device verification remains outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
 
 ## Start here
 

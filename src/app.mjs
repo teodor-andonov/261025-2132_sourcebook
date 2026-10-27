@@ -7,6 +7,7 @@ import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {catalogTagResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
 import {groupViewItems,viewTableMetadata,TABLE_COLUMNS,DEFAULT_TABLE_COLUMNS,normalizeTableColumns} from './view-layout.mjs';
+import {describeFileSymbol,sidePreviewKind} from './file-symbols.mjs';
 import {scanRegisteredFolders,verifyCatalogRootReconnect,assertLiveSourceEntry} from './source-scan.mjs';
 import {validateViews,sortViewsForSidebar} from './views.mjs';
 import {createViewsController} from './views-controller.mjs';
@@ -15,6 +16,7 @@ import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagP
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
+  sidePreviewSerial:0,sidePreviewUrl:null,
   catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,activeViewId:null,views:[],viewSaving:false,sort:'name',groupBy:'none',tableColumns:[...DEFAULT_TABLE_COLUMNS],fileType:'all',fileStatus:'all',
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,
   search:'', view:localStorage.getItem('sb-view')||'gallery',
@@ -127,6 +129,11 @@ function itemKind(item){
   if(/\.(mp4|mov|webm)$/i.test(item.name))return 'video';
   return 'file';
 }
+function fileSymbol(item){
+  const info=describeFileSymbol(item);
+  if(info.folder)return '<span class="sb-type-folder" aria-hidden="true">'+icon('folder',23)+'</span>';
+  return '<span class="sb-type-icon" style="--type-h:'+info.hue+'" title="'+escapeHTML(info.label)+'" aria-hidden="true"><span class="sb-type-glyph">'+icon(info.glyph,19)+'</span><span class="sb-type-ext">'+escapeHTML(info.label)+'</span></span>';
+}
 function itemRecord(item){
   if(item?.catalogResult)return item.record;
   // Never silently bind a copied filename token to another resource's record.
@@ -144,6 +151,7 @@ function openDialog(inner){
   document.body.append(outer);outer.querySelector('input')?.focus();
 }
 function landing(){
+  clearSidePreview();
   forgetImages();
   $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>Sourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions"><button class="primary" data-action="open-folder">'+icon('folder')+' Open folder</button><button class="secondary" data-action="open-catalog">'+icon('database')+' Open catalog</button><button class="secondary" data-action="create-catalog">'+icon('plus')+' New catalog</button></div><div id="recent-area"></div><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
   getLocal('recent').then(value=>{
@@ -502,7 +510,8 @@ function render(){
   const historyControls=plain
     ?'<button class="icon-button" title="Back" aria-label="Back" data-action="tab-back" '+(backward?'':'disabled')+'>'+icon('back')+'</button><button class="icon-button" title="Forward" aria-label="Forward" data-action="tab-forward" '+(nextward?'':'disabled')+'>'+icon('forward')+'</button>'
     :'';
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+recoveryNotice+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+statusControl+sortControl+groupControl+columnsButton+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
+  clearSidePreview();
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+recoveryNotice+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div id="sidebar-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize sidebar" aria-orientation="vertical"></div><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+'<div class="layout-buttons" role="group" aria-label="Layout">'+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+'</div>'+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+statusControl+sortControl+groupControl+columnsButton+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<div id="inspector-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize side preview" aria-orientation="vertical"></div><aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="side-preview" class="side-preview" aria-label="Selected file preview"></div><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML=viewsUI.inResults()?'<button data-action="exit-catalog-tag">'+icon('database',16)+' Catalog</button><span class="crumb">'+icon('chevron',13)+'</span><button>'+icon('tag',14)+' '+escapeHTML(viewsUI.title())+'</button>':'<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
@@ -528,14 +537,14 @@ function visibleItems(){
 }
 function resourceCard(item){
   const kind=itemKind(item);
-  return '<button class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" title="'+escapeHTML(item.name)+'" aria-selected="'+state.selected.has(item.id)+'"><span class="art '+kind+'">'+icon(kind==='pdf'?'file':kind,kind==='folder'?37:31)+(kind==='image'?'<img loading="lazy" alt="" class="thumbnail"/>':'')+'</span><span class="filename">'+escapeHTML(cleanName(item.name))+'</span><span class="filetype">'+(item.catalogResult?escapeHTML(item.location+(item.missing?' · Missing at scan':'')+(item.changedKind?' · Type changed':'')+(item.unobjectified?' · Not cataloged':'')):kind==='folder'?'Folder':kind)+'</span></button>';
+  return '<button class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" title="'+escapeHTML(item.name)+'" aria-selected="'+state.selected.has(item.id)+'"><span class="art '+kind+'">'+fileSymbol(item)+(kind==='image'?'<img loading="lazy" alt="" class="thumbnail"/>':'')+'</span><span class="filename">'+escapeHTML(cleanName(item.name))+'</span><span class="filetype">'+(item.catalogResult?escapeHTML(item.location+(item.missing?' · Missing at scan':'')+(item.changedKind?' · Type changed':'')+(item.unobjectified?' · Not cataloged':'')):kind==='folder'?'Folder':kind)+'</span></button>';
 }
 function resourceTableRow(item){
   const meta=viewTableMetadata(item,recordTagPaths(itemRecord(item),state.taxonomy));
   const kind=itemKind(item);
   const columns=normalizeTableColumns(state.tableColumns);
   return '<tr class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" tabindex="0" aria-selected="'+state.selected.has(item.id)+'" title="'+escapeHTML(item.name)+'">'+columns.map(key=>{
-    if(key==='name')return '<td class="table-name">'+icon(kind==='pdf'?'file':kind,16)+'<span>'+escapeHTML(cleanName(item.name))+'</span></td>';
+    if(key==='name')return '<td class="table-name">'+fileSymbol(item)+'<span>'+escapeHTML(cleanName(item.name))+'</span></td>';
     const value=key==='tags'?meta.tags.map(tag=>'#'+tag).join(' '):meta[key]??'';
     return '<td class="table-'+key+'" title="'+escapeHTML(String(value))+'">'+escapeHTML(String(value))+'</td>';
   }).join('')+'</tr>';
@@ -645,13 +654,54 @@ function commitTagInput(){
   try{state.tagDraft=mergeTagInput(state.tagDraft,input.value);input.value='';renderTagPills();showTagSuggestions();return true;}
   catch(e){toast(errorText(e),true);input.focus();return false;}
 }
+function clearSidePreview(){
+  ++state.sidePreviewSerial;
+  if(state.sidePreviewUrl){URL.revokeObjectURL(state.sidePreviewUrl);state.sidePreviewUrl=null;}
+}
+async function renderSidePreview(item){
+  const host=$('#side-preview');
+  clearSidePreview();
+  if(!host)return;
+  const serial=state.sidePreviewSerial;
+  if(!item){host.innerHTML='<div class="side-preview-empty">'+icon('view',25)+'<span>Select a file to preview</span></div>';return;}
+  if(item.missing){host.innerHTML='<div class="side-preview-empty">'+icon('alert',23)+'<span>File not found at last completed scan</span></div>';return;}
+  if(item.kind==='directory'){
+    host.innerHTML='<div class="side-preview-symbol">'+fileSymbol(item)+'</div>';
+    return;
+  }
+  host.innerHTML='<div class="side-preview-empty">Loading preview…</div>';
+  try{
+    const handle=item.catalogResult?await catalogResultHandle(item):item.handle;
+    if(!handle||typeof handle.getFile!=='function')throw Error('Reconnect folder to preview');
+    const file=await handle.getFile(),format=sidePreviewKind(item,file.size);
+    let body;
+    if(format==='text'){
+      const text=await file.slice(0,120000).text();
+      body='<pre class="side-preview-text">'+escapeHTML(text)+'</pre>';
+    }else if(['image','pdf','video','audio'].includes(format)){
+      if(serial!==state.sidePreviewSerial||!host.isConnected)return;
+      const url=URL.createObjectURL(file);
+      state.sidePreviewUrl=url;
+      if(format==='image')body='<img src="'+url+'" alt="'+escapeHTML(item.name)+'" class="side-preview-media"/>';
+      if(format==='pdf')body='<iframe src="'+url+'#toolbar=0" title="PDF preview" class="side-preview-pdf"></iframe>';
+      if(format==='video')body='<video src="'+url+'" controls preload="metadata" class="side-preview-media"></video>';
+      if(format==='audio')body='<audio src="'+url+'" controls preload="metadata" class="side-preview-audio"></audio>';
+    }else body='<div class="side-preview-symbol">'+fileSymbol(item)+'<span>'+(format==='large-text'?'Large text file':'Preview unavailable')+'</span></div>';
+    if(serial!==state.sidePreviewSerial||!host.isConnected)return;
+    host.innerHTML='<div class="side-preview-content">'+body+'</div><button class="side-preview-open" data-action="side-open-preview" title="Open full preview">'+icon('view',14)+'<span>Open preview</span></button>';
+  }catch(error){
+    if(serial!==state.sidePreviewSerial||!host.isConnected)return;
+    host.innerHTML='<div class="side-preview-empty">'+icon('alert',18)+'<span>'+escapeHTML(errorText(error))+'</span></div>';
+  }
+}
 function renderInspector(){
   const host=$('#inspector-data');if(!host)return;
+  void renderSidePreview(state.selected.size===1?state.items.find(x=>state.selected.has(x.id)):null);
   if(viewsUI.inResults()){
     const selected=state.selected.size===1?state.items.find(item=>state.selected.has(item.id)):null;
     if(!selected){host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' results selected':'Select a resource')+'</span></div>';return;}
     const tags=recordTagPaths(selected.record,state.taxonomy);
-    host.innerHTML='<div class="inspector-cover">'+icon(itemKind(selected)==='pdf'?'file':itemKind(selected),40)+'</div><h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
+    host.innerHTML='<h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
     return;
   }
   if(state.selected.size!==1){
@@ -667,13 +717,13 @@ function renderInspector(){
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   const record=itemRecord(item);
   if(!state.catalog){
-    host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),40)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4>'+(item.kind==='directory'?'<button class="secondary full" data-action="open-selected-tab">'+icon('plus',15)+' Open in new tab</button>':'')+'<details class="file-details" open><summary>File information</summary><code>'+escapeHTML(item.name)+'</code></details>';
+    host.innerHTML='<h4>'+escapeHTML(cleanName(item.name))+'</h4>'+(item.kind==='directory'?'<button class="secondary full" data-action="open-selected-tab">'+icon('plus',15)+' Open in new tab</button>':'')+'<details class="file-details" open><summary>File information</summary><code>'+escapeHTML(item.name)+'</code></details>';
     return;
   }
   if(state.tagDraftItem!==item.id){
     state.tagDraftItem=item.id;state.tagDraft=recordTagPaths(record,state.taxonomy);
   }
-  host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),40)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">TAGS</div><div class="tag-editor" id="tag-editor"><div class="tag-pills" id="tag-pills"></div><input id="tag-input" aria-label="Add tag" placeholder="# Add tag…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="tag-suggestions" aria-expanded="false"/></div><div class="tag-suggestions" id="tag-suggestions" role="listbox" aria-label="Existing tags" hidden></div><div class="micro-hint">Nest tags with /, e.g. Architecture / Facades</div></div><div class="detail"><div class="label">NOTES</div><textarea rows="3" id="notes" placeholder="Optional note">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save',16)+' Save</button><details class="file-details"><summary>File information</summary><code>'+escapeHTML(item.name)+'</code>'+(record?'<div class="micro-hint">ID: '+escapeHTML(record.id)+'</div>':'')+'</details>';
+  host.innerHTML='<h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">TAGS</div><div class="tag-editor" id="tag-editor"><div class="tag-pills" id="tag-pills"></div><input id="tag-input" aria-label="Add tag" placeholder="# Add tag…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="tag-suggestions" aria-expanded="false"/></div><div class="tag-suggestions" id="tag-suggestions" role="listbox" aria-label="Existing tags" hidden></div><div class="micro-hint">Nest tags with /, e.g. Architecture / Facades</div></div><div class="detail"><div class="label">NOTES</div><textarea rows="3" id="notes" placeholder="Optional note">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save',16)+' Save</button><details class="file-details"><summary>File information</summary><code>'+escapeHTML(item.name)+'</code>'+(record?'<div class="micro-hint">ID: '+escapeHTML(record.id)+'</div>':'')+'</details>';
   renderTagPills();
 }
 function refreshSelectionUI(){
@@ -814,7 +864,7 @@ async function showPreview(item){
     const file=await handle.getFile();
     const kind=itemKind(item);
     const url=URL.createObjectURL(file);state.previewUrl=url;state.previewId=item.id;
-    let body='<div class="unsupported">'+icon('file',65)+'<p>Preview unavailable for this format</p><a download="'+escapeHTML(item.name)+'" href="'+url+'">Download file</a></div>';
+    let body='<div class="unsupported">'+fileSymbol(item)+'<p>Preview unavailable for this format</p><a download="'+escapeHTML(item.name)+'" href="'+url+'">Download file</a></div>';
     if(kind==='image')body='<img class="viewer-image" src="'+url+'" alt="'+escapeHTML(item.name)+'"/>';
     if(kind==='pdf')body='<iframe class="viewer-pdf" src="'+url+'#toolbar=0" title="PDF preview"></iframe>';
     if(kind==='video')body='<video class="viewer-video" src="'+url+'" controls autoplay></video>';
@@ -862,6 +912,52 @@ async function importFiles(){
     invalidateScan();await navigate(state.sourceId,state.parts);toast('Imported '+count+' file(s)');
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
+const paneConfigs={
+  'sidebar-resizer':{selector:'.sidebar',cssVar:'--sb-sidebar-width',key:'sb-sidebar-width',min:154,max:360,defaultWidth:206,direction:1},
+  'inspector-resizer':{selector:'.inspector',cssVar:'--sb-inspector-width',key:'sb-inspector-width',min:250,max:660,defaultWidth:350,direction:-1}
+};
+for(const config of Object.values(paneConfigs)){
+  const stored=Number(localStorage.getItem(config.key));
+  if(stored>=config.min&&stored<=config.max)document.documentElement.style.setProperty(config.cssVar,stored+'px');
+}
+document.addEventListener('pointerdown',event=>{
+  const grip=event.target.closest('.pane-grip'),config=grip&&paneConfigs[grip.id];
+  if(!config||event.button!==0||window.innerWidth<=760)return;
+  const panel=document.querySelector(config.selector);
+  if(!panel)return;
+  event.preventDefault();
+  const startX=event.clientX,initial=panel.getBoundingClientRect().width;
+  function apply(x){
+    const max=Math.min(config.max,Math.max(config.min,window.innerWidth-330));
+    const next=Math.max(config.min,Math.min(max,Math.round(initial+(x-startX)*config.direction)));
+    document.documentElement.style.setProperty(config.cssVar,next+'px');
+    grip.setAttribute('aria-valuenow',String(next));
+    return next;
+  }
+  function move(e){if(e.pointerId===event.pointerId)apply(e.clientX);}
+  function end(e){
+    if(e.pointerId!==event.pointerId)return;
+    const width=apply(e.clientX);
+    localStorage.setItem(config.key,String(width));
+    window.removeEventListener('pointermove',move,true);
+    window.removeEventListener('pointerup',end,true);
+    window.removeEventListener('pointercancel',end,true);
+  }
+  window.addEventListener('pointermove',move,true);
+  window.addEventListener('pointerup',end,true);
+  window.addEventListener('pointercancel',end,true);
+});
+document.addEventListener('keydown',event=>{
+  const grip=event.target.closest('.pane-grip'),config=grip&&paneConfigs[grip.id];
+  if(!config||!['ArrowLeft','ArrowRight','Home'].includes(event.key))return;
+  event.preventDefault();event.stopImmediatePropagation();
+  const panel=document.querySelector(config.selector);
+  if(!panel)return;
+  const width=event.key==='Home'?config.defaultWidth:panel.getBoundingClientRect().width+(event.key==='ArrowRight'?1:-1)*config.direction*(event.shiftKey?36:12);
+  const val=Math.max(config.min,Math.min(config.max,Math.round(width)));
+  document.documentElement.style.setProperty(config.cssVar,val+'px');
+  localStorage.setItem(config.key,String(val));
+},true);
 document.addEventListener('submit',event=>{
   if(event.target.id==='catalog-form'){event.preventDefault();submitCatalog(event.target);}
   if(event.target.id==='table-columns-form'){
@@ -958,6 +1054,7 @@ document.addEventListener('click',async event=>{
     case 'table-columns':openTableColumnsDialog();break;
     case 'gallery':case 'list':case 'table':state.view=action;localStorage.setItem('sb-view',action);render();break;
     case 'inspector':state.inspector=!state.inspector;render();break;
+    case 'side-open-preview':showPreview();break;
     case 'sidebar':state.sidebar=!state.sidebar;$('#sidebar')?.classList.toggle('open');break;
     case 'show-more':state.pageCount+=150;renderItems();break;
     case 'clear-tag-filter':state.tagFilter=null;state.selected.clear();state.lastSelected=null;render();break;
