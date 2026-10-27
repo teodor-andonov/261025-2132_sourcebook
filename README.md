@@ -8,7 +8,7 @@
 Sourcebook lets you point a portable **Catalog** at existing folders, browse everything immediately, generate previews, and selectively enrich resources with metadata — without requiring a proprietary managed library.
 
 **Platforms:** Windows + Android; same product and feature set, responsive layout only.  
-**Status:** V0.0.2 implementation preview (2026-10-27); automated tests run in GitHub Actions, but real-device verification and hosted deployment remain outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
+**Status:** V0.0.4 implementation preview (2026-10-27); automated tests run in GitHub Actions, but real-device verification and hosted deployment remain outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
 
 ## Start here
 
@@ -17,6 +17,14 @@ Sourcebook lets you point a portable **Catalog** at existing folders, browse eve
 - [UX / quality standard](docs/UX_QUALITY_STANDARD.md) — Soft Precision design language, polish rubric and interaction contracts.
 - [Original V0.1 MEGA Plan](docs/PLAN_V0.1.md) — preserved historical initial plan; native-wrapper proposals superseded by PWA-first decision.
 - [Core product decisions](logs/decisions/0001-product-identity.md) and [PWA-first decision](logs/decisions/0002-pwa-first.md).
+
+## Visual snapshots
+
+- [Desktop launcher (1440×900)](screenshots/desktop-launcher.png)
+- [Desktop gallery and inspector (1440×900)](screenshots/desktop-gallery.png)
+- [Screenshot workflow and fixture disclosure](screenshots/README.md)
+
+These are **real Chromium browser captures** of Sourcebook with synthetic local reference files. Screenshots are regenerated when UI code changes; they do not prove physical Android/Windows filesystem compatibility.
 
 ## Product principles
 
