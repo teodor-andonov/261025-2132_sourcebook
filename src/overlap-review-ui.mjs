@@ -30,6 +30,7 @@ export function createOverlapReviewUI({state,openDialog,escapeHTML,icon,toast,er
         state.sourceIndex===index&&state.scanGeneration===generation;
       if(!stillCurrent())throw Error('Catalog or Folder index changed during overlap inspection');
       const files=new Map(backup.files.map(file=>[file.path,file.data]));
+      if(files.has('.sourcebook-pending.json'))throw Error('A Catalog recovery journal appeared during inspection; resolve it before reviewing overlaps');
       const sources=JSON.parse(files.get('sources.json')||'[]');
       const taxonomy=JSON.parse(files.get('tags.json')||'[]');
       const records=backup.files.filter(file=>/^resources\/[a-z0-9_-]{1,100}\.json$/.test(file.path))
