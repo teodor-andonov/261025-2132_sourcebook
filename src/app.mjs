@@ -2,6 +2,7 @@ import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {nextSelectionIndex} from './navigation.mjs';
+import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
 import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts,assertTagSnapshotUnchanged} from './tags.mjs';
 
@@ -310,7 +311,12 @@ function render(){
     ?'<div class="tab-entry"><button class="nav-item tab-nav '+(source.id===state.sourceId?'selected':'')+'" data-source="'+escapeHTML(source.id)+'" title="'+escapeHTML([source.name,...source.parts].join('/'))+'">'+icon('folder',16)+'<span>'+escapeHTML(source.name)+'</span></button><button class="tab-close" data-close-tab="'+escapeHTML(source.id)+'" title="Close '+escapeHTML(source.name)+'" aria-label="Close '+escapeHTML(source.name)+'">'+icon('close',12)+'</button></div>'
     :'<button class="nav-item '+(source.id===state.sourceId?'selected':'')+'" data-source="'+escapeHTML(source.id)+'">'+icon('folder',16)+'<span>'+escapeHTML(source.name)+'</span>'+(!state.handles.has(source.id)?icon('alert',13):'')+'</button>'
   ).join('');
-  const rootSection='<div class="section-head"><span>'+(plain?'TABS':'FOLDERS')+'</span>'+button(plain?'Open folder':'Register folder','plus',plain?'open-folder':'add-source')+'</div><nav>'+sources+'</nav>';
+  const folderItems=plain?sources:catalogFolderTree(state.sources,state.records.values()).map(folder=>{
+    const selected=folder.sourceId===state.sourceId&&folder.path===state.parts.join('/');
+    const offline=!state.handles.has(folder.sourceId);
+    return '<button class="nav-item catalog-folder '+(selected?'selected':'')+'" data-catalog-folder="'+escapeHTML(folder.sourceId)+'" data-folder-path="'+escapeHTML(folder.path)+'" title="'+escapeHTML(folder.name)+'" style="--depth:'+Math.min(folder.depth,10)+'">'+icon('folder',15)+'<span>'+escapeHTML(folder.name)+'</span>'+(offline&&folder.root?icon('alert',12):'')+'</button>';
+  }).join('');
+  const rootSection='<div class="section-head"><span>'+(plain?'TABS':'FOLDERS')+'</span>'+button(plain?'Open folder':'Register folder','plus',plain?'open-folder':'add-source')+'</div><nav>'+folderItems+'</nav>';
   const catalogSection=plain
     ?'<div class="section-head"><span>CATALOG</span></div><nav><button class="nav-item" data-action="open-catalog">'+icon('database',16)+'<span>Open catalog</span></button><button class="nav-item" data-action="create-catalog">'+icon('plus',16)+'<span>New catalog</span></button></nav>'
     :'<div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav>';
@@ -596,6 +602,8 @@ document.addEventListener('click',async event=>{
   if(removeTag){state.tagDraft.splice(Number(removeTag.dataset.removeTag),1);renderTagPills();$('#tag-input')?.focus();return;}
   const crumb=event.target.closest('[data-crumb]');if(crumb){return navigate(state.sourceId,state.parts.slice(0,Number(crumb.dataset.crumb)+1));}
   const closeTab=event.target.closest('[data-close-tab]');if(closeTab){return closePlainFolderTab(closeTab.dataset.closeTab);}
+  const catalogFolder=event.target.closest('[data-catalog-folder]');
+  if(catalogFolder){state.sidebar=false;return navigate(catalogFolder.dataset.catalogFolder,catalogFolderParts(catalogFolder.dataset.folderPath));}
   const source=event.target.closest('[data-source]');if(source){return state.catalog?navigate(source.dataset.source,[]):switchFolderTab(source.dataset.source);}
   const tile=event.target.closest('[data-item]');if(tile){const item=state.items.find(i=>i.id===tile.dataset.item);if(item)select(item,event);return;}
   const action=event.target.closest('[data-action]')?.dataset.action;

@@ -99,3 +99,6 @@
 .folder-context{position:fixed;z-index:120;min-width:158px;background:var(--panel);border:1px solid var(--border);border-radius:7px;box-shadow:var(--shadow);padding:4px}
 .folder-context button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border-radius:5px;padding:8px;font-size:12px}
 .folder-context button:hover,.folder-context button:focus-visible{background:var(--panel2)}
+
+/* Catalog Folders: real, derived relative ancestors; no virtual collections. */
+.catalog-folder{padding-left:calc(7px + var(--depth,0)*13px);font-size:11px}

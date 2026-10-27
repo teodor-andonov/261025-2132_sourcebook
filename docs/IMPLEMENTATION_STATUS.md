@@ -4,6 +4,14 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — Catalog Folder hierarchy for registered roots (V0.0.13 candidate)
+
+- Catalog FOLDERS now lists registered real source roots and automatically derived ancestor folders of objectified resource paths. An objectified `images/gallery/img1.png` appears as `Images / gallery` when `Images` is the registered root; no drive-wide absolute path is displayed or stored.
+- Clicking a catalog folder navigates the actual physical directory through the existing permissioned browser, so unobjectified files remain visible. New resource metadata automatically refreshes the derived sidebar tree on render; no directories are created or moved.
+- Pure model tests cover deduplication, ancestor paths, explicitly objectified directories, corrupt/missing records, multiple roots and a future shortest-relative-path rule for deepest overlapping roots. That rule is **not yet wired into metadata saving**; existing catalog records retain their original source ID.
+- No extra sidebar category or collection database. Sourcebook remains minimal grayscale with one accent. No user files are renamed or mutated by this feature.
+- Bumped service-worker cache to `sourcebook-shell-0.0.13-ta-icons-1` and precached the model. CI and real-device validation are pending; screenshot/Pages publishing remain manual only and were not triggered.
+
 ## 2026-10-27 — PWA identity/cache isolation (V0.0.12 candidate)
 
 - Compared the Mindmap and Sourcebook GitHub Pages manifest/service-worker source. Both previously used a relative manifest `id: "./"`; they are path-distinct when each is served from its own repo path, but explicit distinct IDs remove installation-identity ambiguity.

@@ -1,6 +1,6 @@
 # Sourcebook
 
-> **Implementation underway — V0.0.11 folder-tab cycle (2026-10-27).** Local-folder gallery, portable `.sb` catalogs, stable-ID nested tags and current-folder tag-aware search are implemented. GitHub Pages publishing succeeded on 2026-10-27; subsequent app changes are published **manually only**, by explicit request. Physical Windows/Pixel 8 verification remains outstanding. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+> **Implementation underway — V0.0.13 catalog-folder cycle (2026-10-27).** Local-folder gallery, portable `.sb` catalogs, stable-ID nested tags and current-folder tag-aware search are implemented. GitHub Pages publishing succeeded on 2026-10-27; subsequent app changes are published **manually only**, by explicit request. Physical Windows/Pixel 8 verification remains outstanding. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 
 **A beautiful, fast, local-first file browser with optional portable reference catalogs for ordinary files, folders and URLs.**
@@ -8,7 +8,7 @@
 Sourcebook lets you point a portable **Catalog** at existing folders, browse everything immediately, generate previews, and selectively enrich resources with metadata — without requiring a proprietary managed library.
 
 **Platforms:** Windows + Android; same product and feature set, responsive layout only.  
-**Status:** V0.0.11 folder-tabs implementation candidate (2026-10-27); automated tests run in GitHub Actions, and an earlier hosted release succeeded. Real-device verification remains outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
+**Status:** V0.0.13 catalog-folder implementation candidate (2026-10-27); automated tests run in GitHub Actions, and an earlier hosted release succeeded. Real-device verification remains outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
 
 ## Start here
 

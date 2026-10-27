@@ -624,7 +624,7 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 
 - [ ] Portable *.sb schema v1 and migrations.
 - [ ] Catalog switcher and recent catalogs.
-- [ ] Existing registered physical roots, derived nearest-root ancestor tree, overlapping root resolution and source exclusion.
+- [x] Catalog Folder sidebar shows registered roots and derived ancestor paths from objectified resources (V0.0.13; CI/device validation pending). Overlap resolution at save time and source exclusions remain open.
 - [ ] Device-private source mapping; sync folder reconnect.
 - [ ] Sequential catalog resource allocation, token parser and display clean name.
 - [ ] Safe objectify flow with ask-first/auto/never rename preferences.
