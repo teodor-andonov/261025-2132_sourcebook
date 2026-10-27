@@ -26,5 +26,5 @@ The user also adopted a repository convention: feature branches, PR checks, squa
 
 ## Verification
 
-PR CI: pending until run completes. Do not claim green before confirming the run.
+PR CI: [run 40551202489](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40551202489) completed successfully; Node tests and JavaScript syntax checks both passed. Later documentation-only changes did not alter tested app code.
 Release: only after verified squash merge to `main` through Actions.
