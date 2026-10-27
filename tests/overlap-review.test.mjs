@@ -24,8 +24,8 @@ test('review compares all Catalog records under a verified root mapping, without
   assert.equal(report.counts.groups,1);
   assert.equal(report.counts.differing,1);
   assert.deepEqual(report.groups[0].flags,['Notes differ','Tags differ']);
-  assert.equal(report.groups[0].records[0].sourceName,'References');
-  assert.equal(report.groups[0].records[1].sourceName,'Projects');
+  assert.equal(report.groups[0].records[0].sourceName,'Projects');
+  assert.equal(report.groups[0].records[1].sourceName,'References');
   assert.equal(report.groups[0].records[0].tagPaths.length,1);
   assert.equal(JSON.stringify({records,sources,tags,overlaps}),before);
 });
