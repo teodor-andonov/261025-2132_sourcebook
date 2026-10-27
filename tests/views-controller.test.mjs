@@ -43,6 +43,14 @@ test('View update writes only views.json, verifies readback and retains stable I
   assert.equal(f.disk['views.json'][0].presentation.size,220);
   assert.equal(f.state.viewSaving,false);
 });
+test('updating an unchanged View is a no-op, not a failed transaction',async()=>{
+  const f=fixture();f.ui.open('v1');
+  // Explicit first update canonicalizes legacy defaults, subsequent one is a no-op.
+  assert.equal(await f.ui.update(),true);
+  f.writes.length=0;
+  assert.equal(await f.ui.update(),true);
+  assert.deepEqual(f.writes,[]);
+});
 test('stale views.json refuses an overwrite, and leaves disk untouched',async()=>{
   const f=fixture();f.ui.open('v1');
   f.disk['views.json'][0].query='external edit';

@@ -38,6 +38,12 @@ test('catalog transaction validates only catalog-local paths and distinct JSON s
   assert.throws(()=>validateCatalogChanges([change('tags.json',null,[]),change('tags.json',null,[])]),/Invalid/);
   assert.deepEqual(validateCatalogChanges(metadata),metadata);
 });
+test('catalog identity cannot be changed by a journal',async()=>{
+  const h=root();
+  await assert.rejects(commitCatalogTransaction({handle:h,catalogId:catalog.id,
+    changes:[change('catalog.json',catalog,{...catalog,id:'other'})]}),/cannot change catalog identity/);
+  assert.deepEqual(h.writes,[]);
+});
 test('journal is verified before any metadata write, then removed on success',async()=>{
   const h=root();
   assert.equal(await commitCatalogTransaction({handle:h,catalogId:catalog.id,changes:metadata,transactionId:'tx-1'}),3);

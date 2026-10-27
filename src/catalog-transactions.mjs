@@ -36,7 +36,11 @@ function validateJournal(value,expectedCatalogId){
   if(!value||value.formatVersion!==1||!validId(value.id)||!validId(value.catalogId)||
      (expectedCatalogId&&value.catalogId!==expectedCatalogId)||
      typeof value.createdAt!=='string'||!Number.isFinite(Date.parse(value.createdAt)))throw Error('Invalid or foreign pending catalog transaction');
-  return {...value,changes:validateCatalogChanges(value.changes)};
+  const changes=validateCatalogChanges(value.changes);
+  const identityChange=changes.find(change=>change.path==='catalog.json');
+  if(identityChange&&(identityChange.before?.id!==value.catalogId||identityChange.after?.id!==value.catalogId))
+    throw Error('Pending transaction would change catalog identity');
+  return {...value,changes};
 }
 async function readPath(handle,path){
   let folder=handle,name=path;
@@ -113,6 +117,9 @@ async function applyJournal(handle,catalogId,journal){
 export async function commitCatalogTransaction({handle,catalogId,changes,transactionId=crypto.randomUUID()}){
   if(!handle||!validId(catalogId)||!validId(transactionId))throw Error('Invalid catalog transaction identity');
   const checked=validateCatalogChanges(changes);
+  const identityChange=checked.find(change=>change.path==='catalog.json');
+  if(identityChange&&(identityChange.before?.id!==catalogId||identityChange.after?.id!==catalogId))
+    throw Error('Catalog transaction cannot change catalog identity');
   if(inFlight.has(handle))throw Error('Another catalog write is already in progress');
   inFlight.add(handle);
   try{

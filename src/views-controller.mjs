@@ -56,7 +56,8 @@ export function createViewsController({state,readJson,authorized,render,toast,fo
       if(!cat||cat.id!==state.catalog.id||cat.code!==state.catalog.code)throw Error('Catalog identity changed; reopen it');
       const before=await readJson(state.catalogHandle,'views.json',null),disk=before??[];
       assertViewsSnapshotUnchanged(state.views,disk);
-      const next=edit(validateViews(disk));
+      const normalized=validateViews(disk),next=edit(normalized);
+      if(JSON.stringify(next)===JSON.stringify(normalized)){toast('View unchanged');return true;}
       await commitCatalogEdits([{path:'views.json',before,after:next}]);
       state.views=next;toast('Views saved');return true;
     }catch(e){await refreshPendingCatalog();toast('View save failed: '+(e?.message||String(e)),true);return false;}

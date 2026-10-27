@@ -299,6 +299,7 @@ async function openDirectory(h){
   state.sourceId=state.sources[0]?.id||null;
   state.parts=[];state.items=[];state.selected.clear();state.search='';
   render();
+  if(state.pendingTransaction)toast('Interrupted catalog save detected. Catalog editing is blocked until recovery.',true);
   if(state.sourceId)await navigate(state.sourceId,[]);
 }
 async function addSource(){
@@ -315,7 +316,7 @@ async function addSource(){
     catch(e){console.warn('Source handle will need reconnecting after reload',e);toast('Source added, but this device cannot remember its permission.',true);}
     state.handles.set(item.id,h);
     toast('Added '+h.name);await navigate(item.id,[]);
-  }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
+  }catch(e){await refreshPendingCatalog();render();if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 async function reconnect(){
   if(state.resourceSaving||state.bulkSaving||state.viewSaving)return toast('Finish metadata editing before reconnecting.',true);
