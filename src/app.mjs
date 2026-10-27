@@ -38,6 +38,7 @@ async function commitCatalogEdits(changes){
 async function recoverCatalogSave(){
   if(!state.catalog||state.resourceSaving||state.bulkSaving||state.viewSaving)return;
   state.resourceSaving=true;
+  let recovered=false;
   try{
     await refreshPendingCatalog();
     const pending=state.pendingTransaction;
@@ -56,9 +57,15 @@ async function recoverCatalogSave(){
     if(!state.sources.some(source=>source.id===state.sourceId))state.sourceId=state.sources[0]?.id||null;
     state.parts=[];state.items=[];state.selected.clear();state.activeViewId=null;state.catalogTagView=null;state.tagFilter=null;
     await refreshRecords();invalidateScan();
+    recovered=true;
     toast('Interrupted catalog save completed. Source files unchanged.');
   }catch(error){await refreshPendingCatalog();toast('Recovery failed: '+errorText(error),true);}
-  finally{state.resourceSaving=false;render();}
+  finally{
+    state.resourceSaving=false;
+    if(recovered&&state.sourceId){
+      try{await navigate(state.sourceId,[]);}catch(error){render();toast('Folder needs reconnection: '+errorText(error),true);}
+    }else render();
+  }
 }
 function invalidateScan(){++state.scanGeneration;state.scan=null;state.scanBusy=false;state.scanProgress='';}
 let tabPersistQueue=Promise.resolve();
