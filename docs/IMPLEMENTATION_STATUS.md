@@ -1,3 +1,10 @@
+## 2026-10-27 — Saved Views first vertical slice (V0.0.16)
+
+- **Implemented in source:** catalog-local `views.json` with stable View IDs, optional registered-root/recursive-folder scope, nested tag ID, filename/hashtag query, gallery/list, density and name/type sorting. Catalog sidebar supports Save View, open, explicit Update/Rename and Delete. Results are read-only catalog metadata projections with existing preview and Show in folder actions.
+- View writes request catalog permission, verify catalog identity, reject stale `views.json` snapshots, validate all saved records and read back after writing. Source files are not modified by View operations. Missing registered roots and deleted tag IDs do not widen results.
+- **Scope limitation:** Views currently include cataloged resources only, not all unobjectified files on disk. Queries run over loaded metadata, not a persistent filesystem search index. Metadata writes are optimistic and not crash-atomic or fully race-safe across concurrent editors.
+- **Verification:** query/model tests and new mocked controller integration tests are included. GitHub Actions CI succeeded for the preceding query/model commit (`ad12230`, run `40522343661`) and UI wiring commit (`fd3edba`, run `40522660001`). New integration tests await CI on this documentation/test commit. No screenshots, live deployment, or physical Windows/Android testing were performed.
+
 # Sourcebook implementation status
 
 **Date:** 2026-10-27  
