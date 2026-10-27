@@ -1,7 +1,8 @@
 // Catalog-only bulk tag editing. No ordinary source files are written.
-// Preflight reduces stale edits; multiple JSON writes are not atomic.
+// Preflight checks and a recoverable catalog journal protect interrupted batches.
 import {planResourceIdentity} from './catalog.mjs';
-import {readJson,writeJson} from './storage.mjs';
+import {readJson} from './storage.mjs';
+import {commitCatalogTransaction} from './catalog-transactions.mjs';
 import {normalizeTagLabel,recordTagPaths,ensureTagPath,assertTagSnapshotUnchanged} from './tags.mjs';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const key=(source,path)=>source+'\0'+path;
@@ -67,38 +68,21 @@ export function planBulkTags({catalog,taxonomy,records,items,sourceId,parts,path
 export async function commitBulkTags({handle,plan,expectedCatalog,expectedTaxonomy}){
   const catalog=await readJson(handle,'catalog.json');
   if(!same(catalog,expectedCatalog))throw Error('Catalog changed on disk.');
-  const tags=await readJson(handle,'tags.json',[]);
+  const rawTags=await readJson(handle,'tags.json',null),tags=rawTags??[];
   assertTagSnapshotUnchanged(expectedTaxonomy,tags);
   if(!plan.changes.length)return 0;
   let dir=null;
-  try{dir=await handle.getDirectoryHandle('resources');}catch(e){if(e.name!=='NotFoundError')throw e;}
+  try{dir=await handle.getDirectoryHandle('resources');}
+  catch(e){if(e.name!=='NotFoundError')throw e;}
+  const changes=[];
+  if(!same(plan.taxonomy,tags))changes.push({path:'tags.json',before:rawTags,after:plan.taxonomy});
+  if(plan.nextSequence>(catalog.nextSequence||1))
+    changes.push({path:'catalog.json',before:catalog,after:{...catalog,nextSequence:plan.nextSequence}});
   for(const {before,after} of plan.changes){
     const disk=dir?await readJson(dir,after.id+'.json',null):null;
     if(!same(disk,before))throw Error('Resource changed on disk: '+after.path);
+    changes.push({path:'resources/'+after.id+'.json',before,after});
   }
-  if(!same(plan.taxonomy,tags)){
-    await writeJson(handle,'tags.json',plan.taxonomy);
-    if(!same(await readJson(handle,'tags.json'),plan.taxonomy))throw Error('Could not verify tags.json');
-  }
-  if(plan.nextSequence>(catalog.nextSequence||1)){
-    if(!same(await readJson(handle,'catalog.json'),catalog))throw Error('Catalog sequence changed');
-    const updated={...catalog,nextSequence:plan.nextSequence};
-    await writeJson(handle,'catalog.json',updated);
-    if(!same(await readJson(handle,'catalog.json'),updated))throw Error('Could not verify catalog sequence');
-  }
-  if(!dir)dir=await handle.getDirectoryHandle('resources',{create:true});
-  let completed=0;
-  for(const {before,after} of plan.changes){
-    try{
-      assertTagSnapshotUnchanged(plan.taxonomy,await readJson(handle,'tags.json',[]));
-      if(!same(await readJson(dir,after.id+'.json',null),before))throw Error('Resource changed during save: '+after.path);
-      await writeJson(dir,after.id+'.json',after);
-      if(!same(await readJson(dir,after.id+'.json',null),after))throw Error('Could not verify '+after.path);
-      completed++;
-    }catch(e){
-      const error=new Error('Stopped after '+completed+' of '+plan.changes.length+' verified records: '+e.message);
-      error.completed=completed;throw error;
-    }
-  }
-  return completed;
+  await commitCatalogTransaction({handle,catalogId:catalog.id,changes});
+  return plan.changes.length;
 }

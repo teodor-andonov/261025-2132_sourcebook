@@ -90,6 +90,13 @@ async function applyJournal(handle,catalogId,journal){
     const change=journal.changes[i];
     const current=await readJournal(handle,catalogId);
     if(!current||!same(current,journal))throw Error('Pending transaction changed during save');
+    // Previously applied critical metadata cannot change during a long batch.
+    for(let j=0;j<i;j++){
+      const earlier=journal.changes[j];
+      if(!['tags.json','catalog.json','sources.json','views.json'].includes(earlier.path))continue;
+      if(!same(await readPath(handle,earlier.path),earlier.after))
+        throw Error('Catalog changed during transaction: '+earlier.path);
+    }
     const disk=await readPath(handle,change.path);
     if(same(disk,change.after))continue; // Idempotent replay after interruption.
     if(!same(disk,change.before))throw Error('Catalog changed during transaction: '+change.path);

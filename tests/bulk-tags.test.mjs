@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from '../src/bulk-tags.mjs';
+import {CATALOG_JOURNAL,inspectPendingCatalogTransaction} from '../src/catalog-transactions.mjs';
 const catalog={id:'c',code:'ab',nextSequence:1};
 const items=[{name:'A.png',kind:'file'},{name:'B.png',kind:'file'}];
 const plan=(extra={})=>planBulkTags({catalog,taxonomy:[],records:[],items,sourceId:'root',parts:[],paths:['Architecture / Facades'],mode:'add',siblingNames:items.map(x=>x.name),idFactory:(()=>{let n=0;return ()=>'tag'+(++n);})(),timestamp:'2026-10-27T13:00:00.000Z',...extra});
@@ -40,6 +41,7 @@ class Dir{
       let content;return {write:async x=>{content=x;},close:async()=>{dir.files.set(name,content);dir.writes.push(name);},abort:async()=>{}};
     }};
   }
+  async removeEntry(name){if(!this.files.delete(name))throw Object.assign(Error('missing'),{name:'NotFoundError'});}
   async getDirectoryHandle(name,{create=false}={}){
     if(!this[name]){if(!create)throw Object.assign(new Error('missing'),{name:'NotFoundError'});this[name]=new Dir();}
     return this[name];
@@ -49,7 +51,8 @@ const memory=()=>new Dir(new Map([['catalog.json',JSON.stringify(catalog)],['tag
 test('in-memory filesystem integration verifies taxonomy, allocator and resource writes',async()=>{
   const h=memory(),p=plan();
   assert.equal(await commitBulkTags({handle:h,plan:p,expectedCatalog:catalog,expectedTaxonomy:[]}),2);
-  assert.deepEqual(h.writes,['tags.json','catalog.json']);
+  assert.deepEqual(h.writes,[CATALOG_JOURNAL,'tags.json','catalog.json']);
+  assert.equal(h.files.has(CATALOG_JOURNAL),false);
   assert.deepEqual(h.resources.writes,['ab1.json','ab2.json']);
   assert.deepEqual(JSON.parse(h.resources.files.get('ab2.json')).tagIds,['tag2']);
 });
@@ -76,6 +79,9 @@ test('mid-batch taxonomy change reports partial verified count',async()=>{
     }
     return file;
   };
-  await assert.rejects(commitBulkTags({handle:h,plan:p,expectedCatalog:catalog,expectedTaxonomy:[]}),/Stopped after 1 of 2/);
+  await assert.rejects(commitBulkTags({handle:h,plan:p,expectedCatalog:catalog,expectedTaxonomy:[]}),/Catalog changed during transaction: tags.json/);
   assert.deepEqual(h.resources.writes,['ab1.json']);
+  const pending=await inspectPendingCatalogTransaction(h,catalog.id);
+  assert.deepEqual(pending.conflicts,['tags.json']);
+  assert.equal(h.files.has(CATALOG_JOURNAL),true);
 });
