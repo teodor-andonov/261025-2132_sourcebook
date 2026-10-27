@@ -86,3 +86,21 @@ Typed custom schemas, manual ratings, tag colors, elaborate forms, kanban, AI-ta
 ## Cross-references
 
 [ULTRA Roadmap](ROADMAP_V1_ULTRA.md) · [Implementation status](IMPLEMENTATION_STATUS.md) · [1440×900 screenshots](../screenshots/README.md)
+
+## Overlapping Catalog record review
+
+- Verified registered-root ancestry nominates possible duplicate resource
+  paths; it is **not** proof that descendant file handles are still identical.
+  Before labeling competing Catalog records as the same physical entry, recheck
+  the actual file/directory handles with read permission and `isSameEntry`.
+- The review is explicitly invoked and compares all Catalog metadata records,
+  independently of a saved View's current filters. Show differences in stable
+  Tag IDs/paths, notes, resource kinds and other fields without picking a winner.
+- Different, missing, permission-denied and unverified file handles remain
+  visible and cannot be silently reconciled. Provide a bounded read-only
+  diagnostic export and Show in folder; do not write Catalog JSON, rename
+  ordinary files, or automatically remove competing records.
+- This review is not Syncthing conflict merging, cross-device locking or a
+  guarantee of permanent physical identity. Refresh before making any manual
+  decision; a report is a timestamped snapshot.
+

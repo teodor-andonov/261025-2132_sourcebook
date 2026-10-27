@@ -283,3 +283,13 @@ video.side-preview-media{max-height:240px}
 .catalog-conflict-list>div:last-child{border-bottom:0}
 .catalog-conflict-list code{display:block;white-space:normal;overflow-wrap:anywhere;font-size:11px;color:var(--muted)}
 .catalog-conflict-list strong{font-size:12px}
+
+/* Read-only overlap review stays within the existing compact Catalog dialog. */
+.overlap-review-list{max-height:min(50vh,410px);overflow:auto;border:1px solid var(--border);border-radius:7px}
+.overlap-review-group{padding:8px 10px;border-bottom:1px solid var(--border);overflow-wrap:anywhere}
+.overlap-review-group:last-child{border-bottom:0}
+.overlap-review-group summary{cursor:pointer;font-size:12px;line-height:1.5}
+.overlap-review-record{padding:9px 4px 7px 12px;border-top:1px solid var(--border);font-size:11px;line-height:1.55}
+.overlap-review-record strong{display:block;font-size:12px}
+.overlap-review-record code{display:block;white-space:normal;overflow-wrap:anywhere;color:var(--muted)}
+.overlap-review-record button{margin-top:5px}
