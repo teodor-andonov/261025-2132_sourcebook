@@ -19,4 +19,4 @@ A 50,000-entry root-level index can persist across app restarts, but refreshing 
 
 No automatic watcher or change notifications, no source-file writes, no Catalog JSON changes, no cross-device index sync, no overlap deduplication. Initial complete-root indexing is still required; a missing/deleted subfolder is reported as an error rather than silently erasing its cached entries. The 50,000-entry cap and 32-level traversal limit remain.
 
-PR CI and squash merge are required before claiming completion. No screenshots or visual fixtures were captured or requested. Actual physical Windows/Android testing is still outstanding.
+Initial PR CI passed 179/179 Node tests and JavaScript syntax checks ([run 40586652803](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40586652803)); the final follow-up commit still requires CI before squash merge. No screenshots or visual fixtures were captured or requested. Actual physical Windows/Android testing is still outstanding.

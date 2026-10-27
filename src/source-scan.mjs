@@ -114,7 +114,7 @@ export async function scanRegisteredSubfolder(source,root,folderPath,options={})
   for(const part of parts)directory=await directory.getDirectoryHandle(part);
   if(directory?.kind!=='directory')throw Error('Indexed subfolder is no longer a directory');
   const result=await scanRegisteredFolders([source],new Map([[source.id,directory]]),{
-    ...options,maxDepth:maxDepth-parts.length
+    ...options,maxEntries:Math.min(options.maxEntries??50000,49999),maxDepth:maxDepth-parts.length
   });
   const entries=[{sourceId:source.id,path:folderPath,kind:'directory'},
     ...result.entries.map(entry=>({...entry,path:folderPath+'/'+entry.path}))];
