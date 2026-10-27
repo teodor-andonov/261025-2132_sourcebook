@@ -94,3 +94,31 @@ export async function assertLiveSourceEntry(root,parts,item){
     !await live.isSameEntry(item.handle))throw Error('Source entry was replaced: '+item.name);
   return true;
 }
+
+
+// Targeted, read-only traversal of a known subfolder within a registered root.
+// The root is never replaced by a same-named directory, and a failed traversal
+// never claims that cached siblings (or missing catalog records) are absent.
+export async function scanRegisteredSubfolder(source,root,folderPath,options={}){
+  if(!source||!validPart(source.id)||typeof folderPath!=='string'||!folderPath||
+     folderPath.length>4096||folderPath.split('/').some(part=>!validPart(part)))
+    throw Error('Invalid indexed subfolder path');
+  if(root?.kind!=='directory'||typeof root.getDirectoryHandle!=='function'||typeof root.queryPermission!=='function')
+    throw Error('Registered Catalog Folder is disconnected');
+  if(await root.queryPermission({mode:'read'})!=='granted')throw Error('Registered Catalog Folder read permission unavailable');
+  const parts=folderPath.split('/');
+  const maxDepth=options.maxDepth??32;
+  if(!Number.isInteger(maxDepth)||maxDepth<1||parts.length>=maxDepth)
+    throw Error('Indexed subfolder exceeds scan depth limit');
+  let directory=root;
+  for(const part of parts)directory=await directory.getDirectoryHandle(part);
+  if(directory?.kind!=='directory')throw Error('Indexed subfolder is no longer a directory');
+  const result=await scanRegisteredFolders([source],new Map([[source.id,directory]]),{
+    ...options,maxEntries:Math.min(options.maxEntries??50000,49999),maxDepth:maxDepth-parts.length
+  });
+  const entries=[{sourceId:source.id,path:folderPath,kind:'directory'},
+    ...result.entries.map(entry=>({...entry,path:folderPath+'/'+entry.path}))];
+  const complete=result.completeRootIds.includes(source.id)&&!result.cancelled;
+  return {...result,entries,completeRootIds:[],
+    completeSubtreePaths:complete?[{sourceId:source.id,path:folderPath}]:[]};
+}

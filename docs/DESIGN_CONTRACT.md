@@ -74,6 +74,7 @@ Typed custom schemas, manual ratings, tag colors, elaborate forms, kanban, AI-ta
 - Persisted Folder snapshots must be identity-bound to the original directory handle and revalidated with `isSameEntry` before use. Display restored results as **Cached · refresh**, never as live filesystem truth.
 - Missing/type-drift labels require a completed scan in the current session. Partial, disconnected, cancelled or quota-failed refreshes must not silently replace a known complete snapshot or imply that files are absent.
 - A **Clear** action removes only the device's cached index after confirmation. Neither it nor refresh may touch source files, Tag IDs or Views JSON. Root-granular refresh is not a filesystem watcher.
+- An already-indexed subfolder may be explicitly refreshed by relative path without traversing siblings. Recheck physical root identity before replacing any cached entries. A complete subtree scan is authoritative only within its own path; never promote sibling/root freshness or infer missing/type-changed records outside that path. A cancelled, denied or partial subtree refresh must preserve the previous cache. After restart, all cached subtree entries are stale until refreshed again.
 
 ## Cross-references
 
