@@ -89,3 +89,17 @@ test('invalid scans cannot poison existing snapshots',()=>{
   assert.throws(()=>refreshSourceIndex(index,scan([],['a']),['a','a'],map),/targets/);
   assert.ok(SOURCE_INDEX_LIMIT>=50000);
 });
+
+test('stale table metadata explicitly labels restored cached entries',async()=>{
+  const {viewTableMetadata}=await import('../src/view-layout.mjs');
+  assert.equal(viewTableMetadata({name:'one.pdf',kind:'file',unobjectified:true,staleIndex:true}).status,'Cached · refresh');
+  assert.equal(viewTableMetadata({name:'one.pdf',kind:'file',unobjectified:true,staleIndex:false}).status,'Not cataloged');
+  assert.equal(viewTableMetadata({name:'one.pdf',kind:'file',missing:true,staleIndex:true}).status,'Missing');
+});
+test('partial refresh of another root never deletes its previously indexed entries',()=>{
+  let index=refreshSourceIndex(emptySourceIndex('cat'),scan([file('a','one'),file('b','two')],['a','b']),['a','b'],map,100).index;
+  const updated=refreshSourceIndex(index,scan([file('b','incomplete')],[],['disconnected']),['b'],map,200);
+  assert.deepEqual(updated.index.roots.find(r=>r.sourceId==='b').entries,[file('b','two')]);
+  assert.deepEqual(updated.index.roots.find(r=>r.sourceId==='a').entries,[file('a','one')]);
+  assert.deepEqual(sourceIndexOverlay(updated.index,{freshRootIds:['a'],partialRootIds:updated.partialRootIds}).completeRootIds,['a']);
+});
