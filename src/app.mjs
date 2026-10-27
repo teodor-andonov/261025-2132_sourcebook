@@ -28,7 +28,7 @@ const state={
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
   tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false,resourceSaving:false,
-  scan:null,scanBusy:false,scanGeneration:0,scanProgress:'',sourceIndex:null,indexFreshIds:new Set(),indexProblem:'',pendingTransaction:null,catalogConflicts:null,conflictReport:null,backupBusy:false,backupRestorePlan:null,backupRestoreSource:null
+  scan:null,scanBusy:false,scanCommitting:false,scanGeneration:0,scanProgress:'',sourceIndex:null,indexFreshIds:new Set(),indexProblem:'',pendingTransaction:null,catalogConflicts:null,conflictReport:null,backupBusy:false,backupRestorePlan:null,backupRestoreSource:null
 };
 const viewsUI=createViewsController({state,readJson,authorized,render,toast,forgetImages,navigate,refreshRecords,commitCatalogEdits,refreshPendingCatalog});
 async function refreshPendingCatalog(){
@@ -212,7 +212,7 @@ async function restoreMissingBackupRecords(){
   }
 }
 function invalidateScan(){
-  ++state.scanGeneration;state.scan=null;state.scanBusy=false;state.scanProgress='';
+  ++state.scanGeneration;state.scan=null;state.scanBusy=false;state.scanCommitting=false;state.scanProgress='';
   state.sourceIndex=null;state.indexFreshIds=new Set();state.indexProblem='';
 }
 // Cache is device-local and never copied into .sb. A restored snapshot is
@@ -620,7 +620,7 @@ async function refreshCatalogTagView(){
   }catch(error){toast(errorText(error),true);}
 }
 function scanStatus(){
-  if(state.scanBusy)return state.scanProgress||'Scanning folders…';
+  if(state.scanBusy)return state.scanCommitting?'Saving device index…':state.scanProgress||'Scanning folders…';
   if(state.indexProblem)return state.indexProblem;
   if(!state.scan)return 'Cataloged only · index not built';
   const fresh=state.scan.completeRootIds.length,stale=state.scan.staleRootIds?.length||0;
@@ -632,7 +632,7 @@ async function runCatalogScan(rootId=''){
   const selected=rootId?state.sources.filter(s=>s.id===rootId):state.sources;
   if(!selected.length)return toast('No Catalog Folder selected.',true);
   const generation=++state.scanGeneration,catalogId=state.catalog.id;
-  state.scanBusy=true;state.scanProgress='Scanning folders…';state.indexProblem='';render();
+  state.scanBusy=true;state.scanCommitting=false;state.scanProgress='Scanning folders…';state.indexProblem='';render();
   try{
     const scan=await scanRegisteredFolders(selected.map(s=>({id:s.id,name:s.name})),new Map(state.handles),{
       isCancelled:()=>generation!==state.scanGeneration||state.catalog?.id!==catalogId,
@@ -643,6 +643,7 @@ async function runCatalogScan(rootId=''){
       }
     });
     if(generation!==state.scanGeneration||scan.cancelled)return;
+    state.scanCommitting=true;render(); // Persistence is no longer cancellable.
     const previous=state.sourceIndex||emptySourceIndex(catalogId);
     const result=refreshSourceIndex(previous,scan,selected.map(s=>s.id),state.handles);
     const fresh=new Set(state.indexFreshIds);
@@ -664,14 +665,15 @@ async function runCatalogScan(rootId=''){
     const summary=changes.length?' · '+changes.reduce((n,x)=>n+x.added,0)+' added, '+
       changes.reduce((n,x)=>n+x.removed,0)+' removed, '+
       changes.reduce((n,x)=>n+x.typeChanged,0)+' type changed':'';
-    toast((saved?'Index refreshed':'Index not saved')+summary+
+    toast((!result.completeRootIds.length?'Partial scan · cache unchanged':saved?'Index refreshed':'Index not saved')+summary+
       (scan.problems.length?' · '+scan.problems.length+' issue(s)':''),!saved||!!scan.problems.length);
   }catch(error){if(generation===state.scanGeneration)toast('Index refresh failed: '+errorText(error),true);}
-  finally{if(generation===state.scanGeneration){state.scanBusy=false;state.scanProgress='';render();}}
+  finally{if(generation===state.scanGeneration){state.scanBusy=false;state.scanCommitting=false;state.scanProgress='';render();}}
 }
 function cancelCatalogScan(){
   if(!state.scanBusy)return;
-  ++state.scanGeneration;state.scanBusy=false;state.scanProgress='';
+  if(state.scanCommitting)return toast('Device index update is finishing; it cannot be cancelled now.');
+  ++state.scanGeneration;state.scanBusy=false;state.scanCommitting=false;state.scanProgress='';
   render();toast('Scan cancelled; previous index retained.');
 }
 function render(){
@@ -704,7 +706,7 @@ function render(){
   const columnsButton=state.view==='table'?'<button class="text-button" data-action="table-columns" title="Choose table columns" aria-label="Choose table columns">'+icon('table',15)+' <span>Columns</span></button>':'';
   const scanControls=state.activeViewId?'<select class="sort-control" id="scan-root" aria-label="Choose Folder to index" '+(state.scanBusy?'disabled':'')+'><option value="">All Folders</option>'+
     state.sources.map(s=>'<option value="'+escapeHTML(s.id)+'">'+escapeHTML(s.name||'Folder')+'</option>').join('')+'</select>'+
-    '<button class="text-button" data-action="'+(state.scanBusy?'cancel-scan':'scan-folders')+'" title="Read-only refresh of the selected Catalog Folder(s)">'+icon(state.scanBusy?'close':'search',15)+' <span>'+(state.scanBusy?'Cancel':state.sourceIndex?.roots.length?'Refresh':'Index')+'</span></button>'+
+    '<button class="text-button" data-action="'+(state.scanBusy?'cancel-scan':'scan-folders')+'" '+(state.scanCommitting?'disabled':'')+' title="Read-only refresh of the selected Catalog Folder(s)">'+icon(state.scanBusy?'close':'search',15)+' <span>'+(state.scanCommitting?'Saving':state.scanBusy?'Cancel':state.sourceIndex?.roots.length?'Refresh':'Index')+'</span></button>'+
     (state.sourceIndex?.roots.length&&!state.scanBusy?'<button class="text-button" data-action="clear-source-index" title="Clear device-local index">'+icon('close',13)+' <span>Clear</span></button>':'')+
     '<span class="scan-status" id="scan-status" title="Device-local snapshot, not a live filesystem watcher. Cached roots cannot assert missing files.">'+escapeHTML(scanStatus())+'</span>':'';
   const sortControl=plain?'':'<select id="sort-mode" class="sort-control" aria-label="Sort"><option value="name" '+(state.sort==='name'?'selected':'')+'>Name ↑</option><option value="name-desc" '+(state.sort==='name-desc'?'selected':'')+'>Name ↓</option><option value="type" '+(state.sort==='type'?'selected':'')+'>Type</option><option value="location" '+(state.sort==='location'?'selected':'')+'>Location</option></select>';
