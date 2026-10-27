@@ -22,8 +22,10 @@ export function normalizeView(value){
   const query=value.query??'';
   if(typeof query!=='string'||query.length>200||/[\u0000-\u001f]/.test(query))throw Error('Invalid View query');
   const p=value.presentation;
-  if(!p||!['gallery','list'].includes(p.mode)||!Number.isInteger(p.size)||p.size<110||p.size>280||!['name','name-desc','type'].includes(p.sort))throw Error('Invalid View presentation');
-  return {id,name:name.trim(),sourceId,folderPath,tagId:tagIds[0]??null,tagIds:[...tagIds],tagMode,query,fileType,pinned,presentation:{mode:p.mode,size:p.size,sort:p.sort}};
+  if(!p||!['gallery','list','table'].includes(p.mode)||!Number.isInteger(p.size)||p.size<110||p.size>280||!['name','name-desc','type','location'].includes(p.sort))throw Error('Invalid View presentation');
+  const groupBy=p.groupBy??'none';
+  if(!['none','source','folder','type'].includes(groupBy))throw Error('Invalid View grouping');
+  return {id,name:name.trim(),sourceId,folderPath,tagId:tagIds[0]??null,tagIds:[...tagIds],tagMode,query,fileType,pinned,presentation:{mode:p.mode,size:p.size,sort:p.sort,groupBy}};
 }
 export function validateViews(value){
   if(!Array.isArray(value)||value.length>200)throw Error('Invalid views.json');

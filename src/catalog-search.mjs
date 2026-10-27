@@ -11,11 +11,12 @@ export function catalogFileType(item){
   return 'other';
 }
 export function sortCatalogResults(items,mode='name'){
-  if(!['name','name-desc','type'].includes(mode))throw Error('Invalid sort mode');
+  if(!['name','name-desc','type','location'].includes(mode))throw Error('Invalid sort mode');
   const cmp=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'});
   const ext=x=>x.kind==='directory'?'':x.name.includes('.')?x.name.split('.').at(-1).toLowerCase():'';
   return [...items].sort((a,b)=>{
-    const primary=mode==='type'?cmp(ext(a),ext(b)):mode==='name-desc'?cmp(b.name,a.name):cmp(a.name,b.name);
+    const loc=x=>String(x.location||x.sourceName||'')+' / '+(Array.isArray(x.parts)?x.parts.join('/'):'');
+    const primary=mode==='type'?cmp(ext(a),ext(b)):mode==='location'?cmp(loc(a),loc(b)):mode==='name-desc'?cmp(b.name,a.name):cmp(a.name,b.name);
     return primary||cmp(a.name,b.name)||cmp(a.sourceName,b.sourceName)||cmp(a.sourceId,b.sourceId)||cmp(a.path,b.path);
   });
 }

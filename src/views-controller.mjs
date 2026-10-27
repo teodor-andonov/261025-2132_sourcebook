@@ -12,7 +12,7 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
     if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving)return;
     const view=state.views.find(v=>v.id===id);if(!view)return toast('View not found',true);
     state.activeViewId=id;state.catalogTagView=null;state.tagFilter=null;state.search=view.query;
-    state.view=view.presentation.mode;state.size=view.presentation.size;state.sort=view.presentation.sort;state.fileType=view.fileType;
+    state.view=view.presentation.mode;state.size=view.presentation.size;state.sort=view.presentation.sort;state.groupBy=view.presentation.groupBy??'none';state.fileType=view.fileType;
     state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;state.selectionMode=false;state.pageCount=150;
     ++state.request;forgetImages();state.loading=false;state.items=results(view);render();
   }
@@ -44,7 +44,7 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
       folderPath:base?base.folderPath:state.catalogTagView?'':state.parts.join('/'),
       tagId:tags.tagIds[0]??null,tagIds:[...tags.tagIds],tagMode:tags.tagMode,
       query:state.search,fileType:state.fileType,
-      presentation:{mode:state.view,size:state.size,sort:state.sort}};
+      presentation:{mode:state.view,size:state.size,sort:state.sort,groupBy:state.groupBy??'none'}};
   }
   async function mutate(edit){
     if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving)return false;

@@ -1,3 +1,13 @@
+## 2026-10-27 — Saved Views table and grouping presentation (V0.0.20 candidate)
+
+- Added **Table** as a third presentation alongside Gallery and List, available from the same top-bar view controls. Table rows show Name, Type, Location, Tags and the explicit read-only scan Status; selectable rows preserve the existing inspector, reveal and preview behaviours. Column headings can sort by Name, Type or Location using the shared sorter.
+- Active saved Views have a compact **Group by** selector: None, Source, physical Folder or file extension/Folder Type. Grouped Gallery/List sections and Table heading rows use the same read-only grouping model, preserving the ordering within groups.
+- View presentation now persists `mode: 'table'`, `sort: 'location'` and optional `groupBy` in the existing `views.json` schema. Older Views lacking `groupBy` normalize to `none` without implicit migration writes or changing stable IDs. View open restores its layout/group; explicit Update persists changes.
+- Added pure presentation grouping/table-metadata tests and View model/controller tests for restoration, persistence, legacy defaults, invalid options and deterministic location sorting. No file-system mutations, catalog memberships, or separate Collection/Smart Folder types.
+- Kept the neutral compact visual system and one configurable accent. The existing scan overlay remains read-only and supports table statuses for missing/unobjectified/type-changed items. Service-worker shell bumped to `sourcebook-shell-0.0.20-view-table-grouping`.
+- Screenshots and Pages publishing remain manual-only and **were not triggered**. Full GitHub Actions checks, browser interaction testing and physical Windows/Android acceptance are **pending at commit time**.
+- Next: table column preferences, richer filters/query builder and defensive reconciliation of multi-writer catalog JSON.
+
 ## 2026-10-27 — Read-only Catalog Folder scan and safer source bindings (V0.0.19)
 
 - **Implemented in source:** Active saved Views expose a compact **Scan** action. It recursively enumerates already-granted registered Catalog Folders (no permission prompt, no file reads or writes), skips nested `.sb` directories, yields periodically, reports progress and supports cancellation. Each scan is limited to 50,000 entries and depth 32; incomplete/denied/disconnected roots are explicitly partial, not falsely treated as empty.

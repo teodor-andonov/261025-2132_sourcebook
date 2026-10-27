@@ -132,3 +132,18 @@ test('View controller includes scanned ordinary files only when filters allow th
   assert.deepEqual(f.state.items.map(x=>x.name),['beam.png','loose.pdf','roof.png']); // Search is applied by the shared browser surface.
   assert.deepEqual(f.writes,[]);
 });
+
+test('table layout and grouping are restored on View open and saved by Update',async()=>{
+  const f=fixture();
+  f.state.views[0].presentation={mode:'table',size:140,sort:'location',groupBy:'source'};
+  f.disk['views.json']=structuredClone(f.state.views);
+  f.ui.open('v1');
+  assert.equal(f.state.view,'table');
+  assert.equal(f.state.groupBy,'source');
+  assert.equal(f.state.sort,'location');
+  f.state.groupBy='type';
+  assert.equal(await f.ui.update(),true);
+  assert.equal(f.disk['views.json'][0].presentation.groupBy,'type');
+  assert.equal(f.disk['views.json'][0].presentation.mode,'table');
+  assert.deepEqual(f.writes,['views.json']);
+});

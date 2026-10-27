@@ -121,3 +121,20 @@ test('legacy single-tag View canonicalization is stable with multiple new tags',
   assert.throws(()=>normalizeView({...before,tagMode:'xor'}),/tag logic/);
   assert.throws(()=>normalizeView({...before,tagIds:Array.from({length:17},(_,i)=>'id'+i)}),/tag IDs/);
 });
+
+test('table mode, grouping and location sort are saved and backwards compatible',()=>{
+  const legacy=normalizeView({...spec,id:'legacy'});
+  assert.equal(legacy.presentation.groupBy,'none');
+  assert.doesNotThrow(()=>assertViewsSnapshotUnchanged([legacy],[{...spec,id:'legacy'}]));
+  const view=normalizeView({...spec,id:'v2',presentation:{mode:'table',size:150,sort:'location',groupBy:'folder'}});
+  assert.deepEqual(view.presentation,{mode:'table',size:150,sort:'location',groupBy:'folder'});
+  const updated=updateSavedView([view],'v2',{presentation:{mode:'list',size:160,sort:'name',groupBy:'source'}});
+  assert.equal(updated[0].presentation.groupBy,'source');
+  assert.throws(()=>normalizeView({...spec,id:'bad',presentation:{mode:'grid',size:150,sort:'name'}}),/presentation/);
+  assert.throws(()=>normalizeView({...spec,id:'bad',presentation:{mode:'table',size:150,sort:'name',groupBy:'unknown'}}),/grouping/);
+});
+test('location sort is deterministic across registered roots and folder paths',()=>{
+  const r=catalogQueryResults(records,roots,roof.tags,{sort:'location'});
+  assert.deepEqual(r.map(x=>x.path),['outside.png','gallery/beam.png','gallery/roof.png','notes/beam.pdf']);
+  assert.deepEqual(sortCatalogResults([...r].reverse(),'location').map(x=>x.id),r.map(x=>x.id));
+});
