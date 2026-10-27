@@ -27,3 +27,7 @@ The existing explicit View scan was ephemeral. Every restart discarded the disco
 - Two different registered root IDs may still point at overlapping physical trees; physical deduplication remains unresolved.
 - A complete scan is only a point-in-time observation; external changes after the scan are not observed until the next refresh.
 - Multi-editor Catalog JSON reconciliation and physical-device acceptance remain separate open tasks.
+
+## Verified after implementation — 2026-10-27 21:34 Europe/Madrid
+
+The final feature code commit `82ba71e` passed [Sourcebook PR CI run 40579151371](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40579151371): **169/169 Node tests passed**, plus JavaScript syntax checks. The initial feature-code run `40578975524` also passed. The last two fixes make IndexedDB persistence noncancellable once committing and guard clearing against catalog-switch races. Documentation-only edits still require final PR CI before squash merge. No screenshots or device testing.
