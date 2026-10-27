@@ -4,13 +4,15 @@ import {planResourceIdentity} from './catalog.mjs';
 import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.mjs';
 import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
-import {catalogTagResults} from './catalog-search.mjs';
+import {catalogTagResults,sortCatalogResults} from './catalog-search.mjs';
+import {validateViews} from './views.mjs';
+import {createViewsController} from './views-controller.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
 import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts,assertTagSnapshotUnchanged} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
-  catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,
+  catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,activeViewId:null,views:[],viewSaving:false,sort:'name',
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,
   search:'', view:localStorage.getItem('sb-view')||'gallery',
   size:Number(localStorage.getItem('sb-size'))||164,
@@ -18,6 +20,7 @@ const state={
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
   tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false
 };
+const viewsUI=createViewsController({state,readJson,writeJson,authorized,render,toast,forgetImages,navigate,refreshRecords});
 let tabPersistQueue=Promise.resolve();
 const glyphs={
   book:'M3 3h7v18H3z M10 7h4v14h-4z M16 4l5 17 M16 5l3-1',
@@ -116,7 +119,7 @@ function rememberFolderTabs(){
   return tabPersistQueue;
 }
 async function setPlainFolder(handle,remember=true){
-  if(state.bulkSaving)throw Error('Finish bulk tagging before switching folders.');
+  if(state.bulkSaving||state.viewSaving)throw Error('Finish catalog editing before switching folders.');
   plainRoot(handle);
   const stayingPlain=!state.catalog;
   const restored=stayingPlain?null:loadFolderTabs(await getLocal('folder-tabs-v1').catch(()=>null));
@@ -128,7 +131,7 @@ async function setPlainFolder(handle,remember=true){
     state.sources=[];state.handles.clear();state.records.clear();state.taxonomy=[];state.tagFilter=null;
     for(const existing of tabs)state.handles.set(existing.id,existing.handle);
   }
-  state.catalog=null;state.catalogHandle=null;state.catalogTagView=null;
+  state.catalog=null;state.catalogHandle=null;state.catalogTagView=null;state.activeViewId=null;state.views=[];
   state.sources=[...tabs,tab];state.handles.set(tab.id,handle);
   state.sourceId=tab.id;state.parts=[];state.selected.clear();state.search='';state.sidebar=false;
   if(remember)void rememberFolderTabs();
@@ -207,14 +210,14 @@ async function refreshRecords(){
   state.records=records;
 }
 async function openDirectory(h){
-  if(state.bulkSaving)throw Error('Finish bulk tagging before switching catalogs.');
+  if(state.bulkSaving||state.viewSaving)throw Error('Finish catalog editing before switching catalogs.');
   const config=await readJson(h,'catalog.json');
   if(!config?.id||!CODE_PATTERN.test(config.code))throw Error('Choose a .sb directory containing catalog.json.');
   state.catalog=config;state.catalogHandle=h;
   state.sources=await readJson(h,'sources.json',[]);
   const savedTags=await readJson(h,'tags.json',[]);
   if(!Array.isArray(savedTags))throw Error('Invalid tags.json catalog taxonomy');
-  state.taxonomy=savedTags;state.tagFilter=null;state.catalogTagView=null;
+  state.taxonomy=savedTags;state.views=validateViews(await readJson(h,'views.json',[]));state.activeViewId=null;state.tagFilter=null;state.catalogTagView=null;
   state.handles.clear();state.records.clear();
   for(const s of state.sources){
     try{const v=await getLocal('source:'+config.id+':'+s.id);if(v)state.handles.set(s.id,v);}
@@ -264,8 +267,8 @@ async function reconnect(){
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 async function navigate(id,parts,historyPosition=null){
-  if(state.bulkSaving)return toast('Finish bulk tagging before navigating.',true);
-  state.catalogTagView=null;
+  if(state.bulkSaving||state.viewSaving)return toast('Finish catalog editing before navigating.',true);
+  state.catalogTagView=null;state.activeViewId=null;
   state.sourceId=id;state.parts=parts;state.search='';state.selected.clear();state.pageCount=150;
   state.tagDraftItem=null;state.tagFilter=null;state.selectionMode=false;
   const request=++state.request;
@@ -327,10 +330,10 @@ async function revealCatalogResult(item){
   else toast('Resource is no longer present at its catalog path.',true);
 }
 function openCatalogTagView(path){
-  if(!state.catalog||state.bulkSaving)return;
+  if(!state.catalog||state.bulkSaving||state.viewSaving)return;
   if(state.catalogTagView===path){void navigate(state.sourceId,[...state.parts]);return;}
   try{
-    state.catalogTagView=path;state.tagFilter=null;state.search='';state.selected.clear();
+    state.catalogTagView=path;state.activeViewId=null;state.tagFilter=null;state.search='';state.selected.clear();
     state.lastSelected=null;state.tagDraftItem=null;state.tagDraft=[];state.selectionMode=false;state.pageCount=150;
     ++state.request;forgetImages();state.loading=false;
     state.items=catalogTagResults([...state.records.values()],state.sources,state.taxonomy,path).map(item=>({...item,catalogResult:true,handle:null}));
@@ -338,10 +341,10 @@ function openCatalogTagView(path){
   }catch(error){toast(errorText(error),true);}
 }
 async function refreshCatalogTagView(){
-  if(!state.catalogTagView)return;
+  if(!viewsUI.inResults())return;
   try{
     await refreshRecords();
-    state.items=catalogTagResults([...state.records.values()],state.sources,state.taxonomy,state.catalogTagView).map(item=>({...item,catalogResult:true,handle:null}));
+    state.items=(state.activeViewId?[]:catalogTagResults([...state.records.values()],state.sources,state.taxonomy,state.catalogTagView).map(item=>({...item,catalogResult:true,handle:null})));if(state.activeViewId){viewsUI.open(state.activeViewId);return;}
     state.selected.clear();render();
   }catch(error){toast(errorText(error),true);}
 }
@@ -349,35 +352,38 @@ function render(){
   $('#folder-context')?.remove();
   if(!state.catalog&&!state.sourceId)return landing();
   const plain=!state.catalog;
-  document.title=(state.catalogTagView?'#'+state.catalogTagView:state.parts.at(-1)||currentSource()?.name||state.catalog?.name||'Sourcebook')+' — Sourcebook';
+  document.title=(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||state.catalog?.name||'Sourcebook')+' — Sourcebook';
   const sources=state.sources.map(source=>plain
     ?'<div class="tab-entry"><button class="nav-item tab-nav '+(source.id===state.sourceId?'selected':'')+'" data-source="'+escapeHTML(source.id)+'" title="'+escapeHTML([source.name,...source.parts].join('/'))+'">'+icon('folder',16)+'<span>'+escapeHTML(source.name)+'</span></button><button class="tab-close" data-close-tab="'+escapeHTML(source.id)+'" title="Close '+escapeHTML(source.name)+'" aria-label="Close '+escapeHTML(source.name)+'">'+icon('close',12)+'</button></div>'
     :'<button class="nav-item '+(source.id===state.sourceId?'selected':'')+'" data-source="'+escapeHTML(source.id)+'">'+icon('folder',16)+'<span>'+escapeHTML(source.name)+'</span>'+(!state.handles.has(source.id)?icon('alert',13):'')+'</button>'
   ).join('');
   const folderItems=plain?sources:catalogFolderTree(state.sources,state.records.values()).map(folder=>{
-    const selected=folder.sourceId===state.sourceId&&folder.path===state.parts.join('/');
+    const selected=!viewsUI.inResults()&&folder.sourceId===state.sourceId&&folder.path===state.parts.join('/');
     const offline=!state.handles.has(folder.sourceId);
     return '<button class="nav-item catalog-folder '+(selected?'selected':'')+'" data-catalog-folder="'+escapeHTML(folder.sourceId)+'" data-folder-path="'+escapeHTML(folder.path)+'" title="'+escapeHTML(folder.name)+'" style="--depth:'+Math.min(folder.depth,10)+'">'+icon('folder',15)+'<span>'+escapeHTML(folder.name)+'</span>'+(offline&&folder.root?icon('alert',12):'')+'</button>';
   }).join('');
   const rootSection='<div class="section-head"><span>'+(plain?'TABS':'FOLDERS')+'</span>'+button(plain?'Open folder':'Register folder','plus',plain?'open-folder':'add-source')+'</div><nav>'+folderItems+'</nav>';
+  const viewRows=state.views.map(v=>'<div class="view-row"><button class="nav-item '+(state.activeViewId===v.id?'selected':'')+'" data-open-view="'+escapeHTML(v.id)+'" title="'+escapeHTML(v.name)+'">'+icon('bookmark',15)+'<span>'+escapeHTML(v.name)+'</span></button><button class="view-delete" data-delete-view="'+escapeHTML(v.id)+'" aria-label="Delete View '+escapeHTML(v.name)+'">'+icon('close',12)+'</button></div>').join('');
   const catalogSection=plain
     ?'<div class="section-head"><span>CATALOG</span></div><nav><button class="nav-item" data-action="open-catalog">'+icon('database',16)+'<span>Open catalog</span></button><button class="nav-item" data-action="create-catalog">'+icon('plus',16)+'<span>New catalog</span></button></nav>'
-    :'<div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav>';
+    :'<div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="section-head"><span>VIEWS</span>'+button('Save View','plus','save-view')+'</div><nav>'+viewRows+'</nav>';
   const header='<button class="catalog-chip" data-action="home">'+icon(plain?'folder':'database',16)+'<span>'+escapeHTML(plain?'Browse':state.catalog.name)+'</span>'+icon('chevron',13)+'</button>';
-  const selectionActions=plain||state.catalogTagView?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
-  const fileActions=plain||state.catalogTagView?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
+  const selectionActions=plain||viewsUI.inResults()?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
+  const fileActions=plain||viewsUI.inResults()?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
+  const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
+  const sortControl=plain?'':'<select id="sort-mode" class="sort-control" aria-label="Sort"><option value="name" '+(state.sort==='name'?'selected':'')+'>Name ↑</option><option value="name-desc" '+(state.sort==='name-desc'?'selected':'')+'>Name ↓</option><option value="type" '+(state.sort==='type'?'selected':'')+'>Type</option></select>';
   const activeTab=activeFolderTab();
   const backward=activeTab&&activeTab.position>0;
   const nextward=activeTab&&activeTab.position<activeTab.history.length-1;
   const historyControls=plain
     ?'<button class="icon-button" title="Back" aria-label="Back" data-action="tab-back" '+(backward?'':'disabled')+'>'+icon('back')+'</button><button class="icon-button" title="Forward" aria-label="Forward" data-action="tab-forward" '+(nextward?'':'disabled')+'>'+icon('forward')+'</button>'
     :'';
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(state.catalogTagView?'#'+state.catalogTagView.replaceAll(' / ','/'):state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
-  $('#breadcrumbs').innerHTML=state.catalogTagView?'<button data-action="exit-catalog-tag">'+icon('database',16)+' Catalog</button><span class="crumb">'+icon('chevron',13)+'</span><button>'+icon('tag',14)+' '+escapeHTML(state.catalogTagView)+'</button>':'<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+sortControl+viewActions+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
+  $('#breadcrumbs').innerHTML=viewsUI.inResults()?'<button data-action="exit-catalog-tag">'+icon('database',16)+' Catalog</button><span class="crumb">'+icon('chevron',13)+'</span><button>'+icon('tag',14)+' '+escapeHTML(viewsUI.title())+'</button>':'<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
 function visibleItems(){
-  if(state.catalogTagView)return state.items.filter(item=>matchesResourceSearch(item.name,recordTagPaths(item.record,state.taxonomy),state.search));
+  if(viewsUI.inResults())return sortCatalogResults(state.items.filter(item=>matchesResourceSearch(item.name,recordTagPaths(item.record,state.taxonomy),state.search)),state.sort);
   const query=state.search.trim();
   const plainQuery=query&&!query.startsWith('#')?query.toLocaleLowerCase():null;
   // Resolve catalog records once per render, rather than scanning all records per item.
@@ -398,13 +404,13 @@ function visibleItems(){
 function renderItems(){
   const host=$('#items');if(!host)return;
   state.observer?.disconnect();state.observer=null;
-  host.className=state.view+(state.catalogTagView?' catalog-results':'');
+  host.className=state.view+(viewsUI.inResults()?' catalog-results':'');
   host.style.setProperty('--size',state.size+'px');
   const items=visibleItems();
   $('#item-count').textContent=items.length+(state.loading?'+':'')+' items';
-  if(!state.catalogTagView&&!state.sourceId){host.innerHTML='<div class="empty">'+icon('folder',38)+'<h3>Your files, one click away</h3><p>Choose a folder to browse.</p><button class="primary" data-action="'+(state.catalog?'add-source':'open-folder')+'">Open folder</button></div>';return;}
-  if(!state.catalogTagView&&!state.handles.has(state.sourceId)){host.innerHTML='<div class="empty">'+icon('alert',35)+'<h3>Reconnect your folder</h3><p>Renew this folder permission to continue.</p><button class="primary" data-action="reconnect">Reconnect source</button></div>';return;}
-  if(!items.length){host.innerHTML='<div class="empty">'+icon('folder',32)+'<h3>'+(state.loading?'Reading files…':state.search||state.tagFilter||state.catalogTagView?'No matches':'Nothing here yet')+'</h3></div>';return;}
+  if(!viewsUI.inResults()&&!state.sourceId){host.innerHTML='<div class="empty">'+icon('folder',38)+'<h3>Your files, one click away</h3><p>Choose a folder to browse.</p><button class="primary" data-action="'+(state.catalog?'add-source':'open-folder')+'">Open folder</button></div>';return;}
+  if(!viewsUI.inResults()&&!state.handles.has(state.sourceId)){host.innerHTML='<div class="empty">'+icon('alert',35)+'<h3>Reconnect your folder</h3><p>Renew this folder permission to continue.</p><button class="primary" data-action="reconnect">Reconnect source</button></div>';return;}
+  if(!items.length){host.innerHTML='<div class="empty">'+icon('folder',32)+'<h3>'+(state.loading?'Reading files…':state.search||state.tagFilter||viewsUI.inResults()?'No matches':'Nothing here yet')+'</h3></div>';return;}
   host.innerHTML=items.slice(0,state.pageCount).map(item=>{
     const kind=itemKind(item);
     return '<button class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" title="'+escapeHTML(item.name)+'" aria-selected="'+state.selected.has(item.id)+'"><span class="art '+kind+'">'+icon(kind==='pdf'?'file':kind,kind==='folder'?37:31)+(kind==='image'?'<img loading="lazy" alt="" class="thumbnail"/>':'')+'</span><span class="filename">'+escapeHTML(cleanName(item.name))+'</span><span class="filetype">'+(item.catalogResult?escapeHTML(item.location):kind==='folder'?'Folder':kind)+'</span></button>';
@@ -486,7 +492,7 @@ function commitTagInput(){
 }
 function renderInspector(){
   const host=$('#inspector-data');if(!host)return;
-  if(state.catalogTagView){
+  if(viewsUI.inResults()){
     const selected=state.selected.size===1?state.items.find(item=>state.selected.has(item.id)):null;
     if(!selected){host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' results selected':'Select a resource')+'</span></div>';return;}
     const tags=recordTagPaths(selected.record,state.taxonomy);
@@ -687,17 +693,21 @@ async function importFiles(){
 }
 document.addEventListener('submit',event=>{
   if(event.target.id==='catalog-form'){event.preventDefault();submitCatalog(event.target);}
+  if(event.target.id==='view-form'){event.preventDefault();void (event.target.dataset.rename==='true'?viewsUI.rename(event.target.elements.name.value.trim()):viewsUI.save(event.target.elements.name.value.trim())).then(ok=>{if(ok)$('#dialog')?.remove();});}
 });
 document.addEventListener('input',event=>{
   if(event.target.id==='tag-input')showTagSuggestions();
   if(event.target.id==='accent-color')applyAccent(event.target.value);
   if(event.target.id==='search-input'){state.search=event.target.value;state.pageCount=150;state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;renderItems();renderInspector();}
+  if(event.target.id==='sort-mode'){state.sort=event.target.value;renderItems();}
   if(event.target.id==='density'){state.size=Number(event.target.value);localStorage.setItem('sb-size',state.size);$('#items')?.style.setProperty('--size',state.size+'px');}
 });
 document.addEventListener('click',async event=>{
   $('#folder-context')?.remove();
   const suggestion=event.target.closest('[data-tag-suggestion]');
   if(suggestion){chooseTagSuggestion(Number(suggestion.dataset.tagSuggestion));$('#tag-input')?.focus();return;}
+  const viewButton=event.target.closest('[data-open-view]');if(viewButton){viewsUI.open(viewButton.dataset.openView);return;}
+  const deleteButton=event.target.closest('[data-delete-view]');if(deleteButton){void viewsUI.remove(deleteButton.dataset.deleteView);return;}
   const pin=event.target.closest('[data-toggle-tag-pin]');
   if(pin){await togglePin(pin.dataset.toggleTagPin);return;}
   const tagNav=event.target.closest('[data-tag-filter]');
@@ -723,9 +733,11 @@ document.addEventListener('click',async event=>{
     case 'home':landing();break;
     case 'add-source':addSource();break;
     case 'reconnect':reconnect();break;
-    case 'refresh':state.catalogTagView?void refreshCatalogTagView():navigate(state.sourceId,[...state.parts]);break;
+    case 'refresh':viewsUI.inResults()?void refreshCatalogTagView():navigate(state.sourceId,[...state.parts]);break;
     case 'exit-catalog-tag':navigate(state.sourceId,[...state.parts]);break;
     case 'reveal-catalog-result':revealCatalogResult(state.items.find(x=>state.selected.has(x.id))).catch(e=>toast(errorText(e),true));break;
+    case 'save-view':case 'rename-view':{const rename=action==='rename-view';const name=rename?viewsUI.active()?.name:state.catalogTagView?'#'+tagLeaf(state.catalogTagView):state.parts.at(-1)||'New View';openDialog('<h2>'+(rename?'Rename View':'Save View')+'</h2><form id="view-form" data-rename="'+rename+'"><label>Name<input required name="name" maxlength="80" value="'+escapeHTML(name)+'"/></label><div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button><button class="primary">Save</button></div></form>');break;}
+    case 'update-view':void viewsUI.update();break;
     case 'gallery':case 'list':state.view=action;localStorage.setItem('sb-view',action);render();break;
     case 'inspector':state.inspector=!state.inspector;render();break;
     case 'sidebar':state.sidebar=!state.sidebar;$('#sidebar')?.classList.toggle('open');break;

@@ -114,3 +114,5 @@
 .catalog-results .resource .filetype{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--muted)}
 .catalog-results .resource .art{background:var(--panel2)}
 .catalog-results .tag-pill{display:inline-flex;margin-right:4px;margin-bottom:4px}
+
+.view-row{display:flex;align-items:center;min-width:0}.view-row .nav-item{flex:1;min-width:0}.view-delete{width:24px;min-width:24px;height:28px;display:grid;place-items:center;border-radius:6px;color:var(--muted)}.view-delete:hover{background:var(--panel2)}.sort-control{font:inherit;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px;max-width:85px}
