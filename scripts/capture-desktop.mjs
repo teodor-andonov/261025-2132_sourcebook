@@ -115,7 +115,8 @@ try{
   await page.locator('#tag-input').press('Enter');
   await page.locator('#notes').fill('Study of iterative geometric envelope systems.');
   await page.locator('[data-action="save-resource"]').click();
-  await page.waitForFunction(()=>document.querySelector('.hint')?.textContent.includes('Catalog identity:'));
+  await page.waitForFunction(()=>document.querySelector('.file-details .micro-hint')?.textContent.includes('ID: ab1'));
+  await page.waitForFunction(()=>document.querySelectorAll('.tag-nav').length>=3);
   await page.waitForFunction(()=>[...document.querySelectorAll('.resource img.thumbnail')].filter(img=>img.complete&&img.naturalWidth>0).length>=8);
   // Wait out transient save/session warning to capture a stable, useful screen.
   await page.waitForTimeout(4700);
@@ -128,7 +129,12 @@ try{
     const file=await records.getFileHandle('ab1.json');
     return JSON.parse(await (await file.getFile()).text());
   });
-  if(record.notes!=='Study of iterative geometric envelope systems.' || JSON.stringify(record.tags)!==JSON.stringify(['Generative / Geometry','Facades']))throw Error('Tag pill edits were not persisted as expected.');
+  if(record.notes!=='Study of iterative geometric envelope systems.' || record.tagIds?.length!==2 || ('tags' in record))throw Error('Stable tag IDs or notes were not persisted as expected.');
+  const catalogTags=await page.evaluate(async()=>{
+    const dir=await window.__sourcebookFixture.parent.getDirectoryHandle('Architecture Research.sb');
+    return JSON.parse(await (await (await dir.getFileHandle('tags.json')).getFile()).text());
+  });
+  if(catalogTags.length!==3)throw Error('Nested tag taxonomy did not persist.');
   await page.screenshot({path:resolve(snapshots,'desktop-gallery.png')});
   console.log('Captured 1440×900: desktop-launcher.png and desktop-gallery.png');
   await context.close();
