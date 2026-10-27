@@ -459,7 +459,7 @@ async function reconnect(){
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 async function navigate(id,parts,historyPosition=null){
-  if(state.bulkSaving||state.viewSaving||state.resourceSaving)return toast('Finish catalog editing before navigating.',true);
+  if(state.bulkSaving||state.viewSaving||state.resourceSaving||state.backupBusy)return toast('Finish catalog editing or backup recovery before navigating.',true);
   state.catalogTagView=null;state.activeViewId=null;
   state.sourceId=id;state.parts=parts;state.search='';state.selected.clear();state.pageCount=150;
   state.tagDraftItem=null;state.tagFilter=null;state.selectionMode=false;
@@ -521,7 +521,7 @@ async function revealCatalogResult(item){
   else toast('Resource is no longer present at its catalog path.',true);
 }
 function openCatalogTagView(path){
-  if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving)return;
+  if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving||state.backupBusy)return;
   if(state.catalogTagView===path){void navigate(state.sourceId,[...state.parts]);return;}
   try{
     state.catalogTagView=path;state.activeViewId=null;state.tagFilter=null;state.search='';state.selected.clear();

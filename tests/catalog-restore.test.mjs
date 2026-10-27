@@ -155,6 +155,8 @@ test('large restores are bounded to 250 records per verified batch',async()=>{
   assert.equal(plan.missingPaths.length,260);
   assert.equal(plan.selectedPaths.length,250);
   assert.equal(plan.remaining,10);
+  assert.equal(plan.changes[0].path,'catalog.json');
+  assert.equal(plan.changes[0].after.nextSequence,261); // reserve all missing IDs, not only the selected batch
   await assert.rejects(planMissingResourceRestore(h,backup,{selectedPaths:plan.missingPaths}),/at most 250/);
   assert.deepEqual(h.writes,[]);
 });

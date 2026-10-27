@@ -72,6 +72,50 @@ export async function planMissingResourceRestore(handle,backup,{selectedPaths}={
   if(selectedPaths!==undefined&&(!Array.isArray(selectedPaths)||new Set(selectedPaths).size!==selectedPaths.length||
     selectedPaths.some(path=>!missing.includes(path))))
     throw Error('Selected restoration records are no longer missing');
+  // Reserve IDs of ALL missing backup records, including those deferred to a
+  // later batch. Otherwise new objectification could steal a restorable ID.
+  for(const path of missing){
+    const token=RESOURCE.exec(path)?.[1];
+    const match=new RegExp('^'+catalog.code+'([1-9][0-9]*)
+  if(selected.length>MAX_BATCH)throw Error('Restore at most 250 missing records per batch');
+  const restored=[],locations=new Set(occupied);
+  for(const path of selected){
+    const record=parse(prior.get(path).data,path);
+    const number=checkRecord(record,path,catalog.code,sourceIds,tagIds,true);
+    const location=key(record);
+    if(locations.has(location))throw Error('Restoration would duplicate a resource location: '+record.path);
+    locations.add(location);highest=Math.max(highest,number);
+    restored.push({path,before:null,after:record});
+  }
+  const next=catalog.nextSequence;
+  if(!Number.isSafeInteger(next)||next<1)throw Error('Invalid Catalog sequence');
+  if(highest>=Number.MAX_SAFE_INTEGER)throw Error('Catalog identity sequence exhausted');
+  const changes=[...restored];
+  if(selected.length&&highest>=next)
+    changes.unshift({path:'catalog.json',before:catalog,after:{...catalog,nextSequence:highest+1}});
+  return {catalogId:catalog.id,signature:snapshotSignature(current.files),
+    missingPaths:missing,selectedPaths:selected,changes,
+    extraFiles:current.files.filter(file=>!prior.has(file.path)).length,
+    changedFiles:current.files.filter(file=>prior.has(file.path)&&file.sha256!==prior.get(file.path).sha256).length,
+    nonResourceMissing:[...prior.keys()].filter(path=>!RESOURCE.test(path)&&!disk.has(path)),
+    remaining:missing.length-selected.length};
+}
+export async function restoreMissingResourceRecords(handle,backup,approvedPlan){
+  if(!approvedPlan||!Array.isArray(approvedPlan.selectedPaths)||!approvedPlan.selectedPaths.length)
+    throw Error('Select missing resource records to restore');
+  // Rebuild from disk AFTER permission/confirmation. No stale preview may authorize a write.
+  const fresh=await planMissingResourceRestore(handle,backup,{selectedPaths:approvedPlan.selectedPaths});
+  if(fresh.catalogId!==approvedPlan.catalogId||fresh.signature!==approvedPlan.signature||
+    JSON.stringify(fresh.changes)!==JSON.stringify(approvedPlan.changes))
+    throw Error('Catalog changed since the restore preview; inspect the backup again');
+  await commitCatalogTransaction({handle,catalogId:fresh.catalogId,changes:fresh.changes});
+  return {restored:fresh.selectedPaths.length,sequenceUpdated:fresh.changes[0]?.path==='catalog.json'};
+}
+).exec(token);
+    if(!match||!Number.isSafeInteger(Number(match[1])))
+      throw Error('Backup contains an unsafe resource ID: '+path);
+    highest=Math.max(highest,Number(match[1]));
+  }
   const selected=(selectedPaths??missing.slice(0,MAX_BATCH)).slice();
   if(selected.length>MAX_BATCH)throw Error('Restore at most 250 missing records per batch');
   const restored=[],locations=new Set(occupied);
