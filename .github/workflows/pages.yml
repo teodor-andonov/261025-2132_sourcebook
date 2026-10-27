@@ -1,7 +1,9 @@
 name: Publish Sourcebook
 
-# Manual release only. No deployment unless explicitly requested by the user.
+# Publish only via Actions: automatically after main updates, or manually.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
