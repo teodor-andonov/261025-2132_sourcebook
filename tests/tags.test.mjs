@@ -19,8 +19,9 @@ test('stable hierarchical IDs and sibling deduplication',()=>{
   assert.equal(tagPath(c.tags,a.id),'Architecture / Facades / Timber');
 });
 test('legacy plain-string tags remain readable',()=>{
-  const t=ensureTagPath([],'Architecture / Facades',()=> 'a');
-  assert.deepEqual(recordTagPaths({tagIds:['a'],tags:['Landscape','Architecture / Facades']},t.tags),['Architecture / Facades','Landscape']);
+  let id=0;
+  const t=ensureTagPath([],'Architecture / Facades',()=> 'a'+(++id));
+  assert.deepEqual(recordTagPaths({tagIds:['a2'],tags:['Landscape','Architecture / Facades']},t.tags),['Architecture / Facades','Landscape']);
 });
 test('tag tree preserves nesting',()=>{
   sequence=0;
