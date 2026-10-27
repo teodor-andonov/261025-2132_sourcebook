@@ -115,13 +115,13 @@ async function refreshRecords(){
   catch(e){if(e.name==='NotFoundError'){state.records=records;return;}throw e;}
   for await(const [name,handle] of dir.entries()){
     if(handle.kind!=='file'||!name.endsWith('.json'))continue;
-    try{
-      const r=JSON.parse(await (await handle.getFile()).text());
-      if(r?.id){
-        if(records.has(r.id))throw Error('Duplicate resource identity: '+r.id);
-        records.set(r.id,r);
-      }
-    }catch(e){console.warn('Invalid resource record',name,e);}
+    let r;
+    try{r=JSON.parse(await (await handle.getFile()).text());}
+    catch(e){console.warn('Invalid resource record',name,e);continue;}
+    if(r?.id){
+      if(records.has(r.id))throw Error('Duplicate resource identity: '+r.id);
+      records.set(r.id,r);
+    }
   }
   state.records=records;
 }
@@ -147,8 +147,9 @@ async function addSource(){
   try{
     const h=await window.showDirectoryPicker({mode:'read'});
     const item={id:crypto.randomUUID(),name:h.name};
-    state.sources.push(item);
-    await writeJson(state.catalogHandle,'sources.json',state.sources);
+    const nextSources=[...state.sources,item];
+    await writeJson(state.catalogHandle,'sources.json',nextSources);
+    state.sources=nextSources;
     try{await setLocal('source:'+state.catalog.id+':'+item.id,h);}
     catch(e){console.warn('Source handle will need reconnecting after reload',e);toast('Source added, but this device cannot remember its permission.',true);}
     state.handles.set(item.id,h);
