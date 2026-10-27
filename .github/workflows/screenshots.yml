@@ -2,7 +2,7 @@ name: Sourcebook Desktop Screenshots
 on:
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: sourcebook-screenshots
   cancel-in-progress: true
@@ -22,14 +22,3 @@ jobs:
           name: sourcebook-desktop-1440x900
           path: screenshots/*.png
           retention-days: 30
-      - name: Update screenshot gallery in repository
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add screenshots/desktop-launcher.png screenshots/desktop-folder.png screenshots/desktop-gallery.png screenshots/desktop-tag-picker.png
-          if git diff --cached --quiet; then
-            echo "Screenshots unchanged"
-          else
-            git commit -m "chore: refresh 1440x900 desktop UI screenshots"
-            git push origin HEAD:main
-          fi

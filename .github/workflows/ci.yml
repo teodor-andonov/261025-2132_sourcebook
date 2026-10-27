@@ -11,15 +11,9 @@ on:
       - 'sw.js'
       - 'manifest.webmanifest'
       - '.github/workflows/ci.yml'
+  # Every PR, including documentation/workflow-only changes, must pass CI before squash merge.
   pull_request:
-    paths:
-      - 'src/**'
-      - 'assets/**'
-      - 'tests/**'
-      - 'index.html'
-      - 'sw.js'
-      - 'manifest.webmanifest'
-      - '.github/workflows/ci.yml'
+    branches: [main]
   workflow_dispatch:
 
 permissions:

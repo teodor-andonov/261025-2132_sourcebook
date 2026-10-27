@@ -1,37 +1,41 @@
-# Sourcebook release and CI policy
+# Sourcebook development and release convention
 
-**Updated:** 2026-10-27 · **Hosting:** GitHub Pages · **App:** Chrome-first static PWA
+**Updated:** 2026-10-27 · **Hosting:** GitHub Pages via GitHub Actions · **App:** Chrome-first static PWA
 
-## User-controlled releases and screenshots
+## Branch → PR → squash → publish
 
-The user explicitly chose to control **all visual screenshot capture and live publishing**. Neither may run on a schedule or as a side effect of ordinary code commits. In GitHub Actions, both workflows now use `workflow_dispatch` **only**.
+1. Start development from the latest `main` in a dedicated `dev/YYMMDD-HHmm-short-topic` branch. Never commit ordinary development directly to `main`.
+2. Implement a coherent batch and run relevant tests. Commit as often as useful on the development branch.
+3. Open a pull request targeting `main`. CI runs for **every PR** (including workflow/docs changes). Fix failures on the branch.
+4. After PR CI is confirmed green and the changes are reviewed, **squash merge** to `main`. Use a descriptive squash commit message. If checks cannot be confirmed, leave the PR open, report the blocker and do **not** bypass.
+5. A push/merge to `main` automatically starts **Publish Sourcebook** GitHub Actions. The action verifies Node tests and JS syntax before deployment. Its existing change-detection step may skip the actual Pages publish when only docs/workflows changed.
+6. To republish manually, open **Actions → Publish Sourcebook → Run workflow**, select **main** and run it. Manual dispatch forces a deployment, including when the app sources are unchanged. Publishing from development branches is explicitly blocked.
 
-| Workflow | Trigger | Purpose |
+Keep `main` as the latest successfully reviewed source history, **not** the location where features are developed. For fully autonomous agent cycles, CI-passing pull requests may be squash merged by the agent when no additional approval is required; failed/unconfirmed checks leave the PR open. Consider enabling GitHub branch protection/rulesets to require PRs and passing Sourcebook CI; the workflow convention alone cannot prevent direct pushes by other GitHub users.
+
+## Workflows
+
+| Workflow | Trigger | Effect |
 | --- | --- | --- |
-| **Sourcebook CI** (`ci.yml`) | Automatically on code changes to main / relevant pull requests, or manually | Node tests and JS syntax checks. Never deploys. |
-| **Sourcebook Desktop Screenshots** (`screenshots.yml`) | Manually only, at user's explicit request | 1440×900 actual headless Chromium fixture snapshots using synthetic test data; never physical device validation. |
-| **Publish Sourcebook** (`pages.yml`) | Manually only, at user's explicit request | Verify code, stage PWA assets and deploy to GitHub Pages. |
+| **Sourcebook CI** (`ci.yml`) | Every PR into `main`, relevant pushes on `main`, manual dispatch | Unit tests and JS syntax checks; never publishes. |
+| **Publish Sourcebook** (`pages.yml`) | Every push to `main` or manual dispatch on `main` | Checks changed app assets, reruns tests, stages only static PWA assets and deploys through GitHub Pages Actions. Docs-only pushes may skip the deployment. |
+| **Sourcebook Desktop Screenshots** (`screenshots.yml`) | **Manual only** | Captures synthetic-browser screenshots as a downloadable Actions artifact, but does not auto-commit screenshots or push to `main`. Screenshots are never a prerequisite to publishing. |
 
-## Release when requested
+No scheduled screenshot capture or separate branch-based website build is required. GitHub Pages **Settings → Pages → Build and deployment → Source: GitHub Actions** must be configured; avoid branch-based Pages publishing alongside `pages.yml`.
 
-1. Open the repository **Actions** tab.
-2. Select **Publish Sourcebook**.
-3. Choose **Run workflow** on `main` and confirm.
+## Safety and verification
 
-There is no longer a nightly Pages deployment or nightly screenshot regeneration. Updates stay on the development branch until a user-triggered release. The existing `pages.yml` change-detection job is kept for workflow continuity but a manual run always sets should_deploy=true.
+- **PR CI first; deployment tests again.** A newly merged change is not a successful release unless the Pages action reports success.
+- Pushing `main` now triggers deployment checks automatically; this replaces the former manual-only release policy. It can make releases without another chat confirmation **after an approved/CI-passing squash merge**. This behavior is intentional.
+- Do not manually run the screenshot workflow or download/capture screenshots unless explicitly requested. Its workflow is artifact-only and may not push directly to `main`.
+- Catalog and source-file mutations are separate from release management. Never overwrite ordinary user data while testing or publishing.
+- Publishing code does not guarantee every installed PWA has activated its updated service worker. Never force-reload during a catalog write.
+- Actual Windows and Android testing must be reported separately from CI or a hosted deployment.
 
-## Safety and validation
+## Multiple TA PWAs
 
-- App code and documentation can continue to be committed in substantial development cycles without changing the live hosted PWA.
-- Do not run the screenshot fixture or publish code without explicit instruction.
-- The screenshot fixture uses a genuine Chromium browser on synthetic data; never present it as Windows or Android device validation.
-- Publishing code does not guarantee already-running PWAs have updated; the service worker may need to activate. Do not force-reload while a catalog write is in progress.
-- Pages source must remain **Settings → Pages → GitHub Actions**.
+Sourcebook uses explicit manifest ID `/261025-2132_sourcebook/` and keeps `scope: "./"` / `start_url: "./"` relative to its GitHub Pages directory. Mindmap uses ID `/261019-1740_pwa-mindmap/`. Keep these identities distinct.
 
-## Multiple TA PWAs under GitHub Pages
+Each service worker must delete **only** its own app-prefixed caches. TA PWAs share `teodor-andonov.github.io` Cache Storage; origin-wide cache clearing would erase other apps' offline shells. Avoid indiscriminate site-data deletion when reinstalling PWAs.
 
-Sourcebook uses explicit manifest ID `/261025-2132_sourcebook/` and keeps `scope: "./"` / `start_url: "./"` relative to its hosted repository directory. Mindmap uses ID `/261019-1740_pwa-mindmap/`. These identities must remain different.
-
-A service worker must only remove caches bearing its own app-specific prefix. All TA PWAs on `teodor-andonov.github.io` share an origin-wide Cache Storage namespace; deleting all cache names on worker activation would erase sibling PWAs' offline shells. The app's existing offline caches may be repopulated after update, but no other app's data should be removed.
-
-If Chrome continues identifying both installed PWAs as one after both versions are manually published, close the apps, uninstall the old installed copies via `chrome://apps`, reopen each full GitHub Pages repository URL, and reinstall separately. **Do not clear site data blindly:** storage is origin-shared and doing so may remove unsaved local state in both apps.
+This convention applies to Sourcebook only; it does not automatically authorize publishing or changing Mindmap.
