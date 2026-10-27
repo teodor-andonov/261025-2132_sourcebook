@@ -39,7 +39,6 @@ block a consistent review.
 
 ## Verification
 
-Node tests and JS syntax checks added for PR CI. **Do not claim CI passed until
-the PR run is green.** No browser UI automation or physical Windows/Android
+**PR CI passed:** [run 40602297689](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40602297689) verified 196/196 Node tests and JavaScript syntax checks at `33612b7`. The first PR run failed because the test fixture named a nested root differently from the actual physical directory; corrected before the successful run. No browser UI automation or physical Windows/Android
 acceptance performed. No screenshots generated. Merge only after PR CI, then
 the existing main-only GitHub Actions publication workflow may run.
