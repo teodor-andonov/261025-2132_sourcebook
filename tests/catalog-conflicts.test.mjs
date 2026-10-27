@@ -106,3 +106,28 @@ test('conflict copies changing during inspection are rejected as stale',async()=
   };
   await assert.rejects(inspectCatalogConflictCopies(h),/changed during inspection/);
 });
+
+test('inspection rejects a conflict copy changed after its first read',async()=>{
+  const h=root(),name='tags.sync-conflict-20261027-191100-ABCDE.json';
+  add(h,name,'[]');
+  const original=h.getFileHandle.bind(h);let reads=0;
+  h.getFileHandle=async (...args)=>{
+    const handle=await original(...args);
+    if(args[0]!==name)return handle;
+    return {getFile:async()=>{
+      const file=await handle.getFile();
+      if(++reads===2)h.files.set(name,'["updated"]');
+      return file;
+    }};
+  };
+  await assert.rejects(inspectCatalogConflictCopies(h),/changed during conflict inspection/);
+});
+test('read-only backup inspection reports conflicts while verified export refuses them',async()=>{
+  const h=root(),clean=await createCatalogBackup(h);
+  add(h,'tags.sync-conflict-20261027-191100-ABCDE.json','["different"]');
+  const {inspectCatalogBackup}=await import('../src/catalog-backup.mjs');
+  const result=await inspectCatalogBackup(h,clean);
+  assert.equal(result.conflictCopies.count,1);
+  assert.equal(result.conflictCopies.counts.divergent,1);
+  await assert.rejects(createCatalogBackup(h),/Syncthing conflict/);
+});

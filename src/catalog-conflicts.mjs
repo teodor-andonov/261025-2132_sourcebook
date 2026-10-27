@@ -35,8 +35,10 @@ async function scanNames(handle){
     }
   }
   await collect(handle,'');
-  try{await collect(await handle.getDirectoryHandle('resources'),'resources/');}
+  let resources;
+  try{resources=await handle.getDirectoryHandle('resources');}
   catch(error){if(!missing(error))throw error;}
+  if(resources)await collect(resources,'resources/');
   return found.sort((a,b)=>a.path.localeCompare(b.path));
 }
 
@@ -72,12 +74,12 @@ export async function assertNoCatalogConflictCopies(handle){
 // SHA-256 values are for comparison/reporting, not proof of common ancestry.
 export async function inspectCatalogConflictCopies(handle,{expectedCatalogId}={}){
   if(!handle)throw Error('Open a Catalog first');
-  const found=await scanNames(handle),entries=[];
+  const found=await scanNames(handle),entries=[],observed=new Map();
   for(const item of found){
     const row={...item,status:'unreadable',conflictSha256:null,canonicalSha256:null};
     if(item.kind!=='file'){entries.push(row);continue;}
     let conflict;
-    try{conflict=await readText(handle,item.path);row.conflictSha256=await checksum(conflict);}
+    try{conflict=await readText(handle,item.path);observed.set(item.path,conflict);row.conflictSha256=await checksum(conflict);}
     catch(error){row.status=missing(error)?'disappeared':'unreadable';entries.push(row);continue;}
     const parsed=json(conflict);
     if(!parsed.valid){row.status='malformed-conflict';entries.push(row);continue;}
@@ -87,6 +89,7 @@ export async function inspectCatalogConflictCopies(handle,{expectedCatalogId}={}
     let canonical;
     try{canonical=await readText(handle,item.canonicalPath);}
     catch(error){row.status=missing(error)?'canonical-missing':'unreadable';entries.push(row);continue;}
+    observed.set(item.canonicalPath,canonical);
     row.canonicalSha256=await checksum(canonical);
     const current=json(canonical);
     row.status=!current.valid?'malformed-current':canonical===conflict?'identical':
@@ -96,6 +99,12 @@ export async function inspectCatalogConflictCopies(handle,{expectedCatalogId}={}
   // Fail closed if a new conflict appeared or a copy disappeared while inspecting.
   if(JSON.stringify(found)!==JSON.stringify(await scanNames(handle)))
     throw Error('Catalog conflict copies changed during inspection; recheck');
+  for(const [path,first] of observed){
+    let latest;
+    try{latest=await readText(handle,path);}
+    catch{throw Error('Catalog metadata changed during conflict inspection: '+path);}
+    if(latest!==first)throw Error('Catalog metadata changed during conflict inspection: '+path);
+  }
   return {count:entries.length,checkedAt:new Date().toISOString(),entries,
     counts:Object.fromEntries(['identical','equivalent','divergent','canonical-missing',
       'malformed-conflict','malformed-current','foreign-catalog','unreadable','disappeared']
