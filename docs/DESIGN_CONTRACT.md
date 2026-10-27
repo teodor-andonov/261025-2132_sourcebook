@@ -24,6 +24,14 @@ Sourcebook should be an unusually capable **visual file utility**, not a decorat
 - **Views** combines saved scope/filter/query with presentation (Gallery / List / Table; grouping by Source, Folder or Type; sort, density and selectable table columns). `views.json` keeps stable View IDs, up to 16 nested tag IDs with **All (AND)** / **Any (OR)**, file-type and catalog/scan-status filters, plus optional pinned shortcuts. Legacy records default to All statuses and five table columns in memory. There is no separate Smart Folder/Collection schema. Results cover cataloged resources; an explicit **Scan** action adds unobjectified entries from already-granted Catalog Folders into a temporary read-only index. Missing/type-changed statuses only derive from completed scans; tagged Views still depend on catalog metadata; scans never objectify files.
 - Do not implement an image editor/annotation engine in V1. Preserve files and prioritize previews and tag integrity.
 
+## Catalog metadata safety and recovery
+
+- A metadata Save changes **only** JSON inside the selected `.sb` Catalog. Never rename, move or write registered ordinary source files while tagging, registering a Folder, pinning a Tag or saving a View.
+- Multi-file edits record exact before/after snapshots in a verified catalog-local recovery journal before touching catalog records. Every step checks its expected snapshot and verifies the written value.
+- Opening a Catalog is read-only, including inspection of an unfinished journal. Never replay or discard it silently. Block further catalog edits and expose a compact **Resume** action with explicit permission and confirmation.
+- If a journal contains malformed data or any record differs from both its before and after snapshot, stop without overwriting; direct the user to manual backup/reconciliation. Do not claim automatic conflict merging or crash-atomicity.
+- A journal is **not** a lock against simultaneous offline editors or Syncthing races. Avoid concurrent editing of one synced Catalog until proper reconciliation and device acceptance exist.
+
 ## Tags first
 
 The first polished editable property is a **tag**. Avoid constructing a generic custom-properties database until this interaction works brilliantly.
