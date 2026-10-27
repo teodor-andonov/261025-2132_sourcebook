@@ -237,12 +237,22 @@ async function loadDeviceSourceIndex(catalogId){
 async function clearDeviceSourceIndex(){
   if(!state.catalog||state.scanBusy)return;
   if(!confirm('Clear this device\'s cached source index? Ordinary files and Catalog metadata will not change.'))return;
+  const catalogId=state.catalog.id,generation=++state.scanGeneration;
+  state.scanBusy=true;state.scanCommitting=true;render();
   try{
-    await removeLocal(sourceIndexKey(state.catalog.id));
+    await removeLocal(sourceIndexKey(catalogId));
+    if(state.catalog?.id!==catalogId||state.scanGeneration!==generation)return;
     invalidateScan();
     if(state.activeViewId)viewsUI.requery();else render();
     toast('Device index cleared. Catalog metadata and source files unchanged.');
-  }catch(error){toast('Could not clear device index: '+errorText(error),true);}
+  }catch(error){
+    if(state.catalog?.id===catalogId&&state.scanGeneration===generation)
+      toast('Could not clear device index: '+errorText(error),true);
+  }finally{
+    if(state.catalog?.id===catalogId&&state.scanGeneration===generation){
+      state.scanBusy=false;state.scanCommitting=false;render();
+    }
+  }
 }
 let tabPersistQueue=Promise.resolve();
 const glyphs={
