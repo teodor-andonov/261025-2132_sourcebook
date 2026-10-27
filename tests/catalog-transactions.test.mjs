@@ -19,6 +19,7 @@ class MemoryDirectory {
     if(!this.directories.has(name)){if(!create)throw Object.assign(Error('Missing directory'),{name:'NotFoundError'});this.directories.set(name,new MemoryDirectory());}
     return this.directories.get(name);
   }
+  async *entries(){for(const name of this.files.keys())yield [name,{kind:'file'}];for(const name of this.directories.keys())yield [name,{kind:'directory'}];}
   async removeEntry(name){if(!this.files.delete(name))throw Object.assign(Error('Missing'),{name:'NotFoundError'});}
 }
 const catalog={id:'cat-1',code:'ab',nextSequence:1};
