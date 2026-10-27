@@ -19,7 +19,7 @@ A verified backup and write-ahead journal do not protect a Catalog when Syncthin
 - Syncthing filename recognition is heuristic. Renamed copies, canonical edits without copies, unsupported conflict patterns and simultaneous cross-device writes are not detected reliably.
 - No automatic conflict resolution or complete ancestry-aware three-way merge. A reported "identical" copy still needs manual cleanup after preservation of both versions.
 - No filesystem-atomic snapshot, lock, physical Windows/Android validation, or proof that a live PWA has activated the updated shell.
-- PR CI [40569695127](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40569695127) passed 158 Node tests and JS syntax checks before the final refinements. Final PR CI and squash merge must still be verified. No screenshots or manual deployments.
+- Final code PR CI [40569827073](https://github.com/teodor-andonov/261025-2132_sourcebook/actions/runs/40569827073) passed **159 Node tests** and JavaScript syntax checks. Squash merge and automatic Pages workflow require separate verification. No screenshots or manual deployments.
 
 ## Follow-up
 
