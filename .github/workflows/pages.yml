@@ -1,12 +1,8 @@
 name: Publish Sourcebook
 
-# Development commits do not publish the live PWA.
-# A nightly check deploys only if web app files differ from the last successful
-# publishing run. Run this workflow manually for an immediate release.
+# Manual release only. No deployment unless explicitly requested by the user.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '17 3 * * *'
 
 permissions:
   contents: read
