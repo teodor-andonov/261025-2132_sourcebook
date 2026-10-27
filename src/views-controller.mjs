@@ -3,7 +3,7 @@ import {normalizeView,validateViews,createSavedView,updateSavedView,removeSavedV
 import {flattenedTagTree} from './tags.mjs';
 
 // Glue for explicit, catalog-only View writes. Caller owns the UI and navigation.
-export function createViewsController({state,readJson,writeJson,authorized,render,toast,forgetImages,navigate,refreshRecords}){
+export function createViewsController({state,readJson,authorized,render,toast,forgetImages,navigate,refreshRecords,commitCatalogEdits,refreshPendingCatalog}){
   const active=()=>state.views.find(v=>v.id===state.activeViewId)||null;
   const inResults=()=>!!(state.activeViewId||state.catalogTagView);
   const title=()=>active()?.name||(state.catalogTagView?'#'+state.catalogTagView.replaceAll(' / ','/'):null);
@@ -54,13 +54,12 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
       if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission required');
       const cat=await readJson(state.catalogHandle,'catalog.json');
       if(!cat||cat.id!==state.catalog.id||cat.code!==state.catalog.code)throw Error('Catalog identity changed; reopen it');
-      const disk=await readJson(state.catalogHandle,'views.json',[]);
+      const before=await readJson(state.catalogHandle,'views.json',null),disk=before??[];
       assertViewsSnapshotUnchanged(state.views,disk);
       const next=edit(validateViews(disk));
-      await writeJson(state.catalogHandle,'views.json',next);
-      if(JSON.stringify(await readJson(state.catalogHandle,'views.json'))!==JSON.stringify(next))throw Error('View write could not be verified');
+      await commitCatalogEdits([{path:'views.json',before,after:next}]);
       state.views=next;toast('Views saved');return true;
-    }catch(e){toast('View save failed: '+(e?.message||String(e)),true);return false;}
+    }catch(e){await refreshPendingCatalog();toast('View save failed: '+(e?.message||String(e)),true);return false;}
     finally{state.viewSaving=false;render();}
   }
   async function save(name,tagSelection=null){return mutate(v=>createSavedView(v,{...spec(tagSelection),name},crypto.randomUUID()));}

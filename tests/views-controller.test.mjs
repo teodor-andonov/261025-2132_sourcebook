@@ -15,7 +15,8 @@ function fixture(){
   const disk={'catalog.json':{id:'cat1',code:'ab'},'views.json':structuredClone(state.views)};
   const writes=[],messages=[];let renders=0,forgot=0;
   const ui=createViewsController({state,readJson:async (_,key,fallback)=>structuredClone(disk[key]??fallback),
-    writeJson:async (_,key,value)=>{writes.push(key);disk[key]=structuredClone(value);},
+    commitCatalogEdits:async changes=>{for(const {path,after} of changes){writes.push(path);disk[path]=structuredClone(after);}},
+    refreshPendingCatalog:async()=>{},
     authorized:async()=>true,render:()=>renders++,toast:(s,w)=>messages.push([s,w]),
     forgetImages:()=>forgot++,navigate:async()=>{},refreshRecords:async()=>{}});
   return {state,ui,disk,writes,messages,get renders(){return renders},get forgot(){return forgot}};
