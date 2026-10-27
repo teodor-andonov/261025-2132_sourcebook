@@ -1,4 +1,4 @@
-import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.mjs';
+import {getLocal,setLocal,removeLocal,readJson,writeJson,nested,authorized} from './storage.mjs';
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.mjs';
@@ -12,6 +12,7 @@ import {catalogTagResults,sortCatalogResults,sortBrowserItems,catalogFileType} f
 import {groupViewItems,viewTableMetadata,TABLE_COLUMNS,DEFAULT_TABLE_COLUMNS,normalizeTableColumns} from './view-layout.mjs';
 import {describeFileSymbol,sidePreviewKind} from './file-symbols.mjs';
 import {scanRegisteredFolders,verifyCatalogRootReconnect,assertLiveSourceEntry} from './source-scan.mjs';
+import {sourceIndexKey,emptySourceIndex,restoreSourceIndex,refreshSourceIndex,sourceIndexOverlay} from './source-index.mjs';
 import {validateViews,sortViewsForSidebar} from './views.mjs';
 import {createViewsController} from './views-controller.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
@@ -27,7 +28,7 @@ const state={
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
   tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false,resourceSaving:false,
-  scan:null,scanBusy:false,scanGeneration:0,scanProgress:'',pendingTransaction:null,catalogConflicts:null,conflictReport:null,backupBusy:false,backupRestorePlan:null,backupRestoreSource:null
+  scan:null,scanBusy:false,scanGeneration:0,scanProgress:'',sourceIndex:null,indexFreshIds:new Set(),indexProblem:'',pendingTransaction:null,catalogConflicts:null,conflictReport:null,backupBusy:false,backupRestorePlan:null,backupRestoreSource:null
 };
 const viewsUI=createViewsController({state,readJson,authorized,render,toast,forgetImages,navigate,refreshRecords,commitCatalogEdits,refreshPendingCatalog});
 async function refreshPendingCatalog(){
@@ -210,7 +211,39 @@ async function restoreMissingBackupRecords(){
     }else if(state.pendingTransaction)render();
   }
 }
-function invalidateScan(){++state.scanGeneration;state.scan=null;state.scanBusy=false;state.scanProgress='';}
+function invalidateScan(){
+  ++state.scanGeneration;state.scan=null;state.scanBusy=false;state.scanProgress='';
+  state.sourceIndex=null;state.indexFreshIds=new Set();state.indexProblem='';
+}
+// Cache is device-local and never copied into .sb. A restored snapshot is
+// stale until a fresh complete scan; only isSameEntry-verified roots are shown.
+async function loadDeviceSourceIndex(catalogId){
+  const generation=state.scanGeneration,handle=state.catalogHandle;
+  try{
+    const saved=await getLocal(sourceIndexKey(catalogId));
+    if(generation!==state.scanGeneration||state.catalog?.id!==catalogId||state.catalogHandle!==handle)return;
+    const restored=await restoreSourceIndex(saved,catalogId,state.sources,state.handles);
+    if(generation!==state.scanGeneration||state.catalog?.id!==catalogId||state.catalogHandle!==handle)return;
+    state.sourceIndex=restored.index;state.indexFreshIds=new Set();
+    state.scan=restored.index.roots.length?sourceIndexOverlay(restored.index):null;
+    if(restored.skippedRootIds.length)
+      state.indexProblem=restored.skippedRootIds.length+' cached Folder(s) require verified reconnection or refresh';
+  }catch(error){
+    if(generation!==state.scanGeneration||state.catalog?.id!==catalogId)return;
+    state.sourceIndex=emptySourceIndex(catalogId);state.scan=null;
+    state.indexProblem='Device index unavailable: '+errorText(error);
+  }
+}
+async function clearDeviceSourceIndex(){
+  if(!state.catalog||state.scanBusy)return;
+  if(!confirm('Clear this device\'s cached source index? Ordinary files and Catalog metadata will not change.'))return;
+  try{
+    await removeLocal(sourceIndexKey(state.catalog.id));
+    invalidateScan();
+    if(state.activeViewId)viewsUI.requery();else render();
+    toast('Device index cleared. Catalog metadata and source files unchanged.');
+  }catch(error){toast('Could not clear device index: '+errorText(error),true);}
+}
 let tabPersistQueue=Promise.resolve();
 const glyphs={
   book:'M3 3h7v18H3z M10 7h4v14h-4z M16 4l5 17 M16 5l3-1',
@@ -454,6 +487,7 @@ async function openDirectory(h){
     catch(e){console.warn('This device cannot restore source handles',e);}
   }
   await refreshRecords(); // Read-only catalog opening must never create a directory.
+  await loadDeviceSourceIndex(config.id);
   try{await setLocal('recent',{handle:h,name:config.name});await setLocal('last-mode','catalog');}
   catch(e){console.warn('This browser cannot remember the recent catalog',e);}
   state.sourceId=state.sources[0]?.id||null;
@@ -587,16 +621,20 @@ async function refreshCatalogTagView(){
 }
 function scanStatus(){
   if(state.scanBusy)return state.scanProgress||'Scanning folders…';
-  if(!state.scan)return 'Cataloged only';
-  const total=state.sources.length,complete=state.scan.completeRootIds.length;
-  return state.scan.entries.length+' indexed · '+complete+'/'+total+' folders'+(state.scan.problems.length?' · partial':'');
+  if(state.indexProblem)return state.indexProblem;
+  if(!state.scan)return 'Cataloged only · index not built';
+  const fresh=state.scan.completeRootIds.length,stale=state.scan.staleRootIds?.length||0;
+  return state.scan.entries.length+' indexed · '+fresh+' scanned'+(stale?' · '+stale+' cached/partial':'')+
+    (state.scan.problems.length?' · '+state.scan.problems.length+' issue(s)':'');
 }
-async function runCatalogScan(){
+async function runCatalogScan(rootId=''){
   if(!state.catalog||state.scanBusy||state.bulkSaving||state.viewSaving||state.resourceSaving)return;
+  const selected=rootId?state.sources.filter(s=>s.id===rootId):state.sources;
+  if(!selected.length)return toast('No Catalog Folder selected.',true);
   const generation=++state.scanGeneration,catalogId=state.catalog.id;
-  state.scanBusy=true;state.scanProgress='Scanning folders…';render();
+  state.scanBusy=true;state.scanProgress='Scanning folders…';state.indexProblem='';render();
   try{
-    const scan=await scanRegisteredFolders(state.sources.map(s=>({id:s.id,name:s.name})),new Map(state.handles),{
+    const scan=await scanRegisteredFolders(selected.map(s=>({id:s.id,name:s.name})),new Map(state.handles),{
       isCancelled:()=>generation!==state.scanGeneration||state.catalog?.id!==catalogId,
       onProgress:p=>{
         if(generation!==state.scanGeneration)return;
@@ -605,16 +643,36 @@ async function runCatalogScan(){
       }
     });
     if(generation!==state.scanGeneration||scan.cancelled)return;
-    state.scan=scan;
+    const previous=state.sourceIndex||emptySourceIndex(catalogId);
+    const result=refreshSourceIndex(previous,scan,selected.map(s=>s.id),state.handles);
+    const fresh=new Set(state.indexFreshIds);
+    for(const source of selected)fresh.delete(source.id);
+    for(const id of result.completeRootIds)fresh.add(id);
+    state.sourceIndex=result.index;state.indexFreshIds=fresh;
+    state.scan=sourceIndexOverlay(result.index,{
+      freshRootIds:[...fresh],partialRootIds:result.partialRootIds,
+      partialEntries:result.partialEntries,problems:result.problems
+    });
     if(state.activeViewId)viewsUI.requery();else render();
-    toast(scan.problems.length?'Scan partial: '+scan.problems.length+' issue(s).':'Scanned '+scan.entries.length+' entries.',!!scan.problems.length);
-  }catch(error){if(generation===state.scanGeneration)toast('Scan failed: '+errorText(error),true);}
+    let saved=true;
+    if(result.completeRootIds.length){
+      try{await setLocal(sourceIndexKey(catalogId),result.index);}
+      catch(error){saved=false;state.indexProblem='Index updated in memory only · device storage failed';console.warn('Index persistence failed',error);}
+    }
+    if(generation!==state.scanGeneration)return;
+    const changes=result.changes.filter(x=>!x.initial);
+    const summary=changes.length?' · '+changes.reduce((n,x)=>n+x.added,0)+' added, '+
+      changes.reduce((n,x)=>n+x.removed,0)+' removed, '+
+      changes.reduce((n,x)=>n+x.typeChanged,0)+' type changed':'';
+    toast((saved?'Index refreshed':'Index not saved')+summary+
+      (scan.problems.length?' · '+scan.problems.length+' issue(s)':''),!saved||!!scan.problems.length);
+  }catch(error){if(generation===state.scanGeneration)toast('Index refresh failed: '+errorText(error),true);}
   finally{if(generation===state.scanGeneration){state.scanBusy=false;state.scanProgress='';render();}}
 }
 function cancelCatalogScan(){
   if(!state.scanBusy)return;
   ++state.scanGeneration;state.scanBusy=false;state.scanProgress='';
-  render();toast('Scan cancelled; previous results retained.');
+  render();toast('Scan cancelled; previous index retained.');
 }
 function render(){
   $('#folder-context')?.remove();
@@ -644,7 +702,11 @@ function render(){
   const typeControl=plain?'':'<select id="file-type" class="sort-control type-control" aria-label="File type"><option value="all" '+(state.fileType==='all'?'selected':'')+'>All types</option><option value="image" '+(state.fileType==='image'?'selected':'')+'>Images</option><option value="pdf" '+(state.fileType==='pdf'?'selected':'')+'>PDFs</option><option value="video" '+(state.fileType==='video'?'selected':'')+'>Videos</option><option value="folder" '+(state.fileType==='folder'?'selected':'')+'>Folders</option><option value="other" '+(state.fileType==='other'?'selected':'')+'>Other</option></select>';
   const statusControl=state.activeViewId?'<select id="file-status" class="sort-control" aria-label="Catalog status"><option value="all" '+(state.fileStatus==='all'?'selected':'')+'>All statuses</option><option value="cataloged" '+(state.fileStatus==='cataloged'?'selected':'')+'>Cataloged</option><option value="unobjectified" '+(state.fileStatus==='unobjectified'?'selected':'')+'>Not cataloged</option><option value="missing" '+(state.fileStatus==='missing'?'selected':'')+'>Missing (scan)</option><option value="changed" '+(state.fileStatus==='changed'?'selected':'')+'>Type changed (scan)</option></select>':'';
   const columnsButton=state.view==='table'?'<button class="text-button" data-action="table-columns" title="Choose table columns" aria-label="Choose table columns">'+icon('table',15)+' <span>Columns</span></button>':'';
-  const scanControls=state.activeViewId?'<button class="text-button" data-action="'+(state.scanBusy?'cancel-scan':'scan-folders')+'" title="Read-only scan of granted Catalog Folders">'+icon(state.scanBusy?'close':'search',15)+' <span>'+(state.scanBusy?'Cancel':'Scan')+'</span></button><span class="scan-status" id="scan-status" title="Scans are temporary snapshots; incomplete roots are not marked missing">'+escapeHTML(scanStatus())+'</span>':'';
+  const scanControls=state.activeViewId?'<select class="sort-control" id="scan-root" aria-label="Choose Folder to index" '+(state.scanBusy?'disabled':'')+'><option value="">All Folders</option>'+
+    state.sources.map(s=>'<option value="'+escapeHTML(s.id)+'">'+escapeHTML(s.name||'Folder')+'</option>').join('')+'</select>'+
+    '<button class="text-button" data-action="'+(state.scanBusy?'cancel-scan':'scan-folders')+'" title="Read-only refresh of the selected Catalog Folder(s)">'+icon(state.scanBusy?'close':'search',15)+' <span>'+(state.scanBusy?'Cancel':state.sourceIndex?.roots.length?'Refresh':'Index')+'</span></button>'+
+    (state.sourceIndex?.roots.length&&!state.scanBusy?'<button class="text-button" data-action="clear-source-index" title="Clear device-local index">'+icon('close',13)+' <span>Clear</span></button>':'')+
+    '<span class="scan-status" id="scan-status" title="Device-local snapshot, not a live filesystem watcher. Cached roots cannot assert missing files.">'+escapeHTML(scanStatus())+'</span>':'';
   const sortControl=plain?'':'<select id="sort-mode" class="sort-control" aria-label="Sort"><option value="name" '+(state.sort==='name'?'selected':'')+'>Name ↑</option><option value="name-desc" '+(state.sort==='name-desc'?'selected':'')+'>Name ↓</option><option value="type" '+(state.sort==='type'?'selected':'')+'>Type</option><option value="location" '+(state.sort==='location'?'selected':'')+'>Location</option></select>';
   const groupControl=state.activeViewId?'<select id="group-mode" class="sort-control" aria-label="Group by"><option value="none" '+(state.groupBy==='none'?'selected':'')+'>No groups</option><option value="source" '+(state.groupBy==='source'?'selected':'')+'>By source</option><option value="folder" '+(state.groupBy==='folder'?'selected':'')+'>By folder</option><option value="type" '+(state.groupBy==='type'?'selected':'')+'>By type</option></select>':'';
   const activeTab=activeFolderTab();
@@ -844,7 +906,7 @@ function renderInspector(){
     const selected=state.selected.size===1?state.items.find(item=>state.selected.has(item.id)):null;
     if(!selected){host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' results selected':'Select a resource')+'</span></div>';return;}
     const tags=recordTagPaths(selected.record,state.taxonomy);
-    host.innerHTML='<h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
+    host.innerHTML='<h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+(selected.staleIndex?'<div class="micro-hint">Cached index snapshot · refresh this Folder to verify its contents.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
     return;
   }
   if(state.selected.size!==1){
@@ -1193,7 +1255,8 @@ document.addEventListener('click',async event=>{
     case 'restore-missing-backup-records':void restoreMissingBackupRecords();break;
     case 'reconnect':reconnect();break;
     case 'refresh':viewsUI.inResults()?void refreshCatalogTagView():navigate(state.sourceId,[...state.parts]);break;
-    case 'scan-folders':void runCatalogScan();break;
+    case 'scan-folders':void runCatalogScan($('#scan-root')?.value||'');break;
+    case 'clear-source-index':void clearDeviceSourceIndex();break;
     case 'cancel-scan':cancelCatalogScan();break;
     case 'exit-catalog-tag':navigate(state.sourceId,[...state.parts]);break;
     case 'reveal-catalog-result':revealCatalogResult(state.items.find(x=>state.selected.has(x.id))).catch(e=>toast(errorText(e),true));break;
