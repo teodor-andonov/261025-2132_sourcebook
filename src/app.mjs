@@ -13,6 +13,7 @@ import {groupViewItems,viewTableMetadata,TABLE_COLUMNS,DEFAULT_TABLE_COLUMNS,nor
 import {describeFileSymbol,sidePreviewKind} from './file-symbols.mjs';
 import {scanRegisteredFolders,scanRegisteredSubfolder,verifyCatalogRootReconnect,assertLiveSourceEntry} from './source-scan.mjs';
 import {sourceIndexKey,emptySourceIndex,restoreSourceIndex,refreshSourceIndex,refreshSourceSubtreeIndex,assertIndexedRootIdentity,sourceIndexOverlay} from './source-index.mjs';
+import {inspectIndexedRootOverlaps} from './source-overlap.mjs';
 import {validateViews,sortViewsForSidebar} from './views.mjs';
 import {createViewsController} from './views-controller.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
@@ -215,6 +216,17 @@ function invalidateScan(){
   ++state.scanGeneration;state.scan=null;state.scanBusy=false;state.scanCommitting=false;state.scanProgress='';
   state.sourceIndex=null;state.indexFreshIds=new Set();state.indexFreshSubtrees=[];state.scanRootId='';state.scanFolderPath='';state.indexProblem='';
 }
+// Overlap proof is device-local and read-only. It must never turn matching
+// names or stale index paths into presumed physical identity. A failed check
+// leaves duplicate entries visible rather than hiding possibly distinct files.
+async function attachVerifiedSourceOverlaps(index,generation,catalogId){
+  if(!state.scan||index.roots.length<2)return;
+  let result;
+  try{result=await inspectIndexedRootOverlaps(index,new Map(state.handles));}
+  catch(error){result={overlaps:[],problems:['Overlap check unavailable: '+errorText(error)]};}
+  if(generation!==state.scanGeneration||state.catalog?.id!==catalogId||state.sourceIndex!==index)return;
+  state.scan={...state.scan,overlaps:result.overlaps,overlapProblems:result.problems};
+}
 // Cache is device-local and never copied into .sb. A restored snapshot is
 // stale until a fresh complete scan; only isSameEntry-verified roots are shown.
 async function loadDeviceSourceIndex(catalogId){
@@ -226,6 +238,8 @@ async function loadDeviceSourceIndex(catalogId){
     if(generation!==state.scanGeneration||state.catalog?.id!==catalogId||state.catalogHandle!==handle)return;
     state.sourceIndex=restored.index;state.indexFreshIds=new Set();state.indexFreshSubtrees=[];
     state.scan=restored.index.roots.length?sourceIndexOverlay(restored.index):null;
+    await attachVerifiedSourceOverlaps(restored.index,generation,catalogId);
+    if(generation!==state.scanGeneration||state.catalog?.id!==catalogId)return;
     if(restored.skippedRootIds.length)
       state.indexProblem=restored.skippedRootIds.length+' cached Folder(s) require verified reconnection or refresh';
   }catch(error){
@@ -635,7 +649,9 @@ function scanStatus(){
   if(!state.scan)return 'Cataloged only · index not built';
   const fresh=state.scan.completeRootIds.length,stale=state.scan.staleRootIds?.length||0;
   return state.scan.entries.length+' indexed · '+fresh+' scanned'+(state.scan.completeSubtreePaths?.length?' · '+state.scan.completeSubtreePaths.length+' subfolder(s) refreshed':'')+(stale?' · '+stale+' cached/partial':'')+
-    (state.scan.problems.length?' · '+state.scan.problems.length+' issue(s)':'');
+    (state.scan.problems.length?' · '+state.scan.problems.length+' issue(s)':'')+
+    (state.scan.overlaps?.length?' · '+state.scan.overlaps.length+' verified overlaps':'')+
+    (state.scan.overlapProblems?.length?' · '+state.scan.overlapProblems.length+' overlap checks unresolved':'');
 }
 async function runCatalogScan(rootId='',folderPath=''){
   if(!state.catalog||state.scanBusy||state.bulkSaving||state.viewSaving||state.resourceSaving)return;
@@ -689,6 +705,8 @@ async function runCatalogScan(rootId='',folderPath=''){
       freshRootIds:[...fresh],freshSubtreePaths:freshSubtrees,partialRootIds:result.partialRootIds,
       partialEntries:result.partialEntries,problems:result.problems
     });
+    await attachVerifiedSourceOverlaps(result.index,generation,catalogId);
+    if(generation!==state.scanGeneration)return;
     if(state.activeViewId)viewsUI.requery();else render();
     const completeCount=(result.completeRootIds?.length||0)+(result.completeSubtreePaths?.length||0);
     let saved=true;
@@ -784,7 +802,7 @@ function visibleItems(){
 }
 function resourceCard(item){
   const kind=itemKind(item);
-  return '<button class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" title="'+escapeHTML(item.name)+'" aria-selected="'+state.selected.has(item.id)+'"><span class="art '+kind+'">'+fileSymbol(item)+(kind==='image'?'<img loading="lazy" alt="" class="thumbnail"/>':'')+'</span><span class="filename">'+escapeHTML(cleanName(item.name))+'</span><span class="filetype">'+(item.catalogResult?escapeHTML(item.location+(item.missing?' · Missing at scan':'')+(item.changedKind?' · Type changed':'')+(item.unobjectified?' · Not cataloged':'')):kind==='folder'?'Folder':kind)+'</span></button>';
+  return '<button class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" title="'+escapeHTML(item.name)+'" aria-selected="'+state.selected.has(item.id)+'"><span class="art '+kind+'">'+fileSymbol(item)+(kind==='image'?'<img loading="lazy" alt="" class="thumbnail"/>':'')+'</span><span class="filename">'+escapeHTML(cleanName(item.name))+'</span><span class="filetype">'+(item.catalogResult?escapeHTML(item.location+(item.missing?' · Missing at scan':'')+(item.changedKind?' · Type changed':'')+(item.unobjectified?' · Not cataloged':'')+(item.overlapConflict?' · Overlap: review metadata':'')):kind==='folder'?'Folder':kind)+'</span></button>';
 }
 function resourceTableRow(item){
   const meta=viewTableMetadata(item,recordTagPaths(itemRecord(item),state.taxonomy));
@@ -802,7 +820,8 @@ function renderItems(){
   host.className=state.view+(viewsUI.inResults()?' catalog-results':'');
   host.style.setProperty('--size',state.size+'px');
   const items=visibleItems();
-  $('#item-count').textContent=items.length+(state.loading?'+':'')+' items';
+  const ambiguous=items.filter(item=>item.overlapConflict).length;
+  $('#item-count').textContent=items.length+(state.loading?'+':'')+' items'+(ambiguous?' · '+ambiguous+' overlap metadata entries':'');
   if(!viewsUI.inResults()&&!state.sourceId){host.innerHTML='<div class="empty">'+icon('folder',38)+'<h3>Your files, one click away</h3><p>Choose a folder to browse.</p><button class="primary" data-action="'+(state.catalog?'add-source':'open-folder')+'">Open folder</button></div>';return;}
   if(!viewsUI.inResults()&&!state.handles.has(state.sourceId)){host.innerHTML='<div class="empty">'+icon('alert',35)+'<h3>Reconnect your folder</h3><p>Renew this folder permission to continue.</p><button class="primary" data-action="reconnect">Reconnect source</button></div>';return;}
   if(!items.length){host.innerHTML='<div class="empty">'+icon('folder',32)+'<h3>'+(state.loading?'Reading files…':state.search||state.tagFilter||viewsUI.inResults()?'No matches':'Nothing here yet')+'</h3></div>';return;}
@@ -948,7 +967,7 @@ function renderInspector(){
     const selected=state.selected.size===1?state.items.find(item=>state.selected.has(item.id)):null;
     if(!selected){host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' results selected':'Select a resource')+'</span></div>';return;}
     const tags=recordTagPaths(selected.record,state.taxonomy);
-    host.innerHTML='<h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+(selected.staleIndex?'<div class="micro-hint">Cached index snapshot · refresh this Folder to verify its contents.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
+    host.innerHTML='<h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.overlapConflict?'<div class="micro-hint" role="status">Verified overlapping Folders report competing metadata or inconsistent source state. Both entries remain visible; review each registered Folder before editing. No records were merged.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+(selected.staleIndex?'<div class="micro-hint">Cached index snapshot · refresh this Folder to verify its contents.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
     return;
   }
   if(state.selected.size!==1){
