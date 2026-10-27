@@ -1,6 +1,6 @@
 # Sourcebook
 
-> **Implementation underway — V0.0.8 prototype (2026-10-27).** Local-folder gallery, portable `.sb` catalogs, stable-ID nested tags and current-folder tag-aware search are implemented. GitHub Pages publishing succeeded on 2026-10-27; subsequent app changes deploy only nightly-on-change or manually. Physical Windows/Pixel 8 verification remains outstanding. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+> **Implementation underway — V0.0.9 candidate (2026-10-27).** Local-folder gallery, portable `.sb` catalogs, stable-ID nested tags and current-folder tag-aware search are implemented. GitHub Pages publishing succeeded on 2026-10-27; subsequent app changes deploy only nightly-on-change or manually. Physical Windows/Pixel 8 verification remains outstanding. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 
 **A beautiful, fast, local-first file browser with optional portable reference catalogs for ordinary files, folders and URLs.**
@@ -38,7 +38,7 @@ Full details: [Release and CI policy](docs/RELEASE_PROCESS.md). Pages is configu
 
 ## Current design direction
 
-**27 Oct 2026 product decision:** Browser-first (ordinary folders without requiring catalog; **planned, not yet implemented**). Sidebar: physical folder **Tabs** and optional **Catalog** with linked root Folders, nested Tags and saved **Views**. Pin tags for manual collections. Defer image editing; preserve files.
+**27 Oct 2026 product decision:** Browser-first: ordinary folder browsing without a catalog is implemented as an initial **read-only** slice. Persistent multiple folder Tabs and catalog root-tree navigation are planned. Sidebar: physical folder **Tabs** and optional **Catalog** with linked root Folders, nested Tags and saved **Views**. Pin tags for manual collections. Defer image editing; preserve files.
 
 
 

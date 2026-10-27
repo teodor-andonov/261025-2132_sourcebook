@@ -27,3 +27,5 @@ The **Sourcebook Desktop Screenshots** GitHub Actions workflow runs nightly at *
 - Record material visual changes in the development log and compare with previous Git history.
 - Snapshot failures should fail the screenshot workflow; do not silently substitute a blank page.
 - Visual snapshots **supplement** device testing, not replace it.
+
+- `desktop-folder.png` — plain read-only folder browser without a catalog, captured in desktop Chromium with synthetic filesystem fixtures; not a physical Windows/Android device test.

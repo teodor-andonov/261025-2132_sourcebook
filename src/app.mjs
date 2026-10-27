@@ -2,6 +2,7 @@ import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {nextSelectionIndex} from './navigation.mjs';
+import {plainRoot} from './workspace.mjs';
 import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
@@ -87,7 +88,7 @@ function openDialog(inner){
 }
 function landing(){
   forgetImages();
-  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>Sourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions"><button class="primary" data-action="create-catalog">'+icon('plus')+' New catalog</button><button class="secondary" data-action="open-catalog">'+icon('folder')+' Open catalog</button></div><div id="recent-area"></div><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
+  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>Sourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions"><button class="primary" data-action="open-folder">'+icon('folder')+' Open folder</button><button class="secondary" data-action="open-catalog">'+icon('database')+' Open catalog</button><button class="secondary" data-action="create-catalog">'+icon('plus')+' New catalog</button></div><div id="recent-area"></div><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
   getLocal('recent').then(value=>{
     if(value&&$('#recent-area'))$('#recent-area').innerHTML='<div class="eyebrow">RECENT CATALOG</div><button class="recent-item" data-action="recent">'+icon('database')+'<span>'+escapeHTML(value.name)+'</span>'+icon('chevron',15)+'</button>';
   }).catch(console.warn);
@@ -97,6 +98,23 @@ async function recentCatalog(){
   if(!r?.handle)return;
   if(await authorized(r.handle,'read'))await openDirectory(r.handle);
   else toast('Open the catalog again to grant access.',true);
+}
+async function setPlainFolder(handle,remember=true){
+  const root=plainRoot(handle);
+  closePreview();
+  state.catalog=null;state.catalogHandle=null;
+  state.sources=[root];state.handles.clear();state.handles.set(root.id,handle);
+  state.records.clear();state.taxonomy=[];state.tagFilter=null;state.sidebar=false;
+  state.sourceId=root.id;state.parts=[];state.selected.clear();state.search='';
+  if(remember){
+    try{await setLocal('last-folder',{handle,name:root.name});await setLocal('last-mode','folder');}
+    catch(e){console.warn('Folder session cannot be restored',e);}
+  }
+  await navigate(root.id,[]);
+}
+async function choosePlainFolder(){
+  try{const handle=await window.showDirectoryPicker({mode:'read'});await setPlainFolder(handle);}
+  catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 function createCatalog(){
   openDialog('<h2>Create a catalog</h2><p>A portable <code>.sb</code> folder, stored wherever you choose.</p><form id="catalog-form"><label>Catalog name<input required name="name" value="My References" maxlength="90"/></label><label>Catalog code<small>1–4 lowercase letters used for filename IDs</small><input required name="code" value="ab" maxlength="4" pattern="[a-z]{1,4}"/></label><div class="dialog-actions"><button class="secondary" type="button" data-action="dismiss">Cancel</button><button class="primary">Choose location</button></div></form>');
@@ -150,7 +168,7 @@ async function openDirectory(h){
     catch(e){console.warn('This device cannot restore source handles',e);}
   }
   await refreshRecords(); // Read-only catalog opening must never create a directory.
-  try{await setLocal('recent',{handle:h,name:config.name});}
+  try{await setLocal('recent',{handle:h,name:config.name});await setLocal('last-mode','catalog');}
   catch(e){console.warn('This browser cannot remember the recent catalog',e);}
   state.sourceId=state.sources[0]?.id||null;
   state.parts=[];state.items=[];state.selected.clear();state.search='';
@@ -171,6 +189,7 @@ async function addSource(){
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 async function reconnect(){
+  if(!state.catalog)return choosePlainFolder();
   try{
     const h=await window.showDirectoryPicker({mode:'read'});
     try{await setLocal('source:'+state.catalog.id+':'+state.sourceId,h);}
@@ -190,7 +209,7 @@ async function navigate(id,parts){
     const folder=await nested(h,parts);const items=[];
     for await(const [name,handle] of folder.entries()){
       if(request!==state.request)return;
-      if(handle.kind==='directory'&&name.endsWith('.sb'))continue;
+      if(state.catalog&&handle.kind==='directory'&&name.endsWith('.sb'))continue;
       items.push({id:id+':'+[...parts,name].join('/'),name,handle,kind:handle.kind});
       if(items.length%100===0){state.items=sort(items);renderItems();}
     }
@@ -223,12 +242,18 @@ async function togglePin(id){
   }catch(error){toast('Pin failed: '+errorText(error),true);}
 }
 function render(){
-  if(!state.catalog)return landing();
-  document.title=(state.parts.at(-1)||currentSource()?.name||state.catalog.name)+' — Sourcebook';
+  if(!state.catalog&&!state.sourceId)return landing();
+  const plain=!state.catalog;
+  document.title=(state.parts.at(-1)||currentSource()?.name||state.catalog?.name||'Sourcebook')+' — Sourcebook';
   const sources=state.sources.map(source=>'<button class="nav-item '+(source.id===state.sourceId?'selected':'')+'" data-source="'+escapeHTML(source.id)+'">'+icon('folder',16)+'<span>'+escapeHTML(source.name)+'</span>'+(!state.handles.has(source.id)?icon('alert',13):'')+'</button>').join('');
-  const tags=tagNavigationHTML();
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div><button class="catalog-chip" data-action="home">'+icon('database',16)+'<span>'+escapeHTML(state.catalog.name)+'</span>'+icon('chevron',13)+'</button><div class="section-head"><span>SOURCES</span>'+button('Add source','plus','add-source')+'</div><nav>'+sources+'</nav><div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+ (tags||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="sidebar-footer">Local catalog</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(state.parts.at(-1)||currentSource()?.name||'Sources')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label><button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button></div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>Sourcebook preview</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>Properties</h3><div id="inspector-data"></div></aside>':'')+'</div>';
-  $('#breadcrumbs').innerHTML='<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Sources')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
+  const rootSection='<div class="section-head"><span>'+(plain?'TABS':'FOLDERS')+'</span>'+button(plain?'Open folder':'Register folder','plus',plain?'open-folder':'add-source')+'</div><nav>'+sources+'</nav>';
+  const catalogSection=plain
+    ?'<div class="section-head"><span>CATALOG</span></div><nav><button class="nav-item" data-action="open-catalog">'+icon('database',16)+'<span>Open catalog</span></button><button class="nav-item" data-action="create-catalog">'+icon('plus',16)+'<span>New catalog</span></button></nav>'
+    :'<div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav>';
+  const header='<button class="catalog-chip" data-action="home">'+icon(plain?'folder':'database',16)+'<span>'+escapeHTML(plain?'Browse':state.catalog.name)+'</span>'+icon('chevron',13)+'</button>';
+  const fileActions=plain?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list')+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom">'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="inspector-data"></div></aside>':'')+'</div>';
+  $('#breadcrumbs').innerHTML='<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
 function renderItems(){
@@ -253,8 +278,8 @@ function renderItems(){
     return matchesResourceSearch(name,paths,query)&&(!state.tagFilter||includesTagPath(paths,state.tagFilter));
   });
   $('#item-count').textContent=items.length+(state.loading?'+':'')+' items';
-  if(!state.sourceId){host.innerHTML='<div class="empty">'+icon('folder',38)+'<h3>Your files, one click away</h3><p>Add a source folder to begin browsing.</p><button class="primary" data-action="add-source">Add folder</button></div>';return;}
-  if(!state.handles.has(state.sourceId)){host.innerHTML='<div class="empty">'+icon('alert',35)+'<h3>Reconnect your folder</h3><p>This catalog source needs a folder permission on this device.</p><button class="primary" data-action="reconnect">Reconnect source</button></div>';return;}
+  if(!state.sourceId){host.innerHTML='<div class="empty">'+icon('folder',38)+'<h3>Your files, one click away</h3><p>Choose a folder to browse.</p><button class="primary" data-action="'+(state.catalog?'add-source':'open-folder')+'">Open folder</button></div>';return;}
+  if(!state.handles.has(state.sourceId)){host.innerHTML='<div class="empty">'+icon('alert',35)+'<h3>Reconnect your folder</h3><p>Renew this folder permission to continue.</p><button class="primary" data-action="reconnect">Reconnect source</button></div>';return;}
   if(!items.length){host.innerHTML='<div class="empty">'+icon('folder',32)+'<h3>'+(state.loading?'Reading files…':state.search||state.tagFilter?'No matches':'Nothing here yet')+'</h3></div>';return;}
   host.innerHTML=items.slice(0,state.pageCount).map(item=>{
     const kind=itemKind(item);
@@ -342,6 +367,10 @@ function renderInspector(){
   }
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   const record=itemRecord(item);
+  if(!state.catalog){
+    host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),40)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><details class="file-details" open><summary>File information</summary><code>'+escapeHTML(item.name)+'</code></details>';
+    return;
+  }
   if(state.tagDraftItem!==item.id){
     state.tagDraftItem=item.id;state.tagDraft=recordTagPaths(record,state.taxonomy);
   }
@@ -367,6 +396,7 @@ function select(item,event){
   refreshSelectionUI();renderInspector();
 }
 async function saveResource(){
+  if(!state.catalog)return;
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   if(!commitTagInput())return;
   const tags=[...state.tagDraft],notes=$('#notes')?.value||'';
@@ -445,7 +475,7 @@ function previewStep(offset){
   if(i>=0&&files.length)showPreview(files[(i+offset+files.length)%files.length]);
 }
 async function newFolder(){
-  if(!sourceHandle())return;
+  if(!state.catalog||!sourceHandle())return;
   const name=prompt('Name of new folder:','New folder');
   if(!name)return;
   if(!validName(name))return toast('Invalid folder name',true);
@@ -453,6 +483,7 @@ async function newFolder(){
   catch(e){toast(errorText(e),true);}
 }
 async function importFiles(){
+  if(!state.catalog)return;
   try{
     if(!await authorized(sourceHandle(),'readwrite'))throw Error('Write access is required to import files.');
     if(typeof window.showOpenFilePicker!=='function')throw Error('File import picker is unavailable in this browser.');
@@ -498,6 +529,7 @@ document.addEventListener('click',async event=>{
   const action=event.target.closest('[data-action]')?.dataset.action;
   if(!action)return;
   switch(action){
+    case 'open-folder':choosePlainFolder();break;
     case 'create-catalog':createCatalog();break;
     case 'open-catalog':chooseCatalog().catch(e=>toast(errorText(e),true));break;
     case 'recent':recentCatalog().catch(e=>toast(errorText(e),true));break;
@@ -566,6 +598,11 @@ document.addEventListener('keydown',event=>{
 async function boot(){
   if(typeof window.showDirectoryPicker!=='function'){landing();toast('This browser does not provide directory access. Folder browsing is unavailable on this device.',true);return;}
   try{
+    if(await getLocal('last-mode')==='folder'){
+      const r=await getLocal('last-folder');
+      if(r?.handle&&typeof r.handle.queryPermission==='function'&&await r.handle.queryPermission({mode:'read'})==='granted')return await setPlainFolder(r.handle,false);
+      landing();return;
+    }
     const r=await getLocal('recent');
     if(r?.handle&&typeof r.handle.queryPermission==='function'&&await r.handle.queryPermission({mode:'read'})==='granted')return await openDirectory(r.handle);
   }catch(e){console.warn('Restore needs permission',e);}

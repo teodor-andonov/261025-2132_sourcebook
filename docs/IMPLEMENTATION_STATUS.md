@@ -4,6 +4,14 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — Catalog-free read-only folder browsing (V0.0.9 candidate)
+
+- Landing now offers **Open folder** without creating/opening a catalog. The chosen folder can be navigated with gallery/list, breadcrumbs, current-folder search, quick look and file information.
+- This first standalone browsing mode requests **read** access only; there is no tag editor, import or write action. Browser-only folders are not silently objectified or renamed; existing portable catalog workflow remains separate.
+- The last plain folder handle and mode may be stored locally in IndexedDB; restart restores only if permission is already granted, otherwise the launcher appears without an unsolicited permission prompt.
+- Added pure tests for validating ordinary directory handles and extended the existing **1440×900 genuine Chromium fixture** to check read-only standalone browsing and unchanged synthetic files. A new `desktop-folder.png` snapshot is configured for the nightly/manual workflow; **the updated capture has not yet run**.
+- Service-worker cache bumped to `sourcebook-shell-0.0.9`; no auto-deployment was triggered. Multi-folder tabs/history, registered root hierarchy, cross-root catalog-wide Views and actual Windows/Pixel 8 verification remain pending.
+
 ## 2026-10-27 — Consistent active specifications
 
 - Cleaned the roadmap, UX quality standard, README and design contract around **Tabs, Folders, Tags, Views, Catalog**.

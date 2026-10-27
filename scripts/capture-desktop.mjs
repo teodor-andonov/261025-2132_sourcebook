@@ -85,7 +85,7 @@ try{
     source.files.set('Performance results.json',new MockFile('Performance results.json','{"simulations":12}','application/json'));
     const parent=new MockFolder('Documents');
     let picks=0;
-    Object.defineProperty(window,'showDirectoryPicker',{configurable:true,value:async()=>++picks===1?parent:source});
+    Object.defineProperty(window,'showDirectoryPicker',{configurable:true,value:async()=>++picks===2?parent:source});
     window.__sourcebookFixture={parent,source,titles};
   });
   const page=await context.newPage();
@@ -95,6 +95,15 @@ try{
   await page.locator('[data-action="create-catalog"]').waitFor();
   await mkdir(snapshots,{recursive:true});
   await page.screenshot({path:resolve(snapshots,'desktop-launcher.png')});
+  // Exercise a real app session on mock physical folders before any catalog exists.
+  await page.locator('[data-action="open-folder"]').click();
+  await page.locator('.resource[data-item]').first().waitFor();
+  if(await page.locator('#tag-input').count())throw Error('Plain folder browsing exposed catalog-only tagging.');
+  if(await page.locator('[data-action="create-folder"]').count())throw Error('Plain folder browsing must remain read-only in this slice.');
+  if(await page.locator('.resource[data-item]').count()<12)throw Error('Plain folder browsing did not enumerate fixture files.');
+  if(!await page.evaluate(()=>window.__sourcebookFixture.parent.files.size===0))throw Error('Plain folder browsing unexpectedly created a catalog.');
+  await page.screenshot({path:resolve(snapshots,'desktop-folder.png')});
+  await page.locator('[data-action="home"]').click();
 
   await page.locator('[data-action="create-catalog"]').click();
   await page.locator('input[name="name"]').fill('Architecture Research');
@@ -177,7 +186,7 @@ try{
   if(!reused)throw Error('Keyboard tag selection did not persist the existing ID or changed the source file.');
   await page.waitForTimeout(4700);
   await page.screenshot({path:resolve(snapshots,'desktop-gallery.png')});
-  console.log('Captured 1440×900: desktop-launcher.png, desktop-tag-picker.png and desktop-gallery.png');
+  console.log('Captured 1440×900: desktop-launcher.png, desktop-folder.png, desktop-tag-picker.png and desktop-gallery.png');
   await context.close();
 }finally{
   if(browser)await browser.close();
