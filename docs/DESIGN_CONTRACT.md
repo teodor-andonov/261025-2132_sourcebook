@@ -24,6 +24,13 @@ Sourcebook should be an unusually capable **visual file utility**, not a decorat
 - **Views** combines saved scope/filter/query with presentation (Gallery / List / Table; grouping by Source, Folder or Type; sort, density and selectable table columns). `views.json` keeps stable View IDs, up to 16 nested tag IDs with **All (AND)** / **Any (OR)**, file-type and catalog/scan-status filters, plus optional pinned shortcuts. Legacy records default to All statuses and five table columns in memory. There is no separate Smart Folder/Collection schema. Results cover cataloged resources; an explicit **Scan** action adds unobjectified entries from already-granted Catalog Folders into a temporary read-only index. Missing/type-changed statuses only derive from completed scans; tagged Views still depend on catalog metadata; scans never objectify files.
 - Do not implement an image editor/annotation engine in V1. Preserve files and prioritize previews and tag integrity.
 
+## Verified overlapping Folders
+
+- Catalog Folder registrations are independent. A physical overlap can be used for **global View presentation only** after a live `isSameEntry` proof of the root or an indexed descendant directory; names and matching paths alone are not proof.
+- Suppress only proven duplicate unobjectified results. A single existing Catalog record takes precedence over a duplicate unobjectified entry without changing its ID, tags, path or source binding. A Folder-scoped View still displays that Folder's own resources.
+- If two Catalog records describe a proven shared path, **show both** with a clear overlap warning; never silently merge records, select a winner, or rewrite Catalog JSON. Likewise, retain results when source type/missing evidence conflicts.
+- Permission denial, stale/missing root identity, ambiguous ancestry and exceeded comparison limits mean **no suppression**. Index entries are snapshots, not per-file identity proofs.
+
 ## Catalog metadata safety and recovery
 
 - A metadata Save changes **only** JSON inside the selected `.sb` Catalog. Never rename, move or write registered ordinary source files while tagging, registering a Folder, pinning a Tag or saving a View.
