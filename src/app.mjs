@@ -5,7 +5,7 @@ import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.m
 import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {catalogTagResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
-import {scanRegisteredFolders} from './source-scan.mjs';
+import {scanRegisteredFolders,verifyCatalogRootReconnect,assertLiveSourceEntry} from './source-scan.mjs';
 import {validateViews,sortViewsForSidebar} from './views.mjs';
 import {createViewsController} from './views-controller.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
@@ -19,7 +19,7 @@ const state={
   size:Number(localStorage.getItem('sb-size'))||164,
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
-  tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false,
+  tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false,resourceSaving:false,
   scan:null,scanBusy:false,scanGeneration:0,scanProgress:''
 };
 const viewsUI=createViewsController({state,readJson,writeJson,authorized,render,toast,forgetImages,navigate,refreshRecords});
@@ -122,7 +122,7 @@ function rememberFolderTabs(){
   return tabPersistQueue;
 }
 async function setPlainFolder(handle,remember=true){
-  if(state.bulkSaving||state.viewSaving)throw Error('Finish catalog editing before switching folders.');
+  if(state.bulkSaving||state.viewSaving||state.resourceSaving)throw Error('Finish catalog editing before switching folders.');
   plainRoot(handle);
   const stayingPlain=!state.catalog;
   const restored=stayingPlain?null:loadFolderTabs(await getLocal('folder-tabs-v1').catch(()=>null));
@@ -239,7 +239,7 @@ async function refreshRecords(){
   state.records=records;
 }
 async function openDirectory(h){
-  if(state.bulkSaving||state.viewSaving)throw Error('Finish catalog editing before switching catalogs.');
+  if(state.bulkSaving||state.viewSaving||state.resourceSaving)throw Error('Finish catalog editing before switching catalogs.');
   const config=await readJson(h,'catalog.json');
   if(!config?.id||!CODE_PATTERN.test(config.code))throw Error('Choose a .sb directory containing catalog.json.');
   invalidateScan();
@@ -262,7 +262,7 @@ async function openDirectory(h){
   if(state.sourceId)await navigate(state.sourceId,[]);
 }
 async function addSource(){
-  if(state.bulkSaving)return toast('Finish bulk tagging before registering folders.',true);
+  if(state.bulkSaving||state.resourceSaving)return toast('Finish metadata editing before registering folders.',true);
   try{
     const h=await window.showDirectoryPicker({mode:'read'});
     const item={id:crypto.randomUUID(),name:h.name};
@@ -290,6 +290,8 @@ async function reconnect(){
   }
   try{
     const h=await window.showDirectoryPicker({mode:'read'});
+    const old=state.handles.get(state.sourceId)||await getLocal('source:'+state.catalog.id+':'+state.sourceId).catch(()=>null);
+    await verifyCatalogRootReconnect(old,h,currentSource()?.name,()=>confirm('This device cannot verify the original Catalog Folder. Confirm this is the same folder: '+currentSource()?.name+'?'));
     try{await setLocal('source:'+state.catalog.id+':'+state.sourceId,h);}
     catch(e){console.warn('Source handle cannot be persisted',e);toast('Source connected for this session only.',true);}
     state.handles.set(state.sourceId,h);invalidateScan();
@@ -297,7 +299,7 @@ async function reconnect(){
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 async function navigate(id,parts,historyPosition=null){
-  if(state.bulkSaving||state.viewSaving)return toast('Finish catalog editing before navigating.',true);
+  if(state.bulkSaving||state.viewSaving||state.resourceSaving)return toast('Finish catalog editing before navigating.',true);
   state.catalogTagView=null;state.activeViewId=null;
   state.sourceId=id;state.parts=parts;state.search='';state.selected.clear();state.pageCount=150;
   state.tagDraftItem=null;state.tagFilter=null;state.selectionMode=false;
@@ -360,7 +362,7 @@ async function revealCatalogResult(item){
   else toast('Resource is no longer present at its catalog path.',true);
 }
 function openCatalogTagView(path){
-  if(!state.catalog||state.bulkSaving||state.viewSaving)return;
+  if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving)return;
   if(state.catalogTagView===path){void navigate(state.sourceId,[...state.parts]);return;}
   try{
     state.catalogTagView=path;state.activeViewId=null;state.tagFilter=null;state.search='';state.selected.clear();
@@ -385,7 +387,7 @@ function scanStatus(){
   return state.scan.entries.length+' indexed · '+complete+'/'+total+' folders'+(state.scan.problems.length?' · partial':'');
 }
 async function runCatalogScan(){
-  if(!state.catalog||state.scanBusy||state.bulkSaving||state.viewSaving)return;
+  if(!state.catalog||state.scanBusy||state.bulkSaving||state.viewSaving||state.resourceSaving)return;
   const generation=++state.scanGeneration,catalogId=state.catalog.id;
   state.scanBusy=true;state.scanProgress='Scanning folders…';render();
   try{
@@ -477,7 +479,7 @@ function renderItems(){
   if(!items.length){host.innerHTML='<div class="empty">'+icon('folder',32)+'<h3>'+(state.loading?'Reading files…':state.search||state.tagFilter||viewsUI.inResults()?'No matches':'Nothing here yet')+'</h3></div>';return;}
   host.innerHTML=items.slice(0,state.pageCount).map(item=>{
     const kind=itemKind(item);
-    return '<button class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" title="'+escapeHTML(item.name)+'" aria-selected="'+state.selected.has(item.id)+'"><span class="art '+kind+'">'+icon(kind==='pdf'?'file':kind,kind==='folder'?37:31)+(kind==='image'?'<img loading="lazy" alt="" class="thumbnail"/>':'')+'</span><span class="filename">'+escapeHTML(cleanName(item.name))+'</span><span class="filetype">'+(item.catalogResult?escapeHTML(item.location+(item.missing?' · Missing at scan':'')+(item.unobjectified?' · Not cataloged':'')):kind==='folder'?'Folder':kind)+'</span></button>';
+    return '<button class="resource '+(state.selected.has(item.id)?'selected':'')+'" data-item="'+escapeHTML(item.id)+'" title="'+escapeHTML(item.name)+'" aria-selected="'+state.selected.has(item.id)+'"><span class="art '+kind+'">'+icon(kind==='pdf'?'file':kind,kind==='folder'?37:31)+(kind==='image'?'<img loading="lazy" alt="" class="thumbnail"/>':'')+'</span><span class="filename">'+escapeHTML(cleanName(item.name))+'</span><span class="filetype">'+(item.catalogResult?escapeHTML(item.location+(item.missing?' · Missing at scan':'')+(item.changedKind?' · Type changed':'')+(item.unobjectified?' · Not cataloged':'')):kind==='folder'?'Folder':kind)+'</span></button>';
   }).join('')+(items.length>state.pageCount?'<button class="show-more" data-action="show-more">Show more ('+(items.length-state.pageCount)+')</button>':'');
   const watcher=new IntersectionObserver(entries=>{
     for(const entry of entries)if(entry.isIntersecting){watcher.unobserve(entry.target);thumbnail(entry.target);}
@@ -560,7 +562,7 @@ function renderInspector(){
     const selected=state.selected.size===1?state.items.find(item=>state.selected.has(item.id)):null;
     if(!selected){host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' results selected':'Select a resource')+'</span></div>';return;}
     const tags=recordTagPaths(selected.record,state.taxonomy);
-    host.innerHTML='<div class="inspector-cover">'+icon(itemKind(selected)==='pdf'?'file':itemKind(selected),40)+'</div><h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
+    host.innerHTML='<div class="inspector-cover">'+icon(itemKind(selected)==='pdf'?'file':itemKind(selected),40)+'</div><h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
     return;
   }
   if(state.selected.size!==1){
@@ -644,18 +646,21 @@ async function bulkTags(mode){
 }
 async function saveResource(){
   if(!state.catalog)return;
-  if(state.bulkSaving)return toast('Finish bulk tagging before saving another resource.',true);
+  if(state.bulkSaving||state.resourceSaving)return toast('Finish the current metadata save first.',true);
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   if(!commitTagInput())return;
   const tags=[...state.tagDraft],notes=$('#notes')?.value||'';
-  const previous=itemRecord(item);
+  const previous=itemRecord(item),root=sourceHandle(),sourceId=state.sourceId,parts=[...state.parts];
+  state.resourceSaving=true;
   try{
+    await assertLiveSourceEntry(root,parts,item);
     if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed to save metadata.');
     const latest=await readJson(state.catalogHandle,'catalog.json');
     if(!latest||latest.id!==state.catalog.id||latest.code!==state.catalog.code)throw Error('Catalog identity changed. Reopen the catalog.');
     await refreshRecords();
     const current=itemRecord(item);
     if(!previous&&current)throw Error('This resource was cataloged on disk since selection. Reopen the catalog before saving.');
+    if(current&&current.kind!==item.kind)throw Error('Resource type changed on disk. Reopen the catalog.');
     if(previous && (!current||JSON.stringify(previous)!==JSON.stringify(current))){
       throw Error('This resource changed on disk. Reopen the catalog before saving.');
     }
@@ -666,13 +671,18 @@ async function saveResource(){
       const result=ensureTagPath(taxonomy,path);
       taxonomy=result.tags;tagIds.push(result.id);
     }
-    if(taxonomy.length!==diskTags.length)await writeJson(state.catalogHandle,'tags.json',taxonomy);
+    if(taxonomy.length!==diskTags.length){
+      await writeJson(state.catalogHandle,'tags.json',taxonomy);
+      if(JSON.stringify(await readJson(state.catalogHandle,'tags.json'))!==JSON.stringify(taxonomy))throw Error('Tag write could not be verified');
+    }
+    await assertLiveSourceEntry(root,parts,item);
     state.taxonomy=taxonomy;
     const dir=await state.catalogHandle.getDirectoryHandle('resources',{create:true});
     if(current){
       const updated={...current,tagIds,notes,updatedAt:new Date().toISOString()};
       delete updated.tags;
       await writeJson(dir,updated.id+'.json',updated);
+      if(JSON.stringify(await readJson(dir,updated.id+'.json'))!==JSON.stringify(updated))throw Error('Resource write could not be verified');
       state.records.set(updated.id,updated);
       toast('Properties saved in catalog');
     }else{
@@ -681,17 +691,26 @@ async function saveResource(){
       if(await readJson(dir,plan.id+'.json'))throw Error('Identity already exists. Reopen the catalog and retry.');
       const record={formatVersion:1,id:plan.id,kind:item.kind,sourceId:state.sourceId,path:[...state.parts,item.name].join('/'),tagIds,notes,renamed:false,updatedAt:new Date().toISOString()};
       await writeJson(dir,record.id+'.json',record);
+      if(JSON.stringify(await readJson(dir,record.id+'.json'))!==JSON.stringify(record))throw Error('Resource write could not be verified');
       state.records.set(record.id,record);
       if(plan.nextSequence>latest.nextSequence){
         const next={...latest,nextSequence:plan.nextSequence};
         await writeJson(state.catalogHandle,'catalog.json',next);
+        if(JSON.stringify(await readJson(state.catalogHandle,'catalog.json'))!==JSON.stringify(next))throw Error('Catalog sequence write could not be verified');
         state.catalog=next;
       }
       toast('Saved to catalog · original file unchanged');
     }
     state.tagDraftItem=null;
     render();
-  }catch(e){toast('Save failed: '+errorText(e),true);}
+  }catch(e){
+    toast('Save failed: '+errorText(e),true);
+    try{
+      state.taxonomy=await readJson(state.catalogHandle,'tags.json',[]);
+      state.catalog=await readJson(state.catalogHandle,'catalog.json');
+      await refreshRecords();render();
+    }catch(error){toast('Catalog refresh failed: '+errorText(error),true);}
+  }finally{state.resourceSaving=false;}
 }
 function closePreview(){
   $('#viewer')?.remove();

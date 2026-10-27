@@ -65,3 +65,32 @@ export async function scanRegisteredFolders(sources,handles,options={}){
   }
   return result(false);
 }
+
+
+// A registered root is a catalog identity, not an arbitrary directory with a
+// similar name. On another device no same-entry proof exists: require explicit
+// human confirmation, and never silently accept a different folder name.
+export async function verifyCatalogRootReconnect(previous,picked,expectedName,approve=()=>false){
+  if(!picked||picked.kind!=='directory'||typeof picked.entries!=='function')throw Error('Choose a directory');
+  if(previous&&typeof previous.isSameEntry==='function'){
+    if(!await previous.isSameEntry(picked))throw Error('This is not the previously registered Catalog Folder.');
+    return 'verified';
+  }
+  if(typeof expectedName!=='string'||picked.name!==expectedName)throw Error('Folder name differs from the registered Catalog Folder. Reconnect the original folder.');
+  if(!approve())throw Error('Folder reconnection not confirmed.');
+  return 'confirmed';
+}
+
+// Verify the selected physical entry still exists at its original path before
+// any metadata write. No getFile, writable handle, rename or move is involved.
+export async function assertLiveSourceEntry(root,parts,item){
+  if(!root||root.kind!=='directory'||!Array.isArray(parts)||parts.some(p=>!validPart(p))||
+    !item||!validPart(item.name)||!['file','directory'].includes(item.kind))throw Error('Invalid source binding');
+  let folder=root;
+  for(const part of parts)folder=await folder.getDirectoryHandle(part);
+  const live=item.kind==='directory'?await folder.getDirectoryHandle(item.name):await folder.getFileHandle(item.name);
+  if(live.kind!==item.kind)throw Error('Source entry type changed: '+item.name);
+  if(typeof live.isSameEntry==='function'&&typeof item.handle?.isSameEntry==='function'&&
+    !await live.isSameEntry(item.handle))throw Error('Source entry was replaced: '+item.name);
+  return true;
+}

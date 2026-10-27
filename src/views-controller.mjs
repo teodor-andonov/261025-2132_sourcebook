@@ -9,7 +9,7 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
   const title=()=>active()?.name||(state.catalogTagView?'#'+state.catalogTagView.replaceAll(' / ','/'):null);
   const results=view=>catalogQueryWithScan([...state.records.values()],state.sources,state.taxonomy,{...view,query:''},state.scan).map(x=>({...x,catalogResult:true,handle:null}));
   function open(id){
-    if(!state.catalog||state.bulkSaving||state.viewSaving)return;
+    if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving)return;
     const view=state.views.find(v=>v.id===id);if(!view)return toast('View not found',true);
     state.activeViewId=id;state.catalogTagView=null;state.tagFilter=null;state.search=view.query;
     state.view=view.presentation.mode;state.size=view.presentation.size;state.sort=view.presentation.sort;state.fileType=view.fileType;
@@ -47,7 +47,7 @@ export function createViewsController({state,readJson,writeJson,authorized,rende
       presentation:{mode:state.view,size:state.size,sort:state.sort}};
   }
   async function mutate(edit){
-    if(!state.catalog||state.bulkSaving||state.viewSaving)return false;
+    if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving)return false;
     state.viewSaving=true;
     try{
       if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission required');

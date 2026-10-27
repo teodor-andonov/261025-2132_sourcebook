@@ -80,3 +80,32 @@ test('incomplete roots do not falsely mark old records missing',()=>{
   const scan={entries:[],completeRootIds:[],problems:['permission denied']};
   assert.equal(catalogQueryWithScan(records,sources,[],{},scan)[0].missing,false);
 });
+
+
+test('catalog reconnect rejects a different old root and requires explicit confirmation on new devices',async()=>{
+  const {verifyCatalogRootReconnect}=await import('../src/source-scan.mjs');
+  const old=dir('Images');old.isSameEntry=async picked=>picked===old;
+  assert.equal(await verifyCatalogRootReconnect(old,old,'Images'),'verified');
+  await assert.rejects(verifyCatalogRootReconnect(old,dir('Images'),'Images'),/not the previously/);
+  await assert.rejects(verifyCatalogRootReconnect(null,dir('Wrong'),'Images',()=>true),/name differs/);
+  await assert.rejects(verifyCatalogRootReconnect(null,dir('Images'),'Images',()=>false),/not confirmed/);
+  assert.equal(await verifyCatalogRootReconnect(null,dir('Images'),'Images',()=>true),'confirmed');
+});
+test('metadata binding verifies existing path and detects replaced source entries',async()=>{
+  const {assertLiveSourceEntry}=await import('../src/source-scan.mjs');
+  const original=file('image.png'),replacement=file('image.png');
+  original.isSameEntry=async other=>other===original;
+  replacement.isSameEntry=async other=>other===replacement;
+  const folder=dir('gallery');folder.getFileHandle=async()=>replacement;
+  const root=dir('Images');root.getDirectoryHandle=async name=>{assert.equal(name,'gallery');return folder;};
+  await assert.rejects(assertLiveSourceEntry(root,['gallery'],{name:'image.png',kind:'file',handle:original}),/replaced/);
+  await assert.doesNotReject(assertLiveSourceEntry(root,['gallery'],{name:'image.png',kind:'file',handle:replacement}));
+  await assert.rejects(assertLiveSourceEntry(root,['..'],{name:'image.png',kind:'file',handle:replacement}),/Invalid/);
+});
+test('complete scan flags resource type drift separately from missing paths',()=>{
+  const record=[{id:'ab1',sourceId:'a',path:'swapped',kind:'file'}];
+  const scan={entries:[{sourceId:'a',path:'swapped',kind:'directory'}],completeRootIds:['a']};
+  const found=catalogQueryWithScan(record,sources,[],{},scan);
+  assert.equal(found[0].missing,false);
+  assert.equal(found[0].changedKind,true);
+});
