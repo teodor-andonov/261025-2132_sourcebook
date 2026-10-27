@@ -57,5 +57,5 @@ test('stale views.json snapshot refuses overwrite',()=>{
 test('physical folder sort control preserves folders first and sorts remaining files',()=>{
   const items=[{name:'z.pdf',kind:'file'},{name:'B',kind:'directory'},{name:'a.png',kind:'file'},{name:'A',kind:'directory'}];
   assert.deepEqual(sortBrowserItems(items,'name-desc').map(x=>x.name),['B','A','z.pdf','a.png']);
-  assert.deepEqual(sortBrowserItems(items,'type').map(x=>x.name),['A','B','a.png','z.pdf']);
+  assert.deepEqual(sortBrowserItems(items,'type').map(x=>x.name),['A','B','z.pdf','a.png']);
 });
