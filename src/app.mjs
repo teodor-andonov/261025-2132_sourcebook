@@ -94,7 +94,7 @@ async function exportCatalogBackup(){
 function chooseBackupForInspection(){
   if(!state.catalog)return toast('Open a catalog first.',true);
   state.backupRestorePlan=null;state.backupRestoreSource=null;
-  openDialog('<h2>Inspect metadata backup</h2><p>Verify and compare a metadata-only backup. You may explicitly restore missing resource records; existing metadata and source files will never be overwritten.</p><label>Backup JSON<input id="backup-inspect-file" type="file" accept=".json,application/json"/></label><div id="backup-inspection-result" class="backup-results" aria-live="polite"></div><div class="dialog-actions"><button type="button" class="primary" data-action="dismiss">Done</button></div>');
+  openDialog('<h2>Inspect metadata backup</h2><p>Verify and compare a metadata-only backup. You may explicitly restore missing resource records; existing resource records and ordinary files are preserved; the Catalog ID counter may advance.</p><label>Backup JSON<input id="backup-inspect-file" type="file" accept=".json,application/json"/></label><div id="backup-inspection-result" class="backup-results" aria-live="polite"></div><div class="dialog-actions"><button type="button" class="primary" data-action="dismiss">Done</button></div>');
 }
 async function inspectBackupFile(file){
   const target=$('#backup-inspection-result');
@@ -138,7 +138,7 @@ async function restoreMissingBackupRecords(){
   try{
     const approved=await planMissingResourceRestore(handle,backup,{selectedPaths:selected});
     if(approved.signature!==preview.signature)throw Error('Catalog changed since inspection. Inspect the backup again.');
-    if(!confirm('Restore '+selected.length+' missing Catalog resource record(s)? This writes only Catalog JSON and never overwrites existing metadata or ordinary files.'))return;
+    if(!confirm('Restore '+selected.length+' missing Catalog resource record(s)? This writes only Catalog JSON, never overwrites existing resource records or ordinary files, and may advance the Catalog ID counter.'))return;
     if(!await authorized(handle,'readwrite'))throw Error('Catalog write permission is required for restoration.');
     const result=await restoreMissingResourceRecords(handle,backup,approved);
     if(state.catalogHandle!==handle)throw Error('Catalog switched during restoration');

@@ -9,7 +9,7 @@ This cycle implements **missing-resource-only restoration**. It is a conservativ
 ## Delivered
 
 - Testable `src/catalog-restore.mjs` plan/execute API: verifies backup and live Catalog, validates references, catches duplicate source/path identities, caps batches, reserves IDs of all missing backup records even across deferred batches, rejects stale previews and uses the existing recovery journal.
-- Settings → Inspect / restore: verified comparison, selectable missing resource JSON, explicit confirmation, permission request, state refresh and visible failure/reinspection path. Existing/changed metadata and ordinary source files are untouched.
+- Settings → Inspect / restore: verified comparison, selectable missing resource JSON, explicit confirmation, permission request, state refresh and visible failure/reinspection path. Existing resource metadata and ordinary source files are untouched; catalog.json may advance its nextSequence counter.
 - Service worker precaches the new module; Node tests cover interrupted/resumed operations, stale checks, tampering, orphan references and large batches.
 - README now follows feature-branch development and automatic GitHub Actions publishing.
 
