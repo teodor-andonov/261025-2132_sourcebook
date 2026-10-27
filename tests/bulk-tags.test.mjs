@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from '../src/bulk-tags.mjs';
-import {CATALOG_JOURNAL,inspectPendingCatalogTransaction} from '../src/catalog-transactions.mjs';
+import {CATALOG_JOURNAL,inspectPendingCatalogTransaction,resumeCatalogTransaction} from '../src/catalog-transactions.mjs';
 const catalog={id:'c',code:'ab',nextSequence:1};
 const items=[{name:'A.png',kind:'file'},{name:'B.png',kind:'file'}];
 const plan=(extra={})=>planBulkTags({catalog,taxonomy:[],records:[],items,sourceId:'root',parts:[],paths:['Architecture / Facades'],mode:'add',siblingNames:items.map(x=>x.name),idFactory:(()=>{let n=0;return ()=>'tag'+(++n);})(),timestamp:'2026-10-27T13:00:00.000Z',...extra});
@@ -82,6 +82,8 @@ test('mid-batch taxonomy change reports partial verified count',async()=>{
   await assert.rejects(commitBulkTags({handle:h,plan:p,expectedCatalog:catalog,expectedTaxonomy:[]}),/Catalog changed during transaction: tags.json/);
   assert.deepEqual(h.resources.writes,['ab1.json']);
   const pending=await inspectPendingCatalogTransaction(h,catalog.id);
-  assert.deepEqual(pending.conflicts,['tags.json']);
+  assert.deepEqual(pending.conflicts,[]); // External edit restored the old snapshot; safe to replay.
   assert.equal(h.files.has(CATALOG_JOURNAL),true);
+  assert.equal(await resumeCatalogTransaction(h,catalog.id),4);
+  assert.deepEqual(h.resources.writes,['ab1.json','ab2.json']);
 });
