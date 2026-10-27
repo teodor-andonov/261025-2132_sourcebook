@@ -10,6 +10,7 @@
 - The inspector tag picker now supports ArrowDown/ArrowUp to highlight suggestions and Enter to select one. Enter without an active suggestion still creates the explicitly typed tag; comma retains the existing entry behavior. Combobox/listbox ARIA state reflects the highlighted option.
 - Added pure suggestion/navigation tests and extended the **real 1440×900 Chromium fixture** to exercise keyboard selection and verify stable-ID persistence with unchanged source filenames. A `desktop-tag-picker.png` fixture snapshot is configured for the next nightly/manual screenshot run; **no new screenshot capture or physical-device validation is claimed yet**.
 - Only catalog metadata is written when the user explicitly saves. No image editor, source renaming, collection system or custom-property schema added.
+- **Verified:** Sourcebook CI run `40496013373` succeeded for implementation commit `ccdc700a4d7d45dc5854721ea39a8c26572d61b1` (Node unit tests and JavaScript syntax checks). Browser fixture execution and refreshed screenshot images are still pending the separate nightly/manual workflow.
 
 ## 2026-10-27 — Current-folder tag-aware search (V0.0.6)
 
