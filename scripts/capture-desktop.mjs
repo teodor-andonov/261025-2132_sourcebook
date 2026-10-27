@@ -105,7 +105,14 @@ try{
   await page.locator('.resource[data-item]').first().waitFor();
   await page.waitForFunction(()=>document.querySelectorAll('.resource[data-item]').length>=12,{timeout:15000});
   await page.locator('.resource[data-item]').filter({hasText:'Kinetic Facade Study'}).click();
-  await page.locator('#tags').fill('Facades, Generative');
+  await page.locator('#tag-input').fill('#Facades');
+  await page.locator('#tag-input').press('Enter');
+  await page.locator('#tag-input').fill('Generative / Geometry');
+  await page.locator('#tag-input').press('Enter');
+  if(await page.locator('.tag-pill').count()!==2)throw Error('Tag pills did not render');
+  await page.locator('[data-remove-tag="0"]').click();
+  await page.locator('#tag-input').fill('Facades');
+  await page.locator('#tag-input').press('Enter');
   await page.locator('#notes').fill('Study of iterative geometric envelope systems.');
   await page.locator('[data-action="save-resource"]').click();
   await page.waitForFunction(()=>document.querySelector('.hint')?.textContent.includes('Catalog identity:'));
@@ -121,7 +128,7 @@ try{
     const file=await records.getFileHandle('ab1.json');
     return JSON.parse(await (await file.getFile()).text());
   });
-  if(record.notes!=='Study of iterative geometric envelope systems.' || record.tags.length!==2)throw Error('Metadata was not persisted as expected.');
+  if(record.notes!=='Study of iterative geometric envelope systems.' || JSON.stringify(record.tags)!==JSON.stringify(['Generative/Geometry','Facades']))throw Error('Tag pill edits were not persisted as expected.');
   await page.screenshot({path:resolve(snapshots,'desktop-gallery.png')});
   console.log('Captured 1440×900: desktop-launcher.png and desktop-gallery.png');
   await context.close();

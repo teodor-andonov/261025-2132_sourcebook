@@ -4,6 +4,15 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — Compact hashtag pill editor (V0.0.5)
+
+- Inspector tags now use compact neutral hashtag pills: Enter/comma adds, Backspace removes the last, × removes a pill, and Save commits pending input.
+- Slash-delimited labels such as `#Architecture/Facades` are provisional nested names; input is trimmed, deduplicated case-insensitively and validated. Existing `tags: string[]` records remain compatible.
+- Neutral grayscale light/dark surfaces and file icons with one default blue focus/selection accent; inspector spacing reduced. Configurable accent settings are deferred.
+- Pure tag tests and actual headless Chromium **1440×900** screenshot harness updated to exercise pill add/remove/persistence. **Screenshot images pending** next successful nightly/manual run; existing gallery still depicts prior UI.
+- Prevented overwrite when another writer creates a resource record after selection. No source file rename/write added.
+- Stable tag IDs, nested taxonomy operations, descendant queries, bulk tagging and custom properties remain pending. No Windows/Pixel device validation.
+
 ## 2026-10-27 — CI and live deployment split
 
 - Code commits trigger lightweight **Sourcebook CI** tests, not Pages publishing.

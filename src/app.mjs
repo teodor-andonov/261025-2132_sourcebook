@@ -2,6 +2,7 @@ import {getLocal,setLocal,readJson,writeJson,nested,authorized} from './storage.
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {nextSelectionIndex} from './navigation.mjs';
+import {mergeTagInput} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
@@ -10,7 +11,8 @@ const state={
   search:'', view:localStorage.getItem('sb-view')||'gallery',
   size:Number(localStorage.getItem('sb-size'))||164,
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
-  imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150
+  imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
+  tagDraftItem:null, tagDraft:[]
 };
 const glyphs={
   book:'M3 3h7v18H3z M10 7h4v14h-4z M16 4l5 17 M16 5l3-1',
@@ -240,12 +242,28 @@ async function thumbnail(node){
     img.src=url;
   }catch{}
 }
+function renderTagPills(){
+  const host=$('#tag-pills');if(!host)return;
+  host.innerHTML=state.tagDraft.map((tag,index)=>'<span class="tag-pill"><span class="tag-pill-label" title="'+escapeHTML(tag)+'">#'+escapeHTML(tag)+'</span><button type="button" data-remove-tag="'+index+'" aria-label="Remove tag '+escapeHTML(tag)+'" title="Remove tag">'+icon('close',12)+'</button></span>').join('');
+}
+function commitTagInput(){
+  const input=$('#tag-input');if(!input||!input.value.trim())return true;
+  try{state.tagDraft=mergeTagInput(state.tagDraft,input.value);input.value='';renderTagPills();return true;}
+  catch(e){toast(errorText(e),true);input.focus();return false;}
+}
 function renderInspector(){
   const host=$('#inspector-data');if(!host)return;
-  if(state.selected.size!==1){host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' selected':'Select a resource')+'</span></div>';return;}
+  if(state.selected.size!==1){
+    state.tagDraftItem=null;state.tagDraft=[];
+    host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' selected':'Select a resource')+'</span></div>';return;
+  }
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   const record=itemRecord(item);
-  host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),46)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">REAL FILENAME</div><code>'+escapeHTML(item.name)+'</code></div><div class="detail"><div class="label">TAGS <small>(comma separated)</small></div><input id="tags" value="'+escapeHTML((record?.tags||[]).join(', '))+'" placeholder="Architecture, Materials…"/></div><div class="detail"><div class="label">NOTES</div><textarea rows="4" id="notes" placeholder="Write a note…">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save')+' '+(record?'Save properties':'Save to catalog')+'</button><p class="hint">'+(record?'Catalog identity: '+escapeHTML(record.id):'Adds a catalog identity and metadata without renaming or modifying the original file.')+'</p><button class="secondary full" data-action="preview">'+icon('view')+' Quick look</button>';
+  if(state.tagDraftItem!==item.id){
+    state.tagDraftItem=item.id;state.tagDraft=Array.isArray(record?.tags)?[...record.tags]:[];
+  }
+  host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),46)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">REAL FILENAME</div><code>'+escapeHTML(item.name)+'</code></div><div class="detail"><div class="label">TAGS</div><div class="tag-editor" id="tag-editor"><div class="tag-pills" id="tag-pills"></div><input id="tag-input" aria-label="Add tag" placeholder="Add tag…" autocomplete="off"/></div></div><div class="detail"><div class="label">NOTES</div><textarea rows="4" id="notes" placeholder="Write a note…">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save')+' '+(record?'Save properties':'Save to catalog')+'</button><p class="hint">'+(record?'Catalog identity: '+escapeHTML(record.id):'Adds a catalog identity and metadata without renaming or modifying the original file.')+'</p><button class="secondary full" data-action="preview">'+icon('view')+' Quick look</button>';
+  renderTagPills();
 }
 function refreshSelectionUI(){
   for(const node of document.querySelectorAll('#items [data-item]')){
@@ -267,7 +285,8 @@ function select(item,event){
 }
 async function saveResource(){
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
-  const tags=($('#tags')?.value||'').split(',').map(x=>x.trim()).filter(Boolean),notes=$('#notes')?.value||'';
+  if(!commitTagInput())return;
+  const tags=[...state.tagDraft],notes=$('#notes')?.value||'';
   const previous=itemRecord(item);
   try{
     if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed to save metadata.');
@@ -275,6 +294,7 @@ async function saveResource(){
     if(!latest||latest.id!==state.catalog.id||latest.code!==state.catalog.code)throw Error('Catalog identity changed. Reopen the catalog.');
     await refreshRecords();
     const current=itemRecord(item);
+    if(!previous&&current)throw Error('This resource was cataloged on disk since selection. Reopen the catalog before saving.');
     if(previous && (!current||previous.updatedAt!==current.updatedAt)){
       throw Error('This resource changed on disk. Reopen the catalog before saving.');
     }
@@ -368,6 +388,8 @@ document.addEventListener('input',event=>{
   if(event.target.id==='density'){state.size=Number(event.target.value);localStorage.setItem('sb-size',state.size);$('#items')?.style.setProperty('--size',state.size+'px');}
 });
 document.addEventListener('click',async event=>{
+  const removeTag=event.target.closest('[data-remove-tag]');
+  if(removeTag){state.tagDraft.splice(Number(removeTag.dataset.removeTag),1);renderTagPills();$('#tag-input')?.focus();return;}
   const crumb=event.target.closest('[data-crumb]');if(crumb){return navigate(state.sourceId,state.parts.slice(0,Number(crumb.dataset.crumb)+1));}
   const source=event.target.closest('[data-source]');if(source){state.sidebar=false;return navigate(source.dataset.source,[]);}
   const tile=event.target.closest('[data-item]');if(tile){const item=state.items.find(i=>i.id===tile.dataset.item);if(item)select(item,event);return;}
@@ -398,6 +420,11 @@ document.addEventListener('dblclick',event=>{
   if(item)showPreview(item);
 });
 document.addEventListener('keydown',event=>{
+  if(event.target.id==='tag-input'){
+    if(event.key==='Enter'||event.key===','){event.preventDefault();commitTagInput();return;}
+    if(event.key==='Backspace'&&!event.target.value&&state.tagDraft.length){state.tagDraft.pop();renderTagPills();return;}
+    if(event.key==='Escape'){event.target.value='';event.stopPropagation();return;}
+  }
   if(event.key==='Escape'){closePreview();$('#dialog')?.remove();return;}
   if(state.previewId){if(event.key==='ArrowRight')previewStep(1);if(event.key==='ArrowLeft')previewStep(-1);return;}
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('#search-input')?.focus();return;}
