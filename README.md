@@ -1,6 +1,6 @@
 # Sourcebook
 
-> **Implementation underway — V0.0.15 catalog-wide tag discovery cycle (2026-10-27).** Browser-first read-only Folder Tabs, portable `.sb` catalogs, registered-root Folder navigation, nested stable-ID Tags, catalog-wide tag discovery, current-folder hashtag search and safe catalog-only bulk Add/Remove are implemented as prototype features. Code CI is passing; **physical Windows/Pixel 8 testing remains outstanding**. Pages publishing and screenshot capture are **manual only**, by explicit request. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+> **Implementation underway — V0.0.15 catalog-wide tag discovery cycle (2026-10-27).** Browser-first read-only Folder Tabs, portable `.sb` catalogs, registered-root Folder navigation, nested stable-ID Tags, catalog-wide tag discovery, current-folder hashtag search and safe catalog-only bulk Add/Remove are implemented as prototype features. Earlier bulk-tag CI passed; CI for the new catalog-wide discovery commit is not yet confirmed. **Physical Windows/Pixel 8 testing remains outstanding**. Pages publishing and screenshot capture are **manual only**, by explicit request. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 **A beautiful, fast, local-first file browser with optional portable reference catalogs for ordinary files, folders and URLs.**
 
