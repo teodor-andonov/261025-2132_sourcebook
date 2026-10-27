@@ -65,12 +65,12 @@ export async function inspectIndexedRootOverlaps(index,handles,{maxCandidates=12
         continue;
       }
       const verified=[];
-      for(const entry of matches){
+      for(const path of matches){
         if(++comparisons>maxComparisons){
           problems.push('Overlap identity comparison limit reached');
           return {overlaps,problems};
         }
-        try{if(await same(await atPath(ancestor.handle,entry.path),descendant.handle))verified.push(entry.path);}catch{}
+        try{if(await same(await atPath(ancestor.handle,path),descendant.handle))verified.push(path);}catch{}
       }
       if(verified.length>1){
         problems.push('Ambiguous physical paths between '+ancestor.id+' and '+descendant.id);
