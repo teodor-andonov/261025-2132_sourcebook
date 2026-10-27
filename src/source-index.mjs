@@ -111,14 +111,77 @@ export function refreshSourceIndex(index,scan,targetIds,handles,now=Date.now()){
   return {index:{version:SOURCE_INDEX_VERSION,catalogId:index.catalogId,roots},
     changes,completeRootIds:[...complete],partialRootIds,partialEntries,problems:Array.isArray(scan.problems)?[...scan.problems]:[]};
 }
-export function sourceIndexOverlay(index,{freshRootIds=[],partialRootIds=[],partialEntries=[],problems=[]}={}){
+export function sourceIndexOverlay(index,{freshRootIds=[],freshSubtreePaths=[],partialRootIds=[],partialEntries=[],problems=[]}={}){
   if(!index||!Array.isArray(index.roots))throw Error('Invalid source index');
   const known=new Set(index.roots.map(root=>root.sourceId));
   const fresh=[...new Set(freshRootIds)].filter(id=>known.has(id)&&!partialRootIds.includes(id));
   const stale=[...known].filter(id=>!fresh.includes(id));
   const partial=[...new Set(partialRootIds)];
   const extra=assertEntries(partialEntries,new Set(partial.filter(id=>!known.has(id))));
+  if(!Array.isArray(freshSubtreePaths))throw Error('Invalid refreshed subfolder paths');
+  const verifiedSubtrees=[],seenSubtrees=new Set();
+  for(const scope of freshSubtreePaths){
+    if(!scope||!known.has(scope.sourceId)||!validPath(scope.path)||partial.includes(scope.sourceId)||fresh.includes(scope.sourceId))continue;
+    const root=index.roots.find(r=>r.sourceId===scope.sourceId);
+    if(!root.entries.some(e=>e.path===scope.path&&e.kind==='directory'))continue;
+    const key=scope.sourceId+'\u0000'+scope.path;
+    if(!seenSubtrees.has(key)){seenSubtrees.add(key);verifiedSubtrees.push({sourceId:scope.sourceId,path:scope.path});}
+  }
   return {entries:[...index.roots.flatMap(root=>root.entries),...extra],
-    completeRootIds:fresh,staleRootIds:[...new Set([...stale,...partial])],
+    completeRootIds:fresh,completeSubtreePaths:verifiedSubtrees,staleRootIds:[...new Set([...stale,...partial])],
     cachedRootIds:[...known],partialRootIds:partial,problems:[...problems],cancelled:false};
+}
+
+
+// A root handle's display name or source ID is not physical identity. Both
+// complete-root and subfolder refreshes must prove the cached root binding.
+export async function assertIndexedRootIdentity(index,sourceId,handles){
+  if(!index||!Array.isArray(index.roots)||!(handles instanceof Map)||!validId(sourceId))
+    throw Error('Invalid indexed Folder identity check');
+  const previous=index.roots.find(root=>root.sourceId===sourceId);
+  if(!previous)throw Error('Index the complete Catalog Folder before refreshing a subfolder');
+  const current=handles.get(sourceId);
+  if(current?.kind!=='directory'||typeof current.isSameEntry!=='function')
+    throw Error('Indexed Catalog Folder is disconnected');
+  let same=false;
+  try{same=await current.isSameEntry(previous.handle)===true;}catch{}
+  if(!same)throw Error('Indexed Catalog Folder identity changed; clear the device index and reconnect the original Folder');
+  return true;
+}
+
+// Replace ONLY a completely enumerated subtree of an identity-verified root.
+// The original root scan timestamp is intentionally preserved: a subfolder
+// refresh never upgrades its siblings to live, verified filesystem state.
+export async function refreshSourceSubtreeIndex(index,scan,sourceId,folderPath,handles,now=Date.now()){
+  if(!validId(sourceId)||!validPath(folderPath)||!Number.isSafeInteger(now)||now<0)
+    throw Error('Invalid indexed subfolder refresh');
+  await assertIndexedRootIdentity(index,sourceId,handles);
+  if(!scan||!Array.isArray(scan.entries)||!Array.isArray(scan.completeSubtreePaths)||
+     !Array.isArray(scan.completeRootIds)||scan.completeRootIds.length||
+     scan.completeSubtreePaths.length>1)
+    throw Error('Invalid indexed subfolder scan');
+  const marker=scan.completeSubtreePaths[0];
+  if(marker&&(marker.sourceId!==sourceId||marker.path!==folderPath))
+    throw Error('Foreign indexed subfolder completion');
+  const current=assertEntries(scan.entries,new Set([sourceId]));
+  if(current.some(e=>e.path!==folderPath&&!e.path.startsWith(folderPath+'/')))
+    throw Error('Indexed subfolder scan escaped its scope');
+  const root=index.roots.find(r=>r.sourceId===sourceId);
+  const before=root.entries.filter(e=>e.path===folderPath||e.path.startsWith(folderPath+'/'));
+  if(!root.entries.some(e=>e.path===folderPath&&e.kind==='directory'))
+    throw Error('Subfolder is not a directory in the current index; refresh the complete Folder');
+  if(scan.cancelled||!marker){
+    return {index,changes:[],completeSubtreePaths:[],partialRootIds:[sourceId],
+      problems:Array.isArray(scan.problems)?[...scan.problems]:[]};
+  }
+  if(!current.some(e=>e.path===folderPath&&e.kind==='directory'))
+    throw Error('Completed subfolder scan omitted its directory');
+  const entries=[...root.entries.filter(e=>e.path!==folderPath&&!e.path.startsWith(folderPath+'/')),...current];
+  const roots=index.roots.map(r=>r.sourceId===sourceId?{...r,entries}:r);
+  if(roots.reduce((count,r)=>count+r.entries.length,0)>SOURCE_INDEX_LIMIT)
+    throw Error('Device index entry limit reached; refresh a smaller Folder');
+  const next={...index,roots};
+  return {index:next,changes:[{sourceId,path:folderPath,...diffEntries(before,current)}],
+    completeSubtreePaths:[{sourceId,path:folderPath}],partialRootIds:[],
+    problems:Array.isArray(scan.problems)?[...scan.problems]:[]};
 }
