@@ -276,6 +276,7 @@ async function addSource(){
   }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
 }
 async function reconnect(){
+  if(state.resourceSaving||state.bulkSaving||state.viewSaving)return toast('Finish metadata editing before reconnecting.',true);
   if(!state.catalog){
     try{
       const tab=activeFolderTab();
@@ -334,7 +335,7 @@ function tagNavigationHTML(){
   return (pins?'<div class="tag-shortcuts">'+pins+'</div>':'')+rows;
 }
 async function togglePin(id){
-  if(state.bulkSaving)return toast('Finish bulk tagging before editing tags.',true);
+  if(state.bulkSaving||state.resourceSaving)return toast('Finish metadata editing before changing tags.',true);
   try{
     if(!state.catalogHandle||!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed to pin a tag.');
     const disk=await readJson(state.catalogHandle,'tags.json',[]);
@@ -607,7 +608,7 @@ function select(item,event){
   refreshSelectionUI();renderInspector();
 }
 async function bulkTags(mode){
-  if(!state.catalog||state.bulkSaving||state.selected.size<2)return;
+  if(!state.catalog||state.bulkSaving||state.resourceSaving||state.selected.size<2)return;
   if(!commitTagInput())return;
   const items=state.items.filter(item=>state.selected.has(item.id));
   if(items.length!==state.selected.size)return toast('Selection changed. Select again.',true);
@@ -745,7 +746,7 @@ function previewStep(offset){
 }
 async function newFolder(){
   if(!state.catalog||!sourceHandle())return;
-  if(state.scanBusy)return toast('Finish or cancel the folder scan first.',true);
+  if(state.scanBusy||state.resourceSaving)return toast('Finish the current operation first.',true);
   const name=prompt('Name of new folder:','New folder');
   if(!name)return;
   if(!validName(name))return toast('Invalid folder name',true);
@@ -754,7 +755,7 @@ async function newFolder(){
 }
 async function importFiles(){
   if(!state.catalog)return;
-  if(state.scanBusy)return toast('Finish or cancel the folder scan first.',true);
+  if(state.scanBusy||state.resourceSaving)return toast('Finish the current operation first.',true);
   try{
     if(!await authorized(sourceHandle(),'readwrite'))throw Error('Write access is required to import files.');
     if(typeof window.showOpenFilePicker!=='function')throw Error('File import picker is unavailable in this browser.');
@@ -836,7 +837,7 @@ document.addEventListener('click',async event=>{
     case 'create-catalog':createCatalog();break;
     case 'open-catalog':chooseCatalog().catch(e=>toast(errorText(e),true));break;
     case 'recent':recentCatalog().catch(e=>toast(errorText(e),true));break;
-    case 'home':landing();break;
+    case 'home':if(state.resourceSaving||state.bulkSaving||state.viewSaving)return toast('Finish catalog editing first.',true);landing();break;
     case 'add-source':addSource();break;
     case 'reconnect':reconnect();break;
     case 'refresh':viewsUI.inResults()?void refreshCatalogTagView():navigate(state.sourceId,[...state.parts]);break;
