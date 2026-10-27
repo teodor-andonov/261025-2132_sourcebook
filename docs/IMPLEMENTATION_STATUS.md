@@ -85,7 +85,7 @@
 ## Release and device verification
 
 - GitHub Pages was enabled; **Publish Sourcebook** succeeded on 2026-10-27 (Actions run `40485889974`). This V0.0.6 development commit is **not** automatically deployed: live publishing remains nightly-on-change or manual.
-- Previous **Sourcebook CI** run `40481999049` passed. CI for this change needs checking after commit.
+- **Sourcebook CI** run `40489034418` passed for V0.0.6 commit `99a1d380` (unit tests and JavaScript syntax checks).
 - Last **Sourcebook Desktop Screenshots** run `40474583662` passed, but predates the latest tag UI; refreshed fixture screenshots await the nightly/manual workflow.
 - Actual Windows Chrome and Pixel 8 filesystem/permission acceptance tests remain outstanding. Do not claim the hosted app is live until deployment succeeds.
 
