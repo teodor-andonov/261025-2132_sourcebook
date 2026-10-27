@@ -1,0 +1,67 @@
+// Ephemeral, read-only discovery of files under already-granted Catalog Folders.
+// This index is deliberately NOT a catalog mutation or a durable filesystem watcher.
+const validPart=name=>typeof name==='string'&&!!name&&name!=='.'&&name!=='..'&&!/[\/\\\u0000-\u001f]/.test(name);
+const key=(sourceId,path)=>sourceId+'\u0000'+path;
+const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
+
+export async function scanRegisteredFolders(sources,handles,options={}){
+  if(!Array.isArray(sources)||!(handles instanceof Map))throw Error('Invalid scan sources');
+  const {onProgress=()=>{},isCancelled=()=>false,maxEntries=50000,maxDepth=32}=options;
+  if(!Number.isInteger(maxEntries)||maxEntries<1||!Number.isInteger(maxDepth)||maxDepth<1)throw Error('Invalid scan limits');
+  const entries=[],completeRootIds=[],problems=[],seenRoots=new Set(),seenPaths=new Set();
+  const progress=()=>onProgress({count:entries.length,completeRoots:completeRootIds.length,totalRoots:sources.length,problems:problems.length});
+  const result=cancelled=>({entries,completeRootIds,problems,cancelled});
+  for(const source of sources){
+    if(isCancelled())return result(true);
+    if(!source||!validPart(source.id)||seenRoots.has(source.id)){
+      problems.push('Invalid or repeated source ID');progress();continue;
+    }
+    seenRoots.add(source.id);
+    const root=handles.get(source.id);
+    if(!root||root.kind!=='directory'||typeof root.entries!=='function'||typeof root.queryPermission!=='function'){
+      problems.push(String(source.name||source.id)+': disconnected');progress();continue;
+    }
+    let granted=false;
+    try{granted=await root.queryPermission({mode:'read'})==='granted';}
+    catch{}
+    if(!granted){problems.push(String(source.name||source.id)+': read permission unavailable');progress();continue;}
+    const stack=[{handle:root,parts:[]}];
+    let complete=true,limitReached=false;
+    while(stack.length){
+      if(isCancelled())return result(true);
+      const {handle,parts}=stack.pop();
+      try{
+        for await(const [name,child] of handle.entries()){
+          if(isCancelled())return result(true);
+          if(!validPart(name)||!child||!['file','directory'].includes(child.kind)){
+            complete=false;problems.push(String(source.name||source.id)+': invalid directory entry');continue;
+          }
+          if(child.kind==='directory'&&name.endsWith('.sb'))continue;
+          if(entries.length>=maxEntries){
+            complete=false;limitReached=true;problems.push('Scan limit reached ('+maxEntries+' entries)');break;
+          }
+          const path=[...parts,name].join('/'),identity=key(source.id,path);
+          if(seenPaths.has(identity)){
+            complete=false;problems.push(String(source.name||source.id)+': duplicate entry '+path);continue;
+          }
+          seenPaths.add(identity);
+          entries.push({sourceId:source.id,path,kind:child.kind});
+          if(child.kind==='directory'){
+            if(parts.length+1>=maxDepth){
+              complete=false;problems.push(String(source.name||source.id)+': depth limit at '+path);
+            }else if(typeof child.entries==='function')stack.push({handle:child,parts:[...parts,name]});
+            else{complete=false;problems.push(String(source.name||source.id)+': unreadable directory '+path);}
+          }
+          if(entries.length%250===0){progress();await tick();}
+        }
+      }catch(error){
+        complete=false;problems.push(String(source.name||source.id)+': '+(error?.message||'Folder read failed'));
+      }
+      if(limitReached)break;
+    }
+    if(complete)completeRootIds.push(source.id);
+    progress();
+    if(limitReached)break;
+  }
+  return result(false);
+}

@@ -78,3 +78,27 @@ export function catalogTagResults(records,sources,taxonomy,selectedTag){
   if(!tag)throw Error('Choose a tag.');
   return catalogQueryResults(records,sources,taxonomy,{tagPath:tag});
 }
+
+
+// Overlay an explicit, disposable disk scan onto catalog records. Tag conditions
+// naturally exclude unobjectified entries; unfiltered Views include them.
+// Missing is asserted only for roots whose traversal completed without errors.
+export function catalogQueryWithScan(records,sources,taxonomy,filter={},scan=null){
+  const originals=[...records];
+  if(!scan)return catalogQueryResults(originals,sources,taxonomy,filter).map(item=>({...item,unobjectified:false,missing:false}));
+  const recordKeys=new Set(originals.filter(r=>r&&typeof r.sourceId==='string'&&typeof r.path==='string').map(r=>r.sourceId+'\u0000'+r.path));
+  const found=new Set(),extra=[];
+  for(const entry of Array.isArray(scan.entries)?scan.entries:[]){
+    if(!entry||typeof entry.sourceId!=='string'||typeof entry.path!=='string'||!['file','directory'].includes(entry.kind))continue;
+    const k=entry.sourceId+'\u0000'+entry.path;
+    if(found.has(k))continue;
+    found.add(k);
+    if(!recordKeys.has(k))extra.push({id:null,sourceId:entry.sourceId,path:entry.path,kind:entry.kind,tagIds:[]});
+  }
+  const complete=new Set(Array.isArray(scan.completeRootIds)?scan.completeRootIds:[]);
+  return catalogQueryResults([...originals,...extra],sources,taxonomy,filter).map(item=>{
+    const unobjectified=item.record?.id===null;
+    const missing=!unobjectified&&complete.has(item.sourceId)&&!found.has(item.sourceId+'\u0000'+item.path);
+    return {...item,record:unobjectified?null:item.record,unobjectified,missing};
+  });
+}
