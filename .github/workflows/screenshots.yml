@@ -1,15 +1,8 @@
 name: Sourcebook Desktop Screenshots
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'index.html'
-      - 'assets/**'
-      - 'manifest.webmanifest'
-      - 'scripts/capture-desktop.mjs'
-      - '.github/workflows/screenshots.yml'
+  schedule:
+    - cron: '41 2 * * *'
 permissions:
   contents: write
 concurrency:

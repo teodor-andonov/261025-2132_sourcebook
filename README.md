@@ -1,6 +1,6 @@
 # Sourcebook
 
-> **Implementation underway — V0.0 preview (2026-10-26).** The first Chrome PWA code, real-folder gallery, `.sb` catalog creation and simple metadata editing are in the repository. Automated syntax and filename-ID unit tests pass. The app has **not** yet been verified on Windows/Pixel 8. GitHub Pages publication is blocked until the repository's Pages source is set to **GitHub Actions** under Settings → Pages. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+> **Implementation underway — V0.0 preview (2026-10-26).** The first Chrome PWA code, real-folder gallery, `.sb` catalog creation and simple metadata editing are in the repository. Automated syntax and filename-ID unit tests pass. The app has **not** yet been verified on Windows/Pixel 8. GitHub Pages publication still needs the repository's Pages source set to **GitHub Actions** under Settings → Pages; publishing now uses a separate nightly/manual workflow. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 
 **A beautiful, fast, local-first visual explorer and reference catalog for ordinary files, folders and URLs.**
@@ -25,6 +25,16 @@ Sourcebook lets you point a portable **Catalog** at existing folders, browse eve
 - [Screenshot workflow and fixture disclosure](screenshots/README.md)
 
 These are **real Chromium browser captures** of Sourcebook with synthetic local reference files. Screenshots are regenerated when UI code changes; they do not prove physical Android/Windows filesystem compatibility.
+
+## Development and release automation
+
+- **Hourly development:** commits stay on `main` without automatically updating the live PWA.
+- **Every code commit:** lightweight CI tests.
+- **Nightly:** one 1440×900 desktop browser screenshot refresh (02:41 UTC).
+- **Nightly:** publish only if web app assets changed since the last successful deployment (03:17 UTC).
+- **Anytime:** trigger **Actions → Publish Sourcebook → Run workflow** to publish immediately.
+
+Full details: [Release and CI policy](docs/RELEASE_PROCESS.md). Pages must first be enabled from repository Settings → Pages → GitHub Actions.
 
 ## Product principles
 

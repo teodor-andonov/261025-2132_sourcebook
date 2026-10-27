@@ -17,7 +17,7 @@ npx playwright install chromium
 node scripts/capture-desktop.mjs
 ~~~
 
-Alternatively, run the **Sourcebook Desktop Screenshots** GitHub Actions workflow. The workflow uploads PNGs as an artifact and attempts to update the tracked screenshots. If the repository prevents automated commits, take the artifact and commit it explicitly.
+The **Sourcebook Desktop Screenshots** GitHub Actions workflow runs nightly at **02:41 UTC**, not on each code commit. It may also be run manually from the Actions tab after a meaningful visual change. The workflow uploads PNGs as an artifact and attempts to update the tracked screenshots. If the repository prevents automated commits, use the artifact and commit it explicitly.
 
 **Review rules**
 - Use this one desktop viewport only: 1440×900.

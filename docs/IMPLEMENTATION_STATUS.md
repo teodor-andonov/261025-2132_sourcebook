@@ -4,6 +4,14 @@
 **Build:** V0.0 initial real PWA prototype  
 **Repo:** https://github.com/teodor-andonov/261025-2132_sourcebook
 
+## 2026-10-27 — CI and live deployment split
+
+- Code commits trigger lightweight **Sourcebook CI** tests, not Pages publishing.
+- Desktop screenshot workflow runs **nightly at 02:41 UTC** or manually, instead of every UI commit.
+- Live PWA publishes **nightly at 03:17 UTC only when source assets changed since last successful publishing workflow**, or immediately via manual Actions → Publish Sourcebook. Release still runs its own tests.
+- Pages publishes only static PWA assets, excluding development logs, tests and screenshots. Full policy: [RELEASE_PROCESS.md](RELEASE_PROCESS.md).
+- GitHub Pages is **still not verified live**. Initial configuration requires Settings → Pages → Source: GitHub Actions.
+
 ## 2026-10-27 — UI snapshots and keyboard navigation (V0.0.4)
 
 - Added `screenshots/` with a repeatable **1440×900** desktop screenshot workflow. A headless Chromium run exercises the actual app using synthetic files, produces launcher and gallery screenshots, and commits them to the repository automatically.
@@ -50,7 +58,7 @@
 
 GitHub Actions **verify** job is passing. **Deploy** job failed in actions/configure-pages@v5; GitHub Pages likely needs enabling for this newly created repository.
 
-**User action:** Repository → Settings → Pages → Build and deployment → Source = **GitHub Actions**. Re-run the latest workflow or push a subsequent commit. Do not claim the hosted app is live until deployment succeeds.
+**User action:** Repository → Settings → Pages → Build and deployment → Source = **GitHub Actions**. Then run **Actions → Publish Sourcebook → Run workflow** or use the next nightly release. Normal code commits deliberately do not publish. Do not claim the hosted app is live until deployment succeeds.
 
 ## Not done / do not overclaim
 
