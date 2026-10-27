@@ -4,7 +4,7 @@ import {planResourceIdentity} from './catalog.mjs';
 import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.mjs';
 import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
-import {catalogTagResults,sortCatalogResults} from './catalog-search.mjs';
+import {catalogTagResults,sortCatalogResults,sortBrowserItems} from './catalog-search.mjs';
 import {validateViews} from './views.mjs';
 import {createViewsController} from './views-controller.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab} from './workspace.mjs';
@@ -393,13 +393,13 @@ function visibleItems(){
       if(record.sourceId===state.sourceId&&!recordsByPath.has(record.path))recordsByPath.set(record.path,record);
     }
   }
-  return state.items.filter(item=>{
+  return sortBrowserItems(state.items.filter(item=>{
     const name=cleanName(item.name);
     if(!state.tagFilter&&(!query||(plainQuery&&name.toLocaleLowerCase().includes(plainQuery))))return true;
     const path=[...state.parts,item.name].join('/');
     const paths=recordTagPaths(recordsByPath.get(path),state.taxonomy);
     return matchesResourceSearch(name,paths,query)&&(!state.tagFilter||includesTagPath(paths,state.tagFilter));
-  });
+  }),state.sort);
 }
 function renderItems(){
   const host=$('#items');if(!host)return;

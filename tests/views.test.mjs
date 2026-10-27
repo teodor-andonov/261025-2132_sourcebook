@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {catalogQueryResults,sortCatalogResults} from '../src/catalog-search.mjs';
+import {catalogQueryResults,sortCatalogResults,sortBrowserItems} from '../src/catalog-search.mjs';
 import {ensureTagPath} from '../src/tags.mjs';
 import {normalizeView,validateViews,createSavedView,updateSavedView,removeSavedView,assertViewsSnapshotUnchanged} from '../src/views.mjs';
 const roots=[{id:'a',name:'Images'},{id:'b',name:'Papers'}];
@@ -52,4 +52,10 @@ test('stale views.json snapshot refuses overwrite',()=>{
   const a=createSavedView([],spec,'a');
   assert.doesNotThrow(()=>assertViewsSnapshotUnchanged(a,structuredClone(a)));
   assert.throws(()=>assertViewsSnapshotUnchanged(a,updateSavedView(a,'a',{query:'roof'})),/changed/);
+});
+
+test('physical folder sort control preserves folders first and sorts remaining files',()=>{
+  const items=[{name:'z.pdf',kind:'file'},{name:'B',kind:'directory'},{name:'a.png',kind:'file'},{name:'A',kind:'directory'}];
+  assert.deepEqual(sortBrowserItems(items,'name-desc').map(x=>x.name),['B','A','z.pdf','a.png']);
+  assert.deepEqual(sortBrowserItems(items,'type').map(x=>x.name),['A','B','a.png','z.pdf']);
 });

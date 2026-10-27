@@ -10,6 +10,10 @@ export function sortCatalogResults(items,mode='name'){
     return primary||cmp(a.name,b.name)||cmp(a.sourceName,b.sourceName)||cmp(a.sourceId,b.sourceId)||cmp(a.path,b.path);
   });
 }
+// Physical folders retain folder-first ordering under each explicit sort.
+export function sortBrowserItems(items,mode='name'){
+  return sortCatalogResults(items,mode).sort((a,b)=>Number(b.kind==='directory')-Number(a.kind==='directory'));
+}
 function validScope(path){
   if(path==='')return [];
   if(typeof path!=='string'||path.startsWith('/')||path.endsWith('/')||path.includes('\\'))throw Error('Invalid View folder scope');
