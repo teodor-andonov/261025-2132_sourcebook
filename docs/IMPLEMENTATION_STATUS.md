@@ -1,3 +1,10 @@
+## 2026-10-28 00:23 Europe/Madrid — Overlapping Catalog record review (V0.0.30 candidate)
+
+- **Implemented in source:** Settings → **Review overlaps** and a saved View inspector shortcut open a read-only comparison of all competing Catalog resource records under live-verified overlapping registered Folder relationships, not just the current View filter. Tags, notes, kinds, missing Tag references and other metadata differences remain visible; no automatic winner is selected.
+- **Source identity:** Rechecks individual file/directory handles with read permission and `isSameEntry` before labeling a pair `same-entry`. Different, missing or unverifiable entries remain explicit. Verified root ancestry alone does **not** prove the same descendant file; matching names are never sufficient.
+- **Safety:** Uses a double-read Catalog metadata backup snapshot, bounded comparison (20,000 records / 500 groups / 1,000 live entries), no source-file or Catalog writes, explicit JSON diagnostic export and per-record Show in folder. Reports may contain Catalog notes; exporting is user initiated. This is inspection, **not reconciliation** or cross-device locking.
+- **Verification:** Node regression tests and syntax checks added; **PR CI pending at documentation authoring time**. No screenshots or physical Windows/Android testing. Branch → PR → green CI → squash → automatic main-only Actions publish remains required.
+
 ## 2026-10-27 23:28 Europe/Madrid — Verified overlapping Catalog Folders (V0.0.29 candidate)
 
 - **Implemented in source:** After a complete device-local index exists for two registered Catalog Folders, Sourcebook checks whether the live directory handles refer to the same physical root or whether an indexed directory path resolves to the other registered root. Only File System Access `isSameEntry` proof can establish an overlap. Display names, Catalog IDs and matching filenames never establish identity. Proof is read-only, bounded and re-evaluated on Catalog reopening or successful refresh; no device-local overlap relationship is written into portable Catalog JSON.
