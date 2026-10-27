@@ -1,4 +1,5 @@
 import {recordTagPaths,includesTagPath,normalizeTagPath,matchesResourceSearch,tagPath} from './tags.mjs';
+import {collapseVerifiedOverlaps} from './source-overlap.mjs';
 
 // Read-only catalog-wide projection: records only, no file handles or writes.
 export function catalogFileType(item){
@@ -115,5 +116,8 @@ export function catalogQueryWithScan(records,sources,taxonomy,filter={},scan=nul
     return {...item,record:unobjectified?null:item.record,unobjectified,missing,changedKind,
       staleIndex:stale.has(item.sourceId)&&!verified};
   });
-  return filterCatalogStatus(results,filter.fileStatus??'all');
+  // Never infer overlap from a matching filename. Only current-session, live
+  // isSameEntry-verified root relationships may collapse duplicate results.
+  // Source-scoped Views retain their own registered Folder projection.
+  return filterCatalogStatus(collapseVerifiedOverlaps(results,scan.overlaps||[],filter),filter.fileStatus??'all');
 }
