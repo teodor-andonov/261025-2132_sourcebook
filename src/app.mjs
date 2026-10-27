@@ -5,6 +5,7 @@ import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.m
 import {commitCatalogTransaction,inspectPendingCatalogTransaction,resumeCatalogTransaction} from './catalog-transactions.mjs';
 import {createCatalogBackup,inspectCatalogBackup} from './catalog-backup.mjs';
 import {planMissingResourceRestore,restoreMissingResourceRecords} from './catalog-restore.mjs';
+import {inspectCatalogConflictCopies,conflictCanonicalPath} from './catalog-conflicts.mjs';
 import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {catalogTagResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
@@ -26,17 +27,20 @@ const state={
   inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
   tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false,resourceSaving:false,
-  scan:null,scanBusy:false,scanGeneration:0,scanProgress:'',pendingTransaction:null,backupBusy:false,backupRestorePlan:null,backupRestoreSource:null
+  scan:null,scanBusy:false,scanGeneration:0,scanProgress:'',pendingTransaction:null,catalogConflicts:null,conflictReport:null,backupBusy:false,backupRestorePlan:null,backupRestoreSource:null
 };
 const viewsUI=createViewsController({state,readJson,authorized,render,toast,forgetImages,navigate,refreshRecords,commitCatalogEdits,refreshPendingCatalog});
 async function refreshPendingCatalog(){
-  if(!state.catalogHandle||!state.catalog){state.pendingTransaction=null;return;}
+  if(!state.catalogHandle||!state.catalog){state.pendingTransaction=null;state.catalogConflicts=null;return;}
   try{state.pendingTransaction=await inspectPendingCatalogTransaction(state.catalogHandle,state.catalog.id);}
   catch(error){state.pendingTransaction={error:errorText(error),conflicts:['unreadable']};}
+  try{state.catalogConflicts=await inspectCatalogConflictCopies(state.catalogHandle,{expectedCatalogId:state.catalog.id});}
+  catch(error){state.catalogConflicts={error:errorText(error),count:0,entries:[]};}
 }
 async function commitCatalogEdits(changes){
   if(state.backupBusy)throw Error('Wait for the catalog backup inspection to finish.');
   if(state.pendingTransaction)throw Error('Resolve the interrupted catalog save before editing.');
+  if(state.catalogConflicts?.error||state.catalogConflicts?.count)throw Error('Catalog sync conflicts require manual resolution before editing. Inspect conflicts in Settings.');
   try{return await commitCatalogTransaction({handle:state.catalogHandle,catalogId:state.catalog.id,changes});}
   finally{await refreshPendingCatalog();}
 }
@@ -50,6 +54,8 @@ async function recoverCatalogSave(){
     if(!pending)return toast('No interrupted save found.');
     if(pending.error||pending.conflicts?.length)
       throw Error('Recovery is blocked by divergent or unreadable catalog data. Repair the catalog manually from a backup; nothing was overwritten.');
+    if(state.catalogConflicts?.count||state.catalogConflicts?.error)
+      throw Error('Resolve Catalog sync conflicts before resuming an interrupted save.');
     if(!confirm('Resume interrupted catalog save ('+pending.applied+'/'+pending.total+' changes already present)? Only catalog JSON will be written.'))return;
     if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is required for recovery.');
     await resumeCatalogTransaction(state.catalogHandle,state.catalog.id);
@@ -91,6 +97,39 @@ async function exportCatalogBackup(){
   }catch(error){toast('Backup failed: '+errorText(error),true);}
   finally{state.backupBusy=false;}
 }
+function openCatalogConflictsDialog(){
+  if(!state.catalog)return toast('Open a Catalog first.',true);
+  state.conflictReport=null;
+  openDialog('<h2>Catalog sync conflicts</h2><p>Read-only inspection of Syncthing-style conflict copies inside this .sb Catalog. Even identical copies block metadata writes until you resolve them outside Sourcebook. No automatic merge, deletion or overwrite.</p><div id="catalog-conflict-results" class="backup-results" aria-live="polite">Inspecting metadata…</div><div class="dialog-actions"><button class="secondary" type="button" data-action="refresh-catalog-conflicts">Recheck</button><button class="secondary" type="button" data-action="export-catalog-conflict-report">Export report</button><button class="primary" type="button" data-action="dismiss">Done</button></div>');
+  void refreshCatalogConflictDialog();
+}
+async function refreshCatalogConflictDialog(){
+  const target=$('#catalog-conflict-results');
+  if(!state.catalog||!target||state.backupBusy)return;
+  const handle=state.catalogHandle,catalogId=state.catalog.id;
+  state.backupBusy=true;state.conflictReport=null;target.textContent='Inspecting Catalog metadata only…';
+  try{
+    const report=await inspectCatalogConflictCopies(handle,{expectedCatalogId:catalogId});
+    if(handle!==state.catalogHandle)throw Error('Catalog changed during inspection');
+    state.catalogConflicts=report;state.conflictReport={...report,catalogId,scope:'catalog-metadata-conflicts-only'};
+    const counts=Object.entries(report.counts).filter(([,count])=>count).map(([name,count])=>count+' '+name).join(' · ');
+    target.innerHTML=report.count?
+      '<p>'+report.count+' conflict copy/copies found · '+escapeHTML(counts)+'. All writes remain blocked until the copies are resolved manually. Preserve both versions before changing anything.</p><div class="catalog-conflict-list">'+report.entries.map(row=>'<div><strong>'+escapeHTML(row.status)+'</strong><code>'+escapeHTML(row.path)+'</code><code>Canonical: '+escapeHTML(row.canonicalPath)+'</code>'+(row.conflictSha256?'<code>Conflict SHA-256: '+escapeHTML(row.conflictSha256.slice(0,16))+'…</code>':'')+'</div>').join('')+'</div>':
+      '<p>No recognized Syncthing conflict copies were found. This is not a cross-device lock or a guarantee that the Catalog is synchronized.</p>';
+  }catch(error){
+    state.catalogConflicts={error:errorText(error),count:0,entries:[]};
+    target.textContent='Conflict inspection failed: '+errorText(error)+'. Catalog editing remains blocked until inspection succeeds.';
+  }finally{state.backupBusy=false;}
+}
+function exportCatalogConflictReport(){
+  if(!state.conflictReport||!state.catalog)return toast('Recheck Catalog conflicts before exporting a report.',true);
+  const blob=new Blob([JSON.stringify(state.conflictReport,null,2)+'\n'],{type:'application/json'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download='sourcebook-'+new Date().toISOString().slice(0,10)+'-conflict-report.json';
+  document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  toast('Read-only conflict report exported; no metadata changed.');
+}
 function chooseBackupForInspection(){
   if(!state.catalog)return toast('Open a catalog first.',true);
   state.backupRestorePlan=null;state.backupRestoreSource=null;
@@ -116,6 +155,7 @@ async function inspectBackupFile(file){
     const rows=plan?.selectedPaths||[];
     target.innerHTML='<p>'+summary.unchanged+' unchanged · '+summary.changed+' changed · '+summary['missing-now']+' missing now · '+summary['added-since-backup']+' added since backup.</p>'+
       (report.hasPendingJournal||report.currentPendingJournal?'<p>Recovery journal present. Resolve it before restoring.</p>':'')+
+      (report.conflictCopies?.count?'<p>'+report.conflictCopies.count+' Catalog sync conflict copy/copies detected. Restore is blocked; use Settings → Inspect conflicts.</p>':'')+
       (changed.length?'<div class="backup-diff">'+changed.slice(0,100).map(x=>'<div><strong>'+escapeHTML(x.status)+'</strong> · '+escapeHTML(x.path)+'</div>').join('')+
       (changed.length>100?'<p>Showing first 100 of '+changed.length+' differences.</p>':'')+'</div>':'<p>Metadata matches this backup.</p>')+
       (restoreError?'<p>Restoration unavailable: '+escapeHTML(restoreError)+'</p>':'')+
@@ -381,7 +421,7 @@ async function refreshRecords(){
   try{dir=await state.catalogHandle.getDirectoryHandle('resources');}
   catch(e){if(e.name==='NotFoundError'){state.records=records;return;}throw e;}
   for await(const [name,handle] of dir.entries()){
-    if(handle.kind!=='file'||!name.endsWith('.json'))continue;
+    if(handle.kind!=='file'||!name.endsWith('.json')||conflictCanonicalPath('resources/'+name))continue;
     let r;
     try{r=JSON.parse(await (await handle.getFile()).text());}
     catch(e){console.warn('Invalid resource record',name,e);continue;}
@@ -415,6 +455,7 @@ async function openDirectory(h){
   state.parts=[];state.items=[];state.selected.clear();state.search='';
   render();
   if(state.pendingTransaction)toast('Interrupted catalog save detected. Catalog editing is blocked until recovery.',true);
+  if(state.catalogConflicts?.count||state.catalogConflicts?.error)toast('Catalog sync conflict copies detected. Editing is blocked; inspect conflicts in Settings.',true);
   if(state.sourceId)await navigate(state.sourceId,[]);
 }
 async function addSource(){
@@ -591,6 +632,7 @@ function render(){
     :'<div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="section-head"><span>VIEWS</span>'+button('Save View','plus','save-view')+'</div><nav>'+viewRows+'</nav>';
   const header='<button class="catalog-chip" data-action="home">'+icon(plain?'folder':'database',16)+'<span>'+escapeHTML(plain?'Browse':state.catalog.name)+'</span>'+icon('chevron',13)+'</button>';
   const recoveryNotice=!plain&&state.pendingTransaction?'<div class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'Catalog recovery needs manual repair':'Interrupted catalog save · '+state.pendingTransaction.applied+'/'+state.pendingTransaction.total+' changes')+'</span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'':'<button class="secondary" data-action="recover-catalog" title="Resume catalog-only save">'+icon('refresh',14)+' Resume</button>')+'</div>':'';
+  const conflictNotice=!plain&&(state.catalogConflicts?.count||state.catalogConflicts?.error)?'<div class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.catalogConflicts.error?'Conflict scan needs attention':state.catalogConflicts.count+' Catalog sync conflict copy/copies')+'</span><button class="secondary" data-action="inspect-catalog-conflicts" title="Inspect sync conflict copies">Inspect</button></div>':'';
   const selectionActions=plain||viewsUI.inResults()?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
   const fileActions=plain||viewsUI.inResults()?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
   const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="edit-view-tags" title="Edit View tags">'+icon('tag',15)+' <span>Tags</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
@@ -607,7 +649,7 @@ function render(){
     ?'<button class="icon-button" title="Back" aria-label="Back" data-action="tab-back" '+(backward?'':'disabled')+'>'+icon('back')+'</button><button class="icon-button" title="Forward" aria-label="Forward" data-action="tab-forward" '+(nextward?'':'disabled')+'>'+icon('forward')+'</button>'
     :'';
   clearSidePreview();
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+recoveryNotice+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div id="sidebar-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize sidebar" aria-orientation="vertical"></div><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+'<div class="layout-buttons" role="group" aria-label="Layout">'+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+'</div>'+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+statusControl+sortControl+groupControl+columnsButton+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<div id="inspector-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize side preview" aria-orientation="vertical"></div><aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="side-preview" class="side-preview" aria-label="Selected file preview"></div><div id="inspector-data"></div></aside>':'')+'</div>';
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+recoveryNotice+conflictNotice+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div id="sidebar-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize sidebar" aria-orientation="vertical"></div><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+'<div class="layout-buttons" role="group" aria-label="Layout">'+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+'</div>'+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+statusControl+sortControl+groupControl+columnsButton+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<div id="inspector-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize side preview" aria-orientation="vertical"></div><aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="side-preview" class="side-preview" aria-label="Selected file preview"></div><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML=viewsUI.inResults()?'<button data-action="exit-catalog-tag">'+icon('database',16)+' Catalog</button><span class="crumb">'+icon('chevron',13)+'</span><button>'+icon('tag',14)+' '+escapeHTML(viewsUI.title())+'</button>':'<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
@@ -1140,6 +1182,9 @@ document.addEventListener('click',async event=>{
     case 'recover-catalog':void recoverCatalogSave();break;
     case 'export-catalog-backup':void exportCatalogBackup();break;
     case 'inspect-catalog-backup':chooseBackupForInspection();break;
+    case 'inspect-catalog-conflicts':openCatalogConflictsDialog();break;
+    case 'refresh-catalog-conflicts':void refreshCatalogConflictDialog();break;
+    case 'export-catalog-conflict-report':exportCatalogConflictReport();break;
     case 'restore-missing-backup-records':void restoreMissingBackupRecords();break;
     case 'reconnect':reconnect();break;
     case 'refresh':viewsUI.inResults()?void refreshCatalogTagView():navigate(state.sourceId,[...state.parts]);break;
@@ -1162,7 +1207,7 @@ document.addEventListener('click',async event=>{
     case 'clear-selection':state.selected.clear();state.lastSelected=null;state.selectionMode=false;render();break;
     case 'bulk-add':void bulkTags('add');break;
     case 'bulk-remove':void bulkTags('remove');break;
-    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button></div>':'')+'<div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
+    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button> <button type="button" class="secondary" data-action="inspect-catalog-conflicts">Inspect conflicts</button></div>':'')+'<div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
     case 'reset-accent':applyAccent('#5276bd');if($('#accent-color'))$('#accent-color').value='#5276bd';break;
     case 'save-resource':saveResource();break;
     case 'preview':showPreview();break;

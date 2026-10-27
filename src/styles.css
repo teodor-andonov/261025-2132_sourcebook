@@ -274,3 +274,10 @@ video.side-preview-media{max-height:240px}
 .dialog .backup-restore-list label{display:flex;flex-direction:row;align-items:center;gap:9px;padding:5px;font-size:12px;font-weight:400;overflow-wrap:anywhere;cursor:pointer}
 .dialog .backup-restore-list input[type=checkbox]{width:16px;height:16px;flex:none;margin:0;padding:0;accent-color:var(--accent)}
 .backup-recovery button{margin-top:10px}
+
+/* Read-only Syncthing conflict inventory. */
+.catalog-conflict-list{max-height:min(48vh,370px);overflow:auto;overflow-wrap:anywhere;border:1px solid var(--border);border-radius:7px;padding:7px;font-size:12px}
+.catalog-conflict-list>div{padding:8px 4px;border-bottom:1px solid var(--border)}
+.catalog-conflict-list>div:last-child{border-bottom:0}
+.catalog-conflict-list code{display:block;white-space:normal;overflow-wrap:anywhere;font-size:11px;color:var(--muted)}
+.catalog-conflict-list strong{font-size:12px}
