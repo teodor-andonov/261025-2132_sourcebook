@@ -656,7 +656,7 @@ function scanStatus(){
     (state.scan.overlapProblems?.length?' · '+state.scan.overlapProblems.length+' overlap checks unresolved':'');
 }
 async function runCatalogScan(rootId='',folderPath=''){
-  if(!state.catalog||state.scanBusy||state.bulkSaving||state.viewSaving||state.resourceSaving)return;
+  if(!state.catalog||state.scanBusy||state.bulkSaving||state.viewSaving||state.resourceSaving||state.backupBusy)return;
   const selected=rootId?state.sources.filter(s=>s.id===rootId):state.sources;
   if(!selected.length)return toast('No Catalog Folder selected.',true);
   const scoped=!!folderPath;
