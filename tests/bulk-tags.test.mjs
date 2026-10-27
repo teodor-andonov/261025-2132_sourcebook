@@ -64,7 +64,7 @@ test('stale taxonomy and records fail before writes',async()=>{
   await assert.rejects(commitBulkTags({handle:r,plan:p,expectedCatalog:catalog,expectedTaxonomy:[]}),/Resource changed/);
   assert.equal(r.writes.length,0);
 });
-test('mid-batch taxonomy change reports partial verified count',async()=>{
+test('mid-batch taxonomy interference leaves an inspectable and resumable journal',async()=>{
   const h=memory(),p=plan();h.resources=new Dir();
   const original=h.resources.getFileHandle.bind(h.resources);
   h.resources.getFileHandle=async (...args)=>{

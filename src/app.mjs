@@ -51,6 +51,10 @@ async function recoverCatalogSave(){
     state.catalog=await readJson(state.catalogHandle,'catalog.json');
     state.taxonomy=await readJson(state.catalogHandle,'tags.json',[]);
     state.views=validateViews(await readJson(state.catalogHandle,'views.json',[]));
+    state.sources=await readJson(state.catalogHandle,'sources.json',[]);
+    state.handles=new Map([...state.handles].filter(([id])=>state.sources.some(source=>source.id===id)));
+    if(!state.sources.some(source=>source.id===state.sourceId))state.sourceId=state.sources[0]?.id||null;
+    state.parts=[];state.items=[];state.selected.clear();state.activeViewId=null;state.catalogTagView=null;state.tagFilter=null;
     await refreshRecords();invalidateScan();
     toast('Interrupted catalog save completed. Source files unchanged.');
   }catch(error){await refreshPendingCatalog();toast('Recovery failed: '+errorText(error),true);}
@@ -306,6 +310,7 @@ async function addSource(){
   if(state.bulkSaving||state.resourceSaving)return toast('Finish metadata editing before registering folders.',true);
   try{
     const h=await window.showDirectoryPicker({mode:'read'});
+    if(!await authorized(state.catalogHandle,'readwrite'))throw Error('Catalog write permission is needed to register a folder.');
     const item={id:crypto.randomUUID(),name:h.name};
     const before=await readJson(state.catalogHandle,'sources.json',null),disk=before??[];
     if(JSON.stringify(disk)!==JSON.stringify(state.sources))throw Error('Catalog Folders changed on disk. Reopen the catalog.');
