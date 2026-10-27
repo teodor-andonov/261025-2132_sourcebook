@@ -256,11 +256,20 @@ async function thumbnail(node){
 }
 function renderTagPills(){
   const host=$('#tag-pills');if(!host)return;
-  host.innerHTML=state.tagDraft.map((tag,index)=>'<span class="tag-pill"><span class="tag-pill-label" title="'+escapeHTML(tag)+'">#'+escapeHTML(tag)+'</span><button type="button" data-remove-tag="'+index+'" aria-label="Remove tag '+escapeHTML(tag)+'" title="Remove tag">'+icon('close',12)+'</button></span>').join('');
+  host.innerHTML=state.tagDraft.map((tag,index)=>'<span class="tag-pill"><span class="tag-pill-label" title="'+escapeHTML(tag)+'">#'+escapeHTML(tagLeaf(tag))+'</span><button type="button" data-remove-tag="'+index+'" aria-label="Remove tag '+escapeHTML(tag)+'" title="Remove tag">'+icon('close',12)+'</button></span>').join('');
+}
+function showTagSuggestions(){
+  const list=$('#tag-suggestions'),input=$('#tag-input');
+  if(!list||!input)return;
+  const q=input.value.trim().toLocaleLowerCase();
+  if(!q){list.hidden=true;list.innerHTML='';return;}
+  const matches=flattenedTagTree(state.taxonomy).filter(tag=>tag.path.toLocaleLowerCase().includes(q)&&!state.tagDraft.some(x=>x.toLocaleLowerCase()===tag.path.toLocaleLowerCase())).slice(0,5);
+  list.innerHTML=matches.map(t=>'<button type="button" class="tag-suggestion" data-tag-suggestion="'+escapeHTML(t.path)+'"><strong>#'+escapeHTML(t.name)+'</strong><small>'+escapeHTML(t.path)+'</small></button>').join('');
+  list.hidden=!matches.length;
 }
 function commitTagInput(){
   const input=$('#tag-input');if(!input||!input.value.trim())return true;
-  try{state.tagDraft=mergeTagInput(state.tagDraft,input.value);input.value='';renderTagPills();return true;}
+  try{state.tagDraft=mergeTagInput(state.tagDraft,input.value);input.value='';renderTagPills();showTagSuggestions();return true;}
   catch(e){toast(errorText(e),true);input.focus();return false;}
 }
 function renderInspector(){
@@ -272,9 +281,9 @@ function renderInspector(){
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   const record=itemRecord(item);
   if(state.tagDraftItem!==item.id){
-    state.tagDraftItem=item.id;state.tagDraft=Array.isArray(record?.tags)?[...record.tags]:[];
+    state.tagDraftItem=item.id;state.tagDraft=recordTagPaths(record,state.taxonomy);
   }
-  host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),46)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">REAL FILENAME</div><code>'+escapeHTML(item.name)+'</code></div><div class="detail"><div class="label">TAGS</div><div class="tag-editor" id="tag-editor"><div class="tag-pills" id="tag-pills"></div><input id="tag-input" aria-label="Add tag" placeholder="Add tag…" autocomplete="off"/></div></div><div class="detail"><div class="label">NOTES</div><textarea rows="4" id="notes" placeholder="Write a note…">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save')+' '+(record?'Save properties':'Save to catalog')+'</button><p class="hint">'+(record?'Catalog identity: '+escapeHTML(record.id):'Adds a catalog identity and metadata without renaming or modifying the original file.')+'</p><button class="secondary full" data-action="preview">'+icon('view')+' Quick look</button>';
+  host.innerHTML='<div class="inspector-cover">'+icon(itemKind(item)==='pdf'?'file':itemKind(item),40)+'</div><h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">TAGS</div><div class="tag-editor" id="tag-editor"><div class="tag-pills" id="tag-pills"></div><input id="tag-input" aria-label="Add tag" placeholder="# Add tag…" autocomplete="off"/></div><div class="tag-suggestions" id="tag-suggestions" hidden></div><div class="micro-hint">Nest tags with /, e.g. Architecture / Facades</div></div><div class="detail"><div class="label">NOTES</div><textarea rows="3" id="notes" placeholder="Optional note">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save',16)+' Save</button><details class="file-details"><summary>File information</summary><code>'+escapeHTML(item.name)+'</code>'+(record?'<div class="micro-hint">ID: '+escapeHTML(record.id)+'</div>':'')+'</details>';
   renderTagPills();
 }
 function refreshSelectionUI(){
@@ -310,9 +319,19 @@ async function saveResource(){
     if(previous && (!current||previous.updatedAt!==current.updatedAt)){
       throw Error('This resource changed on disk. Reopen the catalog before saving.');
     }
+    const diskTags=await readJson(state.catalogHandle,'tags.json',[]);
+    if(!Array.isArray(diskTags))throw Error('Invalid catalog tag taxonomy.');
+    let taxonomy=diskTags,tagIds=[];
+    for(const path of tags){
+      const result=ensureTagPath(taxonomy,path);
+      taxonomy=result.tags;tagIds.push(result.id);
+    }
+    if(taxonomy.length!==diskTags.length)await writeJson(state.catalogHandle,'tags.json',taxonomy);
+    state.taxonomy=taxonomy;
     const dir=await state.catalogHandle.getDirectoryHandle('resources',{create:true});
     if(current){
-      const updated={...current,tags,notes,updatedAt:new Date().toISOString()};
+      const updated={...current,tagIds,notes,updatedAt:new Date().toISOString()};
+      delete updated.tags;
       await writeJson(dir,updated.id+'.json',updated);
       state.records.set(updated.id,updated);
       toast('Properties saved in catalog');
@@ -320,7 +339,7 @@ async function saveResource(){
       // Source files are NEVER renamed as a side effect of saving metadata.
       const plan=planResourceIdentity(latest,[...state.records.values()],item.name,state.items.map(i=>i.name));
       if(await readJson(dir,plan.id+'.json'))throw Error('Identity already exists. Reopen the catalog and retry.');
-      const record={formatVersion:1,id:plan.id,kind:item.kind,sourceId:state.sourceId,path:[...state.parts,item.name].join('/'),tags,notes,renamed:false,updatedAt:new Date().toISOString()};
+      const record={formatVersion:1,id:plan.id,kind:item.kind,sourceId:state.sourceId,path:[...state.parts,item.name].join('/'),tagIds,notes,renamed:false,updatedAt:new Date().toISOString()};
       await writeJson(dir,record.id+'.json',record);
       state.records.set(record.id,record);
       if(plan.nextSequence>latest.nextSequence){
@@ -330,7 +349,8 @@ async function saveResource(){
       }
       toast('Saved to catalog · original file unchanged');
     }
-    renderInspector();
+    state.tagDraftItem=null;
+    render();
   }catch(e){toast('Save failed: '+errorText(e),true);}
 }
 function closePreview(){
@@ -396,10 +416,16 @@ document.addEventListener('submit',event=>{
   if(event.target.id==='catalog-form'){event.preventDefault();submitCatalog(event.target);}
 });
 document.addEventListener('input',event=>{
+  if(event.target.id==='tag-input')showTagSuggestions();
+  if(event.target.id==='accent-color')applyAccent(event.target.value);
   if(event.target.id==='search-input'){state.search=event.target.value;state.pageCount=150;renderItems();}
   if(event.target.id==='density'){state.size=Number(event.target.value);localStorage.setItem('sb-size',state.size);$('#items')?.style.setProperty('--size',state.size+'px');}
 });
 document.addEventListener('click',async event=>{
+  const suggestion=event.target.closest('[data-tag-suggestion]');
+  if(suggestion){$('#tag-input').value=suggestion.dataset.tagSuggestion;commitTagInput();$('#tag-input')?.focus();return;}
+  const tagNav=event.target.closest('[data-tag-filter]');
+  if(tagNav){state.tagFilter=state.tagFilter===tagNav.dataset.tagFilter?null:tagNav.dataset.tagFilter;render();return;}
   const removeTag=event.target.closest('[data-remove-tag]');
   if(removeTag){state.tagDraft.splice(Number(removeTag.dataset.removeTag),1);renderTagPills();$('#tag-input')?.focus();return;}
   const crumb=event.target.closest('[data-crumb]');if(crumb){return navigate(state.sourceId,state.parts.slice(0,Number(crumb.dataset.crumb)+1));}
@@ -419,6 +445,9 @@ document.addEventListener('click',async event=>{
     case 'inspector':state.inspector=!state.inspector;render();break;
     case 'sidebar':state.sidebar=!state.sidebar;$('#sidebar')?.classList.toggle('open');break;
     case 'show-more':state.pageCount+=150;renderItems();break;
+    case 'clear-tag-filter':state.tagFilter=null;render();break;
+    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label><div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
+    case 'reset-accent':applyAccent('#5276bd');if($('#accent-color'))$('#accent-color').value='#5276bd';break;
     case 'save-resource':saveResource();break;
     case 'preview':showPreview();break;
     case 'close-viewer':closePreview();break;
