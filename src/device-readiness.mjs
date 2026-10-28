@@ -4,6 +4,7 @@ import {parseM0EvidenceReport,compareM0EvidenceReports,M0_REPORT_LIMIT} from './
 import {normalizeShareStorageProbe,inspectShareStorage,requestShareStoragePersistence} from './share-storage.mjs';
 import {normalizeWriteProbe,normalizeReopenProbe,probeDisposableWriteFolder,rememberDisposableReadFolder,recheckDisposableReadFolder,forgetDisposableReadFolder} from './m0-feasibility.mjs';
 import {normalizePortableProbe,normalizeOfflineProbe,createM0PortableCatalogFixture,verifyM0PortableCatalogFixture,inspectM0OfflineShell} from './m0-acceptance.mjs';
+import {normalizeCaptureProbe,createM0CaptureFixture,verifyM0CaptureFixture} from './m0-capture-acceptance.mjs';
 export const M0_CASES=[
   ['M0-01','Standalone PWA installation','Record OS, Chrome and published commit.'],
   ['M0-02','Real Folder browsing and Tabs','Mixed files, nested paths, previews and unchanged originals.'],
@@ -44,6 +45,8 @@ export function normalizeM0Record(input,now=new Date().toISOString()){
     shareStorageProbe:normalizeShareStorageProbe(value.shareStorageProbe),
     portableCreateProbe:normalizePortableProbe(value.portableCreateProbe),
     portableVerifyProbe:normalizePortableProbe(value.portableVerifyProbe),
+    captureCreateProbe:normalizeCaptureProbe(value.captureCreateProbe),
+    captureVerifyProbe:normalizeCaptureProbe(value.captureVerifyProbe),
     offlineProbe:normalizeOfflineProbe(value.offlineProbe),
     reopenProbe:normalizeReopenProbe(value.reopenProbe),
     probe:{
@@ -117,6 +120,7 @@ export function exportM0Report(record,capabilities,now=new Date().toISOString())
     disposableWriteProbe:value.writeProbe,savedReadHandleProbe:value.reopenProbe,
     shareInboxStorageProbe:value.shareStorageProbe,
     portableCatalogCreateProbe:value.portableCreateProbe,portableCatalogVerifyProbe:value.portableVerifyProbe,
+    physicalCaptureCreateProbe:value.captureCreateProbe,physicalCaptureVerifyProbe:value.captureVerifyProbe,
     offlineCacheProbe:value.offlineProbe,
     caveat:'API presence and the read-only probe are not physical-device acceptance. All Pass/Fail/Blocked outcomes are manually entered.'
   };
@@ -132,12 +136,21 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
   };
   let lastLeftoverName='';
   let lastFixtureName='';
+  let lastCaptureFixtureName='';
   const portableSummary=()=>{
     const created=record.portableCreateProbe,verified=record.portableVerifyProbe;
     return 'Create '+created.status+' · transaction '+(created.transactionVerified?'verified':'not verified')+
       ' · local readback '+(created.portableVerified?'verified':'not verified')+
       ' · re-open '+verified.status+(verified.fixtureProof?' · fixture proof '+verified.fixtureProof.slice(0,12)+'…':'')+(created.cleanupRequired?' · PARTIAL FIXTURE: MANUAL REVIEW REQUIRED':'')+
       '. No device acceptance is automatic.';
+  };
+  const captureSummary=()=>{
+    const created=record.captureCreateProbe,verified=record.captureVerifyProbe;
+    return 'Create '+created.status+' · URL '+(created.urlVerified?'verified':'not verified')+
+      ' · Markdown '+(created.textVerified?'verified':'not verified')+
+      ' · reopen '+verified.status+(verified.fixtureProof?' · fixture proof '+verified.fixtureProof.slice(0,12)+'…':'')+
+      (created.cleanupRequired?' · PARTIAL FIXTURE: MANUAL REVIEW REQUIRED':'')+
+      '. Browser Download is NOT a verified Folder write. Device acceptance remains manual.';
   };
   const offlineSummary=()=>{
     const p=record.offlineProbe;
@@ -188,6 +201,9 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
       '<div class="m0-probe"><strong>Portable .sb roundtrip fixture</strong><p>Choose an EMPTY disposable parent. Sourcebook creates a new UUID-named .sb fixture with a REAL source-files/*.url shortcut, a file-bound Catalog record, nested stable-ID Tags and a saved View, using its recovery journal. This synthetic in-Catalog source folder is for testing only; real external Folder grants still need separate device tests. It leaves the fixture in place for restart or Syncthing testing. Never select real project data; no automatic deletion.</p>'+
       '<div class="m0-probe-actions"><button class="secondary" type="button" data-m0-portable-create '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Create disposable .sb</button><button class="secondary" type="button" data-m0-portable-verify '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Verify .sb (read-only)</button></div>'+
       '<p role="status" data-m0-portable-result>'+escapeHTML(portableSummary())+'</p></div>'+
+      '<div class="m0-probe"><strong>Physical URL / Markdown provider gate</strong><p>Choose an EMPTY disposable parent Folder. Sourcebook creates a new Sourcebook-M0-Capture-* Folder containing two REAL ordinary files (.url and .md), verifies exact contents, and LEAVES them for restart or Syncthing checks. Never use project/source data. On another device, choose the fixture Folder itself for read-only verification. If the directory picker is unavailable, record Blocked; a browser Download is not equivalent.</p>'+
+      '<div class="m0-probe-actions"><button class="secondary" type="button" data-m0-capture-create '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Create .url + .md fixture</button><button class="secondary" type="button" data-m0-capture-verify '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Verify files (read-only)</button></div>'+
+      '<p role="status" data-m0-capture-result>'+escapeHTML(captureSummary())+'</p></div>'+
       '<div class="m0-probe"><strong>Temporary Android share storage</strong><p>Inspect origin-wide quota pressure and whether Chrome reports persistent storage. Request persistence only by clicking; permission may be refused, and neither status proves that staged shares survive eviction or that a physical Folder is writable.</p>'+
       '<div class="m0-probe-actions"><button class="secondary" type="button" data-m0-storage>Inspect storage</button><button class="secondary" type="button" data-m0-persist>Request persistence</button></div>'+
       '<p role="status" data-m0-storage-result>'+escapeHTML(storageSummary())+'</p></div>'+
@@ -308,6 +324,26 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
       }catch{toast('Portable fixture verification failed.',true);}
       finally{button.disabled=false;}
     });
+    root.querySelector('[data-m0-capture-create]')?.addEventListener('click',async event=>{
+      if(typeof env.confirm!=='function'||!env.confirm('Select an EMPTY disposable parent Folder only. Sourcebook will create a new Folder containing one .url and one .md test file, verify both and leave them for manual restart/Syncthing inspection. A failure may leave partial files. Continue?'))return;
+      const button=event.currentTarget;button.disabled=true;
+      try{
+        const result=await createM0CaptureFixture(typeof env.showDirectoryPicker==='function'?env.showDirectoryPicker.bind(env):null,{confirmed:true});
+        lastCaptureFixtureName=result.fixtureName||'';
+        record.captureCreateProbe=normalizeCaptureProbe(result);save();
+        root.querySelector('[data-m0-capture-result]').textContent=captureSummary()+
+          (lastCaptureFixtureName?' Fixture Folder: '+lastCaptureFixtureName+'. Retain and inspect manually.':'');
+      }catch{toast('Capture provider fixture failed. Inspect the disposable parent for partial files.',true);}
+      finally{button.disabled=false;}
+    });
+    root.querySelector('[data-m0-capture-verify]')?.addEventListener('click',async event=>{
+      const button=event.currentTarget;button.disabled=true;
+      try{
+        record.captureVerifyProbe=normalizeCaptureProbe(await verifyM0CaptureFixture(typeof env.showDirectoryPicker==='function'?env.showDirectoryPicker.bind(env):null));
+        save();root.querySelector('[data-m0-capture-result]').textContent=captureSummary();
+      }catch{toast('Read-only physical capture verification failed.',true);}
+      finally{button.disabled=false;}
+    });
     for(const [selector,action] of [['[data-m0-storage]',inspectShareStorage],['[data-m0-persist]',requestShareStoragePersistence]]){
       root.querySelector(selector)?.addEventListener('click',async event=>{
         const button=event.currentTarget;button.disabled=true;
@@ -335,7 +371,7 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
     root.querySelector('[data-m0-reset]').addEventListener('click',()=>{
       if(typeof env.confirm==='function'&&!env.confirm('Clear the M0 checklist and probe result on this device?'))return;
       record=normalizeM0Record(null);
-      lastLeftoverName='';lastFixtureName='';
+      lastLeftoverName='';lastFixtureName='';lastCaptureFixtureName='';
       save();open();
     });
   };
