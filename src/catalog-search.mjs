@@ -8,6 +8,7 @@ export function catalogFileType(item){
   if(item?.kind==='directory')return 'folder';
   if(item?.kind!=='file')return 'other';
   const name=String(item.name||'').toLocaleLowerCase();
+  if(name.endsWith('.url'))return 'url';
   if(/\.(jpe?g|png|webp|gif|avif|bmp|svg)$/.test(name))return 'image';
   if(/\.pdf$/.test(name))return 'pdf';
   if(/\.(mp4|mov|webm)$/.test(name))return 'video';
