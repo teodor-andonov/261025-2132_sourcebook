@@ -1,3 +1,9 @@
+## 2026-10-28 18:28 Europe/Madrid — V0.0.49 candidate: provider evidence gate
+- **Code:** Device checks now shows a conservative filesystem-provider triage state and actionable next step, recomputed after disposable probes. Cross-device report comparison rejects contradictory all-Pass reports with unavailable directory pickers or unverified physical file operations, ignoring imported claims.
+- **Safety/evidence:** Existing explicit consent and disposable-only probes remain unchanged; no private paths in provider status. Older reports parse but cannot clear the gate. No automatic M0 acceptance.
+- **Verification:** New automated tests; PR CI, main CI, Pages and branch cleanup to be verified independently. Physical Windows Chrome, Pixel 8, Syncthing and offline testing **Not tested**. No screenshots or Mindmap changes.
+- **Log:** [M0 provider evidence gate](../logs/development/261028-1828_m0-provider-evidence-gate.md).
+
 ## 2026-10-28 17:29 Europe/Madrid — V0.0.48 candidate: physical capture provider gate
 
 - **Implemented in code on development branch:** Device checks can explicitly create a disposable UUID-named Folder containing real `.url` and `.md` files through the same writer as everyday capture, then read back both files. Separate read-only verification can be run after restart or a user-managed Syncthing transfer; a hashed synthetic fixture identity is exported without names/paths.

@@ -1,6 +1,7 @@
 // Device readiness is local and opt-in. API presence never counts as M0 acceptance.
 import {getLocal,setLocal,removeLocal} from './storage.mjs';
 import {parseM0EvidenceReport,compareM0EvidenceReports,M0_REPORT_LIMIT} from './m0-evidence-review.mjs';
+import {evaluateM0ProviderGate} from './m0-provider-gate.mjs';
 import {normalizeShareStorageProbe,inspectShareStorage,requestShareStoragePersistence} from './share-storage.mjs';
 import {normalizeWriteProbe,normalizeReopenProbe,probeDisposableWriteFolder,rememberDisposableReadFolder,recheckDisposableReadFolder,forgetDisposableReadFolder} from './m0-feasibility.mjs';
 import {normalizePortableProbe,normalizeOfflineProbe,createM0PortableCatalogFixture,verifyM0PortableCatalogFixture,inspectM0OfflineShell} from './m0-acceptance.mjs';
@@ -122,6 +123,7 @@ export function exportM0Report(record,capabilities,now=new Date().toISOString())
     portableCatalogCreateProbe:value.portableCreateProbe,portableCatalogVerifyProbe:value.portableVerifyProbe,
     physicalCaptureCreateProbe:value.captureCreateProbe,physicalCaptureVerifyProbe:value.captureVerifyProbe,
     offlineCacheProbe:value.offlineProbe,
+    providerGate:evaluateM0ProviderGate({features:capabilities.features,writeProbe:value.writeProbe,captureVerifyProbe:value.captureVerifyProbe}),
     caveat:'API presence and the read-only probe are not physical-device acceptance. All Pass/Fail/Blocked outcomes are manually entered.'
   };
 }
@@ -183,6 +185,7 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
   const open=()=>{
     record=normalizeM0Record(load()||record);
     const caps=inspectDeviceCapabilities(env);
+    const providerSummary=()=>{const gate=evaluateM0ProviderGate({features:caps.features,writeProbe:record.writeProbe,captureVerifyProbe:record.captureVerifyProbe});return 'Provider gate: '+gate.state+' · '+gate.nextAction;};
     const rows=M0_CASES.map(([id,title,hint])=>{
       const item=record.results[id];
       return '<section class="m0-row" data-m0-id="'+id+'"><div class="m0-row-head"><strong>'+id+' · '+escapeHTML(title)+'</strong>'+
@@ -194,6 +197,7 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
     openDialog('<div class="m0-readiness"><h2>Device checks · M0</h2><p>Device acceptance remains open. API detection and the read-only probe never mark tests passed. Your notes stay in this browser until you export them.</p>'+
       '<div class="m0-capabilities"><strong>'+escapeHTML(caps.platform)+' · Chrome '+escapeHTML(caps.chromeVersion)+' · '+(caps.standalone?'Standalone':'Browser tab / unknown')+'</strong>'+
       '<div class="m0-cap-grid">'+caps.features.map(f=>'<span>'+escapeHTML(f.label)+'</span><span>'+(f.available?'API present':'Unavailable / inactive')+'</span>').join('')+'</div></div>'+
+      '<div class="m0-probe"><strong>Filesystem provider decision</strong><p role="status" data-m0-provider-gate>'+escapeHTML(providerSummary())+'</p><small>Diagnostic only. A browser Download cannot pass this gate.</small></div>'+
       '<div class="m0-probe"><button class="secondary" type="button" data-m0-probe '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Probe a Folder (read-only)</button><p role="status" data-m0-probe-result>'+escapeHTML(probeSummary())+'</p></div>'+
       '<div class="m0-probe"><strong>Disposable Folder feasibility</strong><p>Use an empty throwaway Folder, never a project/source or .sb Catalog. Write test creates one unpredictable probe file, verifies its contents and removes it. A failure may leave that synthetic file for manual cleanup.</p>'+
       '<div class="m0-probe-actions"><button class="secondary" type="button" data-m0-write '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Test write / read / remove</button><button class="secondary" type="button" data-m0-remember '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Remember read handle</button><button class="secondary" type="button" data-m0-recheck>Recheck after restart</button><button class="secondary" type="button" data-m0-forget>Forget handle</button></div>'+
@@ -217,6 +221,7 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
       '<div class="dialog-actions"><button class="secondary" type="button" data-m0-reset>Clear local results</button><button class="secondary" type="button" data-m0-export>Export JSON</button><button class="primary" type="button" data-action="dismiss">Done</button></div></div>');
     const root=doc.querySelector('#dialog .m0-readiness');
     if(!root)return;
+    const refreshProviderGate=()=>{const target=root.querySelector('[data-m0-provider-gate]');if(target)target.textContent=providerSummary();};
     const update=event=>{
       const field=event.target?.dataset?.m0Field;
       if(field){
@@ -277,6 +282,7 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
         lastLeftoverName=result.leftoverName||'';
         record.writeProbe=normalizeWriteProbe(result);save();
         root.querySelector('[data-m0-write-result]').textContent=writeSummary()+(lastLeftoverName?' Inspect and manually remove '+lastLeftoverName+' from the disposable Folder after verifying it is the probe file.':'');
+        refreshProviderGate();
       }catch{toast('Disposable write probe failed. Inspect the selected Folder for a synthetic probe file.',true);}
       finally{button.disabled=false;}
     });
@@ -332,6 +338,7 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
         const result=await createM0CaptureFixture(typeof env.showDirectoryPicker==='function'?env.showDirectoryPicker.bind(env):null,{confirmed:true});
         lastCaptureFixtureName=result.fixtureName||'';
         record.captureCreateProbe=normalizeCaptureProbe(result);save();
+        refreshProviderGate();
         root.querySelector('[data-m0-capture-result]').textContent=captureSummary()+
           (lastCaptureFixtureName?' Fixture Folder: '+lastCaptureFixtureName+'. Retain and inspect manually.':'');
       }catch{toast('Capture provider fixture failed. Inspect the disposable parent for partial files.',true);}
@@ -342,6 +349,7 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
       try{
         record.captureVerifyProbe=normalizeCaptureProbe(await verifyM0CaptureFixture(typeof env.showDirectoryPicker==='function'?env.showDirectoryPicker.bind(env):null));
         save();root.querySelector('[data-m0-capture-result]').textContent=captureSummary();
+        refreshProviderGate();
       }catch{toast('Read-only physical capture verification failed.',true);}
       finally{button.disabled=false;}
     });
