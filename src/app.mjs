@@ -471,9 +471,11 @@ async function saveFileCaptureForm(form,delivery='folder'){
 function landing(){
   clearSidePreview();
   forgetImages();
-  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>Sourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions"><button class="primary" data-action="open-folder">'+icon('folder')+' Open folder</button><button class="secondary" data-action="open-catalog">'+icon('database')+' Open catalog</button><button class="secondary" data-action="create-catalog">'+icon('plus')+' New catalog</button><button class="secondary" data-action="capture-file">'+icon('file')+' Save file from URL/text</button><button class="secondary" data-action="import">'+icon('upload')+' Add ordinary files</button><button class="secondary" data-action="capture-clipboard-image">'+icon('image')+' Clipboard image</button><button class="secondary" data-action="capture-links">'+icon('link')+' Review staged links</button><button class="secondary" data-action="incoming-shares">'+icon('link')+' Incoming shares</button></div><div id="recent-area"></div><button class="secondary" data-action="device-checks" title="Check browser capabilities and record device acceptance">Device checks</button><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
+  const canPick=typeof window.showDirectoryPicker==='function';
+  const folderActions=canPick?'<button class="primary" data-action="open-folder">'+icon('folder')+' Open folder</button><button class="secondary" data-action="open-catalog">'+icon('database')+' Open catalog</button><button class="secondary" data-action="create-catalog">'+icon('plus')+' New catalog</button>':'<p class="micro-hint" role="status">Folder access is unavailable in this browser. You can still review incoming shares, capture URLs/text, Download or send ordinary files to another app. None of these alternatives verifies a Folder write.</p>';
+  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>Sourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions">'+folderActions+'<button class="secondary" data-action="capture-file">'+icon('file')+' Save file from URL/text</button><button class="secondary" data-action="import">'+icon('upload')+' Add ordinary files</button><button class="secondary" data-action="capture-clipboard-image">'+icon('image')+' Clipboard image</button><button class="secondary" data-action="capture-links">'+icon('link')+' Review staged links</button><button class="secondary" data-action="incoming-shares">'+icon('link')+' Incoming shares</button></div><div id="recent-area"></div><button class="secondary" data-action="device-checks" title="Check browser capabilities and record device acceptance">Device checks</button><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
   getLocal('recent').then(value=>{
-    if(value&&$('#recent-area'))$('#recent-area').innerHTML='<div class="eyebrow">RECENT CATALOG</div><button class="recent-item" data-action="recent">'+icon('database')+'<span>'+escapeHTML(value.name)+'</span>'+icon('chevron',15)+'</button>';
+    if(canPick&&value&&$('#recent-area'))$('#recent-area').innerHTML='<div class="eyebrow">RECENT CATALOG</div><button class="recent-item" data-action="recent">'+icon('database')+'<span>'+escapeHTML(value.name)+'</span>'+icon('chevron',15)+'</button>';
   }).catch(console.warn);
 }
 async function recentCatalog(){
@@ -1694,7 +1696,7 @@ document.addEventListener('keydown',event=>{
   if(event.key==='Backspace'&&state.parts.length){event.preventDefault();navigate(state.sourceId,state.parts.slice(0,-1));}
 });
 async function boot(){
-  if(typeof window.showDirectoryPicker!=='function'){landing();toast('This browser does not provide directory access. Folder browsing is unavailable on this device.',true);return;}
+  if(typeof window.showDirectoryPicker!=='function'){landing();toast('Folder browsing unavailable here; review shares or capture files through explicit Download/Send fallbacks.',true);return;}
   try{
     if(await getLocal('last-mode')==='folder'){
       const session=loadFolderTabs(await getLocal('folder-tabs-v1'));
