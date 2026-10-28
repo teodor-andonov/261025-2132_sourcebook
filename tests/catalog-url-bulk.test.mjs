@@ -72,7 +72,7 @@ test('over-limit Tags and malformed URLs abort the entire batch',()=>{
   const first=link('ab1','https://example.org/a',many);
   assert.throws(()=>plan({records:[first,b],taxonomy:tags,selectedIds:['ab1','ab2'],
     paths:['New'],idFactory:()=> 'new'}),/Maximum 64/);
-  assert.throws(()=>plan({records:[a,{...b,url:'javascript:alert(1)'}]}),/Invalid Catalog URL/);
+  assert.throws(()=>plan({records:[a,{...b,url:'javascript:alert(1)'}]}),/Only HTTP/);
 });
 test('bulk Tag plan can be committed as one recoverable Catalog-only transaction',async()=>{
   const result=plan();
