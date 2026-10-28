@@ -89,11 +89,15 @@ async function main(){
       await context.addInitScript(()=>Object.defineProperty(window,'showDirectoryPicker',{value:undefined,configurable:true}));
       await controlled(page);
       assert.equal(await page.locator('[data-action="open-folder"]').count(),0);
+      assert.equal(await page.locator('[data-action="import"]').count(),0);
+      assert.equal(await page.locator('[data-action="capture-clipboard-image"]').count(),0);
       assert.match(await page.locator('.landing').innerText(),/Folder access is unavailable/);
       await page.locator('[data-action="device-checks"]').click();
       assert.match(await page.locator('[data-m0-provider-gate]').innerText(),/blocked/i);
       await page.locator('[data-action="dismiss"]').click();
       await page.locator('[data-action="capture-file"]').click();
+      assert.equal(await page.locator('#capture-file-form button[data-delivery="folder"]').count(),0);
+      assert.match(await page.locator('#capture-file-form').innerText(),/Folder creation is unavailable/);
       await page.locator('#capture-file-form textarea[name="content"]').fill('https://example.org/sourcebook-smoke');
       const pending=page.waitForEvent('download');
       await page.locator('#capture-file-form button[data-delivery="download"]').click();
