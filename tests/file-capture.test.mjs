@@ -26,7 +26,7 @@ test('empty, oversized and unsafe capture is rejected before filesystem write',(
 });
 function fakeDirectory(){
   const files=new Map();let writes=0;
-  const d={kind:'directory',files,get writes(){return writes;},async getFileHandle(name,opts={}){
+  const d={kind:'directory',files,get writes(){return writes;},async *entries(){for(const name of files.keys())yield [name,{}];},async getFileHandle(name,opts={}){
     if(!files.has(name)){if(!opts.create)throw Object.assign(Error('missing'),{name:'NotFoundError'});files.set(name,'');}
     return {async getFile(){return {size:files.get(name).length,text:async()=>files.get(name)};},
       async createWritable(){return {async write(text){writes++;files.set(name,text);},async close(){},async abort(){}}}};
@@ -58,4 +58,11 @@ test('Markdown heading and non-Latin filenames remain safe and valid',async()=>{
   assert.match(plan.name,/Фасади.*Материали.*\.md$/u);
   await writeCapturedFile(d,plan);
   assert.equal(d.files.get(plan.name),'# Фасади / Материали\n');
+});
+
+test('case-only collision in capture refuses overwrite',async()=>{
+  const d=fakeDirectory(),plan=planFileCapture({kind:'text',value:'notes'},settings);
+  d.files.set(plan.name.toUpperCase(),'keep');
+  await assert.rejects(writeCapturedFile(d,plan),/case-only collision/);
+  assert.equal(d.writes,0);
 });
