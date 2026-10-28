@@ -5,6 +5,7 @@ import {createShareInboxUI,removeIncomingShare,listIncomingShares} from './share
 import {createCatalogLinksUI} from './catalog-links-ui.mjs';
 import {classifyPastedText,planFileCapture,writeCapturedFile,parseInternetShortcut,requestCapturedFileDownload} from './file-capture.mjs';
 import {prepareCaptureIntake} from './capture-intake.mjs';
+import {shareCapturedPlan} from './file-share-out.mjs';
 import {collectPastedImageBlobs,prepareClipboardImages,readClipboardImages} from './clipboard-images.mjs';
 import {planOrdinaryFileImport,importOrdinaryFiles} from './file-import.mjs';
 import {planCatalogURLImport,validateCatalogURLRecord} from './catalog-urls.mjs';
@@ -412,6 +413,12 @@ function downloadCapture(input){
   toast('Browser download requested: '+result.name+'. Check Downloads; Sourcebook cannot verify the destination.');
   return result;
 }
+async function shareCapture(input){
+  const plan=planFileCapture(input,{now:new Date(),random:crypto.randomUUID().replaceAll('-','').slice(0,10)});
+  const result=await shareCapturedPlan(plan);
+  toast('File handed to system share sheet: '+plan.name+'. Verify the destination yourself; Sourcebook cannot confirm it was saved.');
+  return result;
+}
 function openFileCapture({intake=null}={}){
   if(state.captureWriting)return toast('Finish the current file operation first',true);
   const current=!viewsUI.inResults()&&state.sourceId;
@@ -425,7 +432,7 @@ function openFileCapture({intake=null}={}){
     '<label>Destination<select name="destination">'+(current?'<option value="current">Current Folder</option>':'')+
     '<option value="choose">Choose another Folder…</option></select></label>'+
     '<div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button>'+
-    '<button class="secondary" type="submit" data-delivery="download">Download instead</button><button class="primary" type="submit" data-delivery="folder">Create in Folder</button></div></form>');
+    '<button class="secondary" type="submit" data-delivery="download">Download instead</button><button class="secondary" type="submit" data-delivery="share">Send file to app…</button><button class="primary" type="submit" data-delivery="folder">Create in Folder</button></div></form>');
   const form=$('#capture-file-form');
   const content=form.elements.content,status=$('#capture-intake-status');
   if(intake)content.value=intake.value;
@@ -456,6 +463,7 @@ async function saveFileCaptureForm(form,delivery='folder'){
     const input=classifyPastedText(form.elements.content.value);
     const data={...input,title:form.elements.title.value};
     const result=delivery==='download'?downloadCapture(data):
+      delivery==='share'?await shareCapture(data):
       await writeCapture(data,{choose:form.elements.destination.value==='choose'});
     if(result)$('#dialog')?.remove();
   }catch(error){if(error?.name!=='AbortError')toast('File capture: '+errorText(error),true);}

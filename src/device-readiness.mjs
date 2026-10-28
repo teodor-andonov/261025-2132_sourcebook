@@ -6,6 +6,7 @@ import {normalizeShareStorageProbe,inspectShareStorage,requestShareStoragePersis
 import {normalizeWriteProbe,normalizeReopenProbe,probeDisposableWriteFolder,rememberDisposableReadFolder,recheckDisposableReadFolder,forgetDisposableReadFolder} from './m0-feasibility.mjs';
 import {normalizePortableProbe,normalizeOfflineProbe,createM0PortableCatalogFixture,verifyM0PortableCatalogFixture,inspectM0OfflineShell} from './m0-acceptance.mjs';
 import {normalizeCaptureProbe,createM0CaptureFixture,verifyM0CaptureFixture} from './m0-capture-acceptance.mjs';
+import {inspectFileShareCapability} from './file-share-out.mjs';
 export const M0_CASES=[
   ['M0-01','Standalone PWA installation','Record OS, Chrome and published commit.'],
   ['M0-02','Real Folder browsing and Tabs','Mixed files, nested paths, previews and unchanged originals.'],
@@ -75,6 +76,7 @@ export function inspectDeviceCapabilities(env=globalThis){
     ['Active service worker',!!nav.serviceWorker?.controller],
     ['Clipboard readText',typeof nav.clipboard?.readText==='function'],
     ['Web Share',typeof nav.share==='function'],
+    ['Web Share files (API only)',inspectFileShareCapability({...win,navigator:nav}).available],
     ['Persistent storage API',typeof nav.storage?.persist==='function'],
     ['Standalone display',standalone]
   ].map(([label,available])=>({label,available}));
