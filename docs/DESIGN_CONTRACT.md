@@ -55,6 +55,12 @@ The first polished editable property is a **tag**. Avoid constructing a generic 
 - Tags aren't metadata colors: use the active accent only to indicate UI selection/focus, not permanent different colors for every tag.
 - Keep "Save" explicit while the prototype lacks robust write queue / undo. Later aim for low-friction auto-save after safe transactional catalog writes.
 
+## Portable Catalog URL Tag editing
+
+- Catalog URL resources have stable Catalog-local identities and share the same nested stable-ID Tag taxonomy as files. Bulk Add/Remove operates on explicitly selected URLs only (maximum 250) and uses one recoverable Catalog-only metadata transaction.
+- Filtering or selecting links never objectifies or changes physical files. Bulk Remove matches exact Tag paths, does not delete taxonomy nodes, and never invents new Tag IDs. Bulk Add may create nested taxonomy paths; unchanged URL records are not rewritten.
+- Device-local captured links are staging, not synced Catalog resources until explicitly imported. Physical Windows/Pixel 8 and Syncthing acceptance remain open.
+
 ## Minimal automatic information
 
 Name, file extension/type, path, size, file timestamps and dimensions are *derived from files* and need no custom property system. Show essential bits contextually; keep raw filename and catalog ID in a collapsed "File information" area.

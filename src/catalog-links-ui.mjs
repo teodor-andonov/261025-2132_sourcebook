@@ -2,6 +2,7 @@
 // metadata transactions. Device-staged links are NEVER removed on import.
 import {LINK_CAPTURE_KEY,normalizeCaptureStore,normalizeCaptureURL} from './link-capture.mjs';
 import {catalogURLName,planCatalogURLImport,planCatalogURLEdit,validateCatalogURLRecord} from './catalog-urls.mjs';
+import {MAX_BULK_URLS,parseBulkURLTagPaths,planBulkCatalogURLTags} from './catalog-url-bulk.mjs';
 import {ensureTagPath,recordTagPaths,assertTagSnapshotUnchanged} from './tags.mjs';
 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -92,6 +93,18 @@ export function createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal
       return {changes,message:'Catalog link metadata saved. URL and stable ID unchanged.'};
     });
   }
+  async function bulkTagLinks(ids,paths,mode){
+    return write(({taxonomy,rawTags,records})=>{
+      const plan=planBulkCatalogURLTags({records,taxonomy,selectedIds:ids,paths,mode});
+      const changes=[];
+      if(plan.changed){
+        if(!same(plan.taxonomy,taxonomy))
+          changes.push({path:'tags.json',before:rawTags,after:plan.taxonomy});
+        changes.push(...plan.changes);
+      }
+      return {changes,message:plan.changed+' of '+plan.selected+' Catalog links updated. Stable IDs and URLs preserved.'};
+    });
+  }
   async function open(){
     if(!state.catalog)return toast('Open a Catalog to store portable links.',true);
     openDialog('<h2>Catalog links</h2><p>Portable URL resources in this .sb Catalog. No page fetches or source-file changes. Import keeps device-staged links intact.</p>'+
@@ -99,22 +112,50 @@ export function createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal
       '<form id="catalog-links-form"><label>Add URLs (one per line, up to 20)<textarea name="urls" rows="3" maxlength="45000" placeholder="https://example.org/reference"></textarea></label>'+
       '<label>Tags (optional, comma-separated paths)<input name="tags" maxlength="1000" placeholder="Architecture / References, Research"/></label>'+
       '<div class="dialog-actions"><button type="submit" class="primary">Add URLs to Catalog</button><button type="button" class="secondary" data-catalog-links="staged">Import selected staged links</button></div></form>'+
-      '<div class="capture-list" id="catalog-staged-list"></div><h3>Catalog URLs</h3><div class="capture-list" id="catalog-url-list"></div>'+
+      '<div class="capture-list" id="catalog-staged-list"></div><h3>Catalog URLs</h3>'+
+      '<label>Find links<input id="catalog-url-filter" type="search" maxlength="200" placeholder="Title, URL or #Tag"/></label>'+
+      '<details class="catalog-url-bulk"><summary>Bulk Tags</summary><label>Tag paths (comma-separated)<input id="catalog-bulk-tags" maxlength="1000" placeholder="Architecture / References"/></label>'+
+      '<div class="dialog-actions"><button type="button" class="secondary" data-catalog-links="select-visible">Select visible</button>'+
+      '<button type="button" class="secondary" data-catalog-links="clear-selection">Clear</button>'+
+      '<button type="button" class="secondary" data-catalog-links="bulk-add">Add Tags</button>'+
+      '<button type="button" class="secondary" data-catalog-links="bulk-remove">Remove Tags</button></div>'+
+      '<p class="micro-hint" id="catalog-url-selection">0 selected</p></details>'+
+      '<div class="capture-list" id="catalog-url-list"></div>'+
       '<div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Done</button></div>');
-    const dialog=$('#dialog');
-    async function populate(){
-      if(!dialog.isConnected)return;
-      const saved=records(),urls=new Set(saved.map(x=>x.url));
+    const dialog=$('#dialog'),selectedIds=new Set();
+    let filterText='';
+    function visibleRecords(saved){
+      const needle=filterText.trim().replace(/^#/u,'').toLocaleLowerCase();
+      if(!needle)return saved;
+      return saved.filter(record=>{
+        try{
+          return [catalogURLName(record),record.url,...recordTagPaths(record,state.taxonomy)]
+            .some(value=>value.toLocaleLowerCase().includes(needle));
+        }catch{return false;}
+      });
+    }
+    function renderCatalogList(saved){
       const list=dialog.querySelector('#catalog-url-list');
-      list.innerHTML=saved.length?saved.map(record=>{
+      if(!list)return;
+      const visible=visibleRecords(saved);
+      list.innerHTML=visible.length?visible.map(record=>{
         try{
           validateCatalogURLRecord(record);
-          return '<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(catalogURLName(record))+
+          return '<div class="capture-row"><input type="checkbox" data-catalog-url-id="'+escapeHTML(record.id)+'" aria-label="Select '+escapeHTML(catalogURLName(record))+'" '+(selectedIds.has(record.id)?'checked':'')+'/>'+
+            '<div class="capture-link"><strong>'+escapeHTML(catalogURLName(record))+
             '</strong><small title="'+escapeHTML(record.url)+'">'+escapeHTML(record.url)+'</small></div>'+
             '<a class="secondary" href="'+escapeHTML(record.url)+'" target="_blank" rel="noopener noreferrer">Open</a>'+
             '<button type="button" class="secondary" data-catalog-links="edit" data-url-id="'+escapeHTML(record.id)+'">Edit</button></div>';
         }catch{return '<p class="micro-hint">Invalid Catalog URL metadata. Repair from a backup before editing.</p>';}
-      }).join(''):'<p>No Catalog links yet.</p>';
+      }).join(''):'<p>No matching Catalog links.</p>';
+      const count=dialog.querySelector('#catalog-url-selection');
+      if(count)count.textContent=selectedIds.size+' selected (maximum '+MAX_BULK_URLS+'). Tag changes affect only Catalog metadata.';
+    }
+    async function populate(){
+      if(!dialog.isConnected)return;
+      const saved=records(),urls=new Set(saved.map(x=>x.url));
+      for(const id of selectedIds)if(!saved.some(record=>record.id===id))selectedIds.delete(id);
+      renderCatalogList(saved);
       const staged=dialog.querySelector('#catalog-staged-list');
       try{
         const store=normalizeCaptureStore(await getLocal(LINK_CAPTURE_KEY));
@@ -125,6 +166,22 @@ export function createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal
       }catch(error){staged.textContent='Cannot read staged links: '+error.message;}
     }
     await populate();
+    dialog.querySelector('#catalog-url-filter').addEventListener('input',event=>{
+      filterText=event.target.value;
+      renderCatalogList(records());
+    });
+    dialog.addEventListener('change',event=>{
+      const checkbox=event.target.closest('input[data-catalog-url-id]');
+      if(!checkbox)return;
+      const id=checkbox.dataset.catalogUrlId;
+      if(checkbox.checked){
+        if(selectedIds.size>=MAX_BULK_URLS){
+          checkbox.checked=false;toast('Select at most '+MAX_BULK_URLS+' links.',true);return;
+        }
+        selectedIds.add(id);
+      }else selectedIds.delete(id);
+      renderCatalogList(records());
+    });
     dialog.querySelector('#catalog-links-form').addEventListener('submit',async event=>{
       event.preventDefault();if(busy)return;
       const form=event.target,lines=form.elements.urls.value.split(/\r?\n/u).map(s=>s.trim()).filter(Boolean);
@@ -141,6 +198,21 @@ export function createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal
       const action=button.dataset.catalogLinks;
       try{
         if(action==='show'){env.document.querySelector('#dialog')?.remove();showLinks();return;}
+        if(action==='clear-selection'){selectedIds.clear();renderCatalogList(records());return;}
+        if(action==='select-visible'){
+          const visible=visibleRecords(records()).filter(record=>{try{validateCatalogURLRecord(record);return true;}catch{return false;}});
+          if(new Set([...selectedIds,...visible.map(record=>record.id)]).size>MAX_BULK_URLS)
+            throw Error('Select at most '+MAX_BULK_URLS+' links');
+          for(const record of visible)selectedIds.add(record.id);
+          renderCatalogList(records());return;
+        }
+        if(action==='bulk-add'||action==='bulk-remove'){
+          if(!selectedIds.size)throw Error('Select Catalog links first');
+          const paths=parseBulkURLTagPaths(dialog.querySelector('#catalog-bulk-tags').value);
+          if(await bulkTagLinks([...selectedIds],paths,action==='bulk-add'?'add':'remove'))
+            await populate();
+          return;
+        }
         if(action==='edit'){openEdit(button.dataset.urlId);return;}
         if(action==='staged'){
           const ids=[...dialog.querySelectorAll('input[data-staged-url]:checked')].map(x=>x.dataset.stagedUrl);
