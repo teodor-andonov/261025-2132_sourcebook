@@ -7,6 +7,9 @@ import {normalizeWriteProbe,normalizeReopenProbe,probeDisposableWriteFolder,reme
 import {normalizePortableProbe,normalizeOfflineProbe,createM0PortableCatalogFixture,verifyM0PortableCatalogFixture,inspectM0OfflineShell} from './m0-acceptance.mjs';
 import {normalizeCaptureProbe,createM0CaptureFixture,verifyM0CaptureFixture} from './m0-capture-acceptance.mjs';
 import {inspectFileShareCapability} from './file-share-out.mjs';
+import {PHYSICAL_WRITE_LOCK} from './physical-write-lock.mjs';
+// Shared with capture/import and the browser-engine concurrency probe.
+export const M0_WRITE_LOCK_NAME=PHYSICAL_WRITE_LOCK;
 export const M0_CASES=[
   ['M0-01','Standalone PWA installation','Record OS, Chrome and published commit.'],
   ['M0-02','Real Folder browsing and Tabs','Mixed files, nested paths, previews and unchanged originals.'],
@@ -70,6 +73,7 @@ export function inspectDeviceCapabilities(env=globalThis){
   const features=[
     ['Secure context',win.isSecureContext===true],
     ['Directory picker',typeof win.showDirectoryPicker==='function'],
+    ['Cooperative file write locks (same-origin only)',typeof nav.locks?.request==='function'],
     ['Open-file picker',typeof win.showOpenFilePicker==='function'],
     ['IndexedDB',!!win.indexedDB],
     ['Service worker',!!nav.serviceWorker],

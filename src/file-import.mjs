@@ -1,6 +1,7 @@
 // Explicit import of ordinary files into a user-granted physical Folder.
 // Never rename, replace, or objectify source files; Catalog metadata is untouched.
 import {copyAndVerifyStreamedFile} from './file-stream-import.mjs';
+import {withPhysicalWriteLock} from './physical-write-lock.mjs';
 export const MAX_IMPORT_FILES=10;
 export const MAX_IMPORT_FILE_BYTES=512*1024*1024;
 export const MAX_IMPORT_TOTAL_BYTES=1024*1024*1024;
@@ -45,57 +46,59 @@ export async function assertImportDestinationAvailable(directory,items){
 }
 const hex=bytes=>Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');
 export async function importOrdinaryFiles(directory,files,{cryptoApi=globalThis.crypto,signal,onProgress}={}){
-  const plan=planOrdinaryFileImport(files);
-  if(plan.items.some(item=>item.size<=STREAM_IMPORT_THRESHOLD)&&typeof cryptoApi?.subtle?.digest!=='function')
-    throw Error('SHA-256 verification is unavailable; no files were written');
-  await assertImportDestinationAvailable(directory,plan.items);
-  const saved=[];
-  const abortIfRequested=()=>{if(signal?.aborted)throw Error('Import cancelled; inspect destination before retrying');};
-  const report=(event)=>{try{onProgress?.({...event,fileIndex:Math.min(saved.length+(event.phase==='done'?0:1),plan.items.length),fileCount:plan.items.length});}catch{}};
-  for(const item of plan.items){
-    try{
-      // Recheck before each write: another tab/provider may have added a file.
-      abortIfRequested();
-      await assertImportDestinationAvailable(directory,[item]);
-      // A second existence check narrows (but cannot eliminate) the empty-file race.
-      try{await directory.getFileHandle(item.name);throw Error('Destination filename already exists; no overwrite attempted');}
-      catch(error){if(error.name!=='NotFoundError')throw error;}
-      if(item.size>STREAM_IMPORT_THRESHOLD){
-        const handle=await directory.getFileHandle(item.name,{create:true});
-        if((await handle.getFile()).size!==0)throw Error('Destination unexpectedly contains data; no overwrite attempted');
-        const result=await copyAndVerifyStreamedFile(handle,item.file,{signal,onProgress:event=>report({...event,name:item.name})});
-        saved.push(result);
-        report({phase:'done',name:item.name,bytes:item.size,size:item.size});
-        continue;
-      }
-      const original=await item.file.arrayBuffer();
-      if(original.byteLength!==item.size)throw Error('Selected file changed before import');
-      const expected=hex(await cryptoApi.subtle.digest('SHA-256',original));
-      abortIfRequested();
-      const handle=await directory.getFileHandle(item.name,{create:true});
-      if((await handle.getFile()).size!==0)
-        throw Error('Destination unexpectedly contains data; no overwrite attempted');
-      let writable;
+  return withPhysicalWriteLock(async()=>{
+    const plan=planOrdinaryFileImport(files);
+    if(plan.items.some(item=>item.size<=STREAM_IMPORT_THRESHOLD)&&typeof cryptoApi?.subtle?.digest!=='function')
+      throw Error('SHA-256 verification is unavailable; no files were written');
+    await assertImportDestinationAvailable(directory,plan.items);
+    const saved=[];
+    const abortIfRequested=()=>{if(signal?.aborted)throw Error('Import cancelled; inspect destination before retrying');};
+    const report=(event)=>{try{onProgress?.({...event,fileIndex:Math.min(saved.length+(event.phase==='done'?0:1),plan.items.length),fileCount:plan.items.length});}catch{}};
+    for(const item of plan.items){
       try{
-        writable=await handle.createWritable();
+        // Recheck before each write: another tab/provider may have added a file.
         abortIfRequested();
-        await writable.write(new Uint8Array(original));
-        await writable.close();
+        await assertImportDestinationAvailable(directory,[item]);
+        // A second existence check narrows (but cannot eliminate) the empty-file race.
+        try{await directory.getFileHandle(item.name);throw Error('Destination filename already exists; no overwrite attempted');}
+        catch(error){if(error.name!=='NotFoundError')throw error;}
+        if(item.size>STREAM_IMPORT_THRESHOLD){
+          const handle=await directory.getFileHandle(item.name,{create:true});
+          if((await handle.getFile()).size!==0)throw Error('Destination unexpectedly contains data; no overwrite attempted');
+          const result=await copyAndVerifyStreamedFile(handle,item.file,{signal,onProgress:event=>report({...event,name:item.name})});
+          saved.push(result);
+          report({phase:'done',name:item.name,bytes:item.size,size:item.size});
+          continue;
+        }
+        const original=await item.file.arrayBuffer();
+        if(original.byteLength!==item.size)throw Error('Selected file changed before import');
+        const expected=hex(await cryptoApi.subtle.digest('SHA-256',original));
+        abortIfRequested();
+        const handle=await directory.getFileHandle(item.name,{create:true});
+        if((await handle.getFile()).size!==0)
+          throw Error('Destination unexpectedly contains data; no overwrite attempted');
+        let writable;
+        try{
+          writable=await handle.createWritable();
+          abortIfRequested();
+          await writable.write(new Uint8Array(original));
+          await writable.close();
+        }catch(error){
+          try{await writable?.abort();}catch{}
+          throw Error('Write failed; partial file may remain: '+error.message);
+        }
+        const verified=await (await handle.getFile()).arrayBuffer();
+        if(verified.byteLength!==original.byteLength||
+          hex(await cryptoApi.subtle.digest('SHA-256',verified))!==expected)
+          throw Error('Readback checksum differs; inspect file');
+        abortIfRequested();
+        saved.push({name:item.name,size:item.size,sha256:expected,verification:'sha256'});
+        report({phase:'done',name:item.name,bytes:item.size,size:item.size});
       }catch(error){
-        try{await writable?.abort();}catch{}
-        throw Error('Write failed; partial file may remain: '+error.message);
+        throw Error('Import stopped after '+saved.length+'/'+plan.items.length+
+          ' verified files. Inspect '+item.name+' and destination before retrying; a partial file may remain. '+error.message);
       }
-      const verified=await (await handle.getFile()).arrayBuffer();
-      if(verified.byteLength!==original.byteLength||
-        hex(await cryptoApi.subtle.digest('SHA-256',verified))!==expected)
-        throw Error('Readback checksum differs; inspect file');
-      abortIfRequested();
-      saved.push({name:item.name,size:item.size,sha256:expected,verification:'sha256'});
-      report({phase:'done',name:item.name,bytes:item.size,size:item.size});
-    }catch(error){
-      throw Error('Import stopped after '+saved.length+'/'+plan.items.length+
-        ' verified files. Inspect '+item.name+' and destination before retrying; a partial file may remain. '+error.message);
     }
-  }
-  return {saved,totalBytes:plan.totalBytes,verified:true};
+    return {saved,totalBytes:plan.totalBytes,verified:true};
+  },{signal});
 }
