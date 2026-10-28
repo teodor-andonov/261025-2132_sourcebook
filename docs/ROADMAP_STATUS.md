@@ -1,3 +1,11 @@
+## 2026-10-28 08:31 Europe/Madrid — Cross-device M0 evidence comparison (V0.0.38 candidate)
+
+- **Implemented in code:** A read-only, memory-only comparison of two explicitly selected M0 JSON exports (one Windows, one Android), with schema/size validation, per-scenario status matrix, release-commit and standalone checks, timestamp warnings, and missing external M0-05 evidence warnings. Imported reports are not persisted or uploaded.
+- **Synthetic fixture identity:** The existing disposable .sb create/verify probes now return a SHA-256 fingerprint of their random test fixture UUID (no path or filename). A matching fingerprint across two successfully verified reports is only *supporting evidence*, not proof of Syncthing transport, live permission persistence or device acceptance.
+- **Acceptance safety:** Comparison can report 'ready for manual review' but always returns accepted=false. Missing, blocked, stale, mismatched and unverified reports cannot be treated as passing. Manual M0-01…08 and physical Windows Chrome/Pixel 8 testing remain outstanding.
+- **Verification at authoring:** Automated regression tests added; actual PR CI, merge and Pages publication must be checked separately. No physical devices, screenshots, visual fixtures or Mindmap changes.
+- **Development log:** [M0 cross-device evidence](../logs/development/261028-0831_m0-cross-device-evidence.md).
+
 # Sourcebook — live roadmap status and acceptance
 
 **Updated:** 2026-10-28 · **Source:** `docs/ROADMAP_V1_ULTRA.md` · **Code reference:** V0.0.31 / merged PR #10; V0.0.32 M0 feasibility merged; V0.0.34 Android incoming-share staging published; V0.0.35 portable Catalog URL resources published; V0.0.36 bulk URL Tag edits in development (CI, release and device verification separate).
