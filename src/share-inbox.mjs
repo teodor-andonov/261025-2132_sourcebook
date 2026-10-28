@@ -112,7 +112,7 @@ export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,env=
       try{
         const items=await listIncomingShares();if(!$('#share-inbox-list'))return;
         host.innerHTML=items.length?items.map(item=>
-          '<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(item.title||item.candidate||'Shared text')+'</strong><small>'+escapeHTML(item.candidate||item.kind==='ambiguous'?'':item.kind==='text'?'Text only · copy or review manually':'')+'</small><textarea readonly rows="2" aria-label="Original shared content">'+escapeHTML(item.text||item.url)+'</textarea></div>'+
+          '<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(item.title||item.candidate||'Shared text')+'</strong><small>'+escapeHTML(item.candidate||(item.kind==='ambiguous'?'Multiple URLs · copy or review manually':'Text only · copy or review manually'))+'</small><textarea readonly rows="2" aria-label="Original shared content">'+escapeHTML(item.text||item.url)+'</textarea></div>'+
           (item.candidate?'<button class="secondary" type="button" data-share="review" data-share-id="'+item.id+'">Review URL</button>':'')+
           '<button class="secondary" type="button" data-share="copy" data-share-id="'+item.id+'">Copy</button><button class="secondary" type="button" data-share="discard" data-share-id="'+item.id+'">Discard</button></div>'
         ).join(''):'<p>No pending shares.</p>';
