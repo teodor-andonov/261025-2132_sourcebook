@@ -1,6 +1,6 @@
 # Sourcebook — live roadmap status and acceptance
 
-**Updated:** 2026-10-28 · **Source:** `docs/ROADMAP_V1_ULTRA.md` · **Code reference:** V0.0.31 / merged PR #10; V0.0.32 M0 feasibility candidate on a PR branch.
+**Updated:** 2026-10-28 · **Source:** `docs/ROADMAP_V1_ULTRA.md` · **Code reference:** V0.0.31 / merged PR #10; V0.0.32 M0 feasibility merged; V0.0.33 device-local link capture candidate on a PR branch.
 
 ## How progress is tracked
 
@@ -19,7 +19,7 @@ Track each workstream independently through three stages:
 | **V0.2:** Portable `.sb` Catalog and filename identity | Partial | **Not tested** | **No** | Catalog JSON, root grants, bracketed identifiers and crash recovery exist; cross-catalog token lifecycle, rename/move rediscovery, migrations and portability tests incomplete. |
 | **V0.3:** Nested Tags and manual grouping | Substantial | **Not tested** | **No** | Stable nested Tags, pinned shortcuts, bulk Add/Remove, catalog-wide discovery work in code. Tag reparent/merge and genuine multi-device Sync acceptance remain. |
 | **V0.4:** Saved Views and search | Substantial | **Not tested** | **No** | AND/OR tags, type/status filtering, source/folder scope, grouping, table columns and explicit indexed scan work. Richer predicates, live change detection and 10k+ responsiveness remain. |
-| **V0.5:** Capture / reference collection | Early | **Not tested** | **No** | Basic import exists. Need first-class URL resources, drop, paste/clipboard, selected destination and Android share/fallback. |
+| **V0.5:** Capture / reference collection | Partial | **Not tested** | **No** | Basic file import and device-local URL staging (paste, clipboard fallback, open/copy/title/remove/export) exist in code. Still need portable Catalog URL resources, drag/drop, Android incoming share target and selected destination. Browser-only staged links do not sync. |
 | **V0.6:** Safe file-management | Early | **Not tested** | **No** | Folder creation and browsing exist; copy/move/rename/delete, conflict policy, queue/undo and truthful browser capability fallbacks remain. |
 | **V0.7 / V0.8:** Rich previews and power/UX | Partial | **Not tested** | **No** | Fold-inspired symbols, side previews, View controls exist; advanced PDF/image viewer, URL cards, fast keyboard/mobile UX and high-density tuning remain. |
 | **V0.9:** Safety and beta reliability | Strong foundation | **Not tested** | **No** | Recovery journal, checksummed metadata backup, selective missing-record restore, Syncthing conflict inspection, device-local index and verified root overlaps implemented; multi-writer reconciliation and stress testing open. |
@@ -32,6 +32,8 @@ Track each workstream independently through three stages:
 - **V0.0.24–0.0.26:** checksummed metadata backup, selective restore and Syncthing conflict-copy guard — see `IMPLEMENTATION_STATUS.md`.
 - **V0.0.27–0.0.29:** indexed refresh, subtree refresh and verified overlapping Catalog Folders — [PR #7](https://github.com/teodor-andonov/261025-2132_sourcebook/pull/7) verified **188/188** Node tests in its PR CI.
 - **V0.0.30:** read-only overlapping Catalog record review — [PR #8](https://github.com/teodor-andonov/261025-2132_sourcebook/pull/8) verified **196/196** Node tests and JavaScript syntax checks. These are automated simulations, not device acceptance.
+
+**V0.0.33 candidate:** Device-local link staging is implemented in code; it is not physical-device verified or accepted. Do not count clipboard API presence as a successful Android capture test. See [development log](../logs/development/261028-0332_device-link-capture.md).
 
 ## Immediate priority — close the M0 device feasibility gate
 
