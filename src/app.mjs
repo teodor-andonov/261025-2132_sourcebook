@@ -1,7 +1,7 @@
 import {getLocal,setLocal,removeLocal,readJson,writeJson,nested,authorized} from './storage.mjs';
 import {createDeviceReadinessUI} from './device-readiness.mjs';
 import {createLinkCaptureUI} from './link-capture.mjs';
-import {createShareInboxUI,removeIncomingShare} from './share-inbox.mjs';
+import {createShareInboxUI,removeIncomingShare,listIncomingShares} from './share-inbox.mjs';
 import {createCatalogLinksUI} from './catalog-links-ui.mjs';
 import {classifyPastedText,planFileCapture,writeCapturedFile,parseInternetShortcut,requestCapturedFileDownload} from './file-capture.mjs';
 import {prepareCaptureIntake} from './capture-intake.mjs';
@@ -50,6 +50,8 @@ const linkCapture=createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setL
 const shareInbox=createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,
   onSaveFile:input=>writeCapture(input,{choose:true}),onDownloadFile:downloadCapture,
   onImportFiles:async(files,id)=>showFileImport(files,{origin:'share',onVerified:async()=>{
+    const item=(await listIncomingShares()).find(entry=>entry.id===id);
+    if(item?.text||item?.url){toast('Files verified. Shared text/URL remains staged for review or Discard.');return;}
     await removeIncomingShare(id);
     toast('Verified shared files; temporary inbox cleared');
   }})});
