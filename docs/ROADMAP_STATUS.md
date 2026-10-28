@@ -1,6 +1,6 @@
 # Sourcebook — live roadmap status and acceptance
 
-**Updated:** 2026-10-28 · **Source:** `docs/ROADMAP_V1_ULTRA.md` · **Code reference:** V0.0.31 / merged PR #10; V0.0.32 M0 feasibility merged; V0.0.33 device-local link capture candidate on a PR branch.
+**Updated:** 2026-10-28 · **Source:** `docs/ROADMAP_V1_ULTRA.md` · **Code reference:** V0.0.31 / merged PR #10; V0.0.32 M0 feasibility merged; V0.0.34 Android incoming-share staging published; V0.0.35 portable Catalog URL resources in development (PR CI and device verification separate).
 
 ## How progress is tracked
 
@@ -19,7 +19,7 @@ Track each workstream independently through three stages:
 | **V0.2:** Portable `.sb` Catalog and filename identity | Partial | **Not tested** | **No** | Catalog JSON, root grants, bracketed identifiers and crash recovery exist; cross-catalog token lifecycle, rename/move rediscovery, migrations and portability tests incomplete. |
 | **V0.3:** Nested Tags and manual grouping | Substantial | **Not tested** | **No** | Stable nested Tags, pinned shortcuts, bulk Add/Remove, catalog-wide discovery work in code. Tag reparent/merge and genuine multi-device Sync acceptance remain. |
 | **V0.4:** Saved Views and search | Substantial | **Not tested** | **No** | AND/OR tags, type/status filtering, source/folder scope, grouping, table columns and explicit indexed scan work. Richer predicates, live change detection and 10k+ responsiveness remain. |
-| **V0.5:** Capture / reference collection | Partial | **Not tested** | **No** | Basic file import and device-local URL staging (paste, clipboard fallback, open/copy/title/remove/export) exist in code. Still need portable Catalog URL resources, drag/drop, Android incoming share target and selected destination. Browser-only staged links do not sync. |
+| **V0.5:** Capture / reference collection | Partial | **Not tested** | **No** | File import, device-local URL staging, incoming Android text/URL share inbox and portable Catalog URL resource schema/import/edit/View projection are implemented in code (V0.0.35 candidate). URL cards, file share, drag/drop, selected physical destination and real-device acceptance remain open. Device-only staging does not sync; explicitly imported Catalog URLs do. |
 | **V0.6:** Safe file-management | Early | **Not tested** | **No** | Folder creation and browsing exist; copy/move/rename/delete, conflict policy, queue/undo and truthful browser capability fallbacks remain. |
 | **V0.7 / V0.8:** Rich previews and power/UX | Partial | **Not tested** | **No** | Fold-inspired symbols, side previews, View controls exist; advanced PDF/image viewer, URL cards, fast keyboard/mobile UX and high-density tuning remain. |
 | **V0.9:** Safety and beta reliability | Strong foundation | **Not tested** | **No** | Recovery journal, checksummed metadata backup, selective missing-record restore, Syncthing conflict inspection, device-local index and verified root overlaps implemented; multi-writer reconciliation and stress testing open. |
@@ -32,6 +32,8 @@ Track each workstream independently through three stages:
 - **V0.0.24–0.0.26:** checksummed metadata backup, selective restore and Syncthing conflict-copy guard — see `IMPLEMENTATION_STATUS.md`.
 - **V0.0.27–0.0.29:** indexed refresh, subtree refresh and verified overlapping Catalog Folders — [PR #7](https://github.com/teodor-andonov/261025-2132_sourcebook/pull/7) verified **188/188** Node tests in its PR CI.
 - **V0.0.30:** read-only overlapping Catalog record review — [PR #8](https://github.com/teodor-andonov/261025-2132_sourcebook/pull/8) verified **196/196** Node tests and JavaScript syntax checks. These are automated simulations, not device acceptance.
+
+**V0.0.35 candidate:** Portable URL resources use Catalog-local sequential IDs in resources/<id>.json, with canonical HTTP(S) URLs, stable-ID Tags, notes, title, saved View filtering and read-only external opening. Manual batch import or selected device-staged transfer is explicit and journaled. Staged links are retained. Device verified: **No**; released & accepted: **No**. See [development log](../logs/development/261028-0531_portable-catalog-links.md).
 
 **V0.0.34 candidate:** Android/Web Share Target POST inbox is implemented in code with explicit review and separate Save to device-local captured links. **Device verified: No. Released & accepted: No.** M0-08 remains Not tested on Pixel 8. Text-only shares remain manual-copy staging; no portable Catalog URL resources. See [development log](../logs/development/261028-0425_android-share-inbox.md).
 
@@ -59,7 +61,7 @@ If the user cannot perform M0 now, agent development should prepare harmless tes
 ## Development sequence after M0
 
 1. **M0 real-device feasibility + fixes:** verify picker/read/write/grants, offline shell, Syncthing portability and high-value browser interaction. Keep screenshots manual only.
-2. **V0.5 capture:** useful URL/card first-class resource, clipboard/drag-drop capture, explicit destination choice, Android Share Target with realistic fallback.
+2. **V0.5 capture:** validate portable URL resource roundtrips and Android Share Target on real devices, then improve URL cards, clipboard/drag-drop capture and explicit physical destination choice.
 3. **V0.6 physical operations:** capability detection and explicit safe copy/move/rename/create/delete; no overwrites without user choice, clear progress and recovery.
 4. **V0.2 identity completeness + V0.9 hardening:** dual-Catalog token identity, rename/move reconciliation, crash/sync conflicts and acceptance tests.
 5. **V0.7+ rich media, 10k–50k gallery measurements and user-visible polish** based on actual usability feedback.

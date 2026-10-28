@@ -1,3 +1,11 @@
+## 2026-10-28 05:31 Europe/Madrid — Portable Catalog URL resources (V0.0.35 candidate)
+
+- **Implemented in source on development branch:** First-class kind=url metadata in existing resources/<catalog-code><sequence>.json, with canonical HTTP(S) URLs, title, notes and stable nested Tag IDs. Manual batch import and selected device-staged import are explicit, journaled Catalog-only writes. Staged links are retained; no page content is fetched, no ordinary source file is renamed or modified.
+- **Discovery and interaction:** URL results participate in global saved Views, hashtag Tag discovery, search and Links type filtering; source/folder-scoped Views exclude URLs. Catalog Links sidebar opens link-only results and a compact import/edit dialog. Explicit external opening uses a new browser tab with noopener,noreferrer; no filesystem handle or missing-file status is assigned to URLs.
+- **Safety:** Catalog sequence allocator skips occupied IDs, rejects invalid/duplicate existing URL records, checks snapshots and Catalog permissions before writes, and uses the existing recoverable journal. Backup/restore recognizes URL metadata without requiring a Folder. This is not cross-tab or cross-device atomic locking, and not a URL crawler, rich card preview or Android file-share target.
+- **Verification status at authoring:** Node tests and syntax checks added; PR CI and Pages outcome must be verified separately. **No physical Windows Chrome or Pixel 8 tests** were performed. M0-01…08 remain open. No screenshots/visual fixtures were requested or generated.
+- **Development log:** [Portable Catalog links](../logs/development/261028-0531_portable-catalog-links.md).
+
 ## 2026-10-28 04:25 Europe/Madrid — Incoming Android share inbox (V0.0.34 candidate)
 
 - **Implemented in code, device unverified:** Installed-PWA POST Share Target routes text/URL to a bounded device-local IndexedDB inbox. Explicit review may stage a normalized URL into existing Capture links; only the user pressing Save commits it. Ambiguous/text-only shares remain available for manual copy. No Catalog JSON or ordinary source file is written.
