@@ -309,7 +309,70 @@ async function main(){
       }
     });
 
-    process.stdout.write('Chromium smoke '+passed+'/7 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
+
+    // Same-origin Catalog metadata coordination uses a separate Web Lock from
+    // ordinary file creation. OPFS is a synthetic browser fixture, NOT a real
+    // Windows/Android external Folder or a Syncthing conflict-resolution test.
+    await scenario('two-tab Chromium Catalog journal lock rejects stale competing edits',async(context,page)=>{
+      await controlled(page);
+      const second=await context.newPage(),pageErrors=[];
+      second.on('pageerror',error=>pageErrors.push(error.message));
+      await controlled(second);
+      const folderName='sourcebook-opfs-catalog-lock-'+crypto.randomUUID();
+      const catalog={id:'browser-catalog-lock',code:'cl',nextSequence:1};
+      const changes=[{path:'tags.json',before:null,after:[{id:'t1',name:'Timber',parentId:null}]}];
+      const lockName='sourcebook-catalog-write-v1';
+      try{
+        await page.evaluate(async({folderName,catalog})=>{
+          const root=await navigator.storage.getDirectory();
+          const dir=await root.getDirectoryHandle(folderName,{create:true});
+          const {writeJson}=await import('./src/storage.mjs');
+          await writeJson(dir,'catalog.json',catalog);
+        },{folderName,catalog});
+        await page.evaluate(name=>{
+          window.__heldCatalogLock=navigator.locks.request(name,{mode:'exclusive'},
+            ()=>new Promise(resolve=>{window.__releaseCatalogLock=resolve;}));
+        },lockName);
+        await page.waitForFunction(()=>typeof window.__releaseCatalogLock==='function');
+        const pending=second.evaluate(async({folderName,catalog,changes})=>{
+          const root=await navigator.storage.getDirectory(),dir=await root.getDirectoryHandle(folderName);
+          const {commitCatalogTransaction}=await import('./src/catalog-transactions.mjs');
+          return commitCatalogTransaction({handle:dir,catalogId:catalog.id,changes,transactionId:'browser-first'});
+        },{folderName,catalog,changes});
+        await second.waitForFunction(async name=>(await navigator.locks.query()).pending.some(lock=>lock.name===name),lockName);
+        const before=await page.evaluate(async folderName=>{
+          const root=await navigator.storage.getDirectory(),dir=await root.getDirectoryHandle(folderName);
+          const names=[];for await(const [name] of dir.entries())names.push(name);
+          return names.sort();
+        },folderName);
+        assert.deepEqual(before,['catalog.json'],'Journal and Tags must wait for the Catalog lock');
+        await page.evaluate(()=>window.__releaseCatalogLock());
+        assert.equal(await pending,1);
+        const result=await page.evaluate(async({folderName,catalog,changes})=>{
+          const root=await navigator.storage.getDirectory(),dir=await root.getDirectoryHandle(folderName);
+          const {commitCatalogTransaction,inspectPendingCatalogTransaction}=await import('./src/catalog-transactions.mjs');
+          const {readJson}=await import('./src/storage.mjs');
+          let staleRefused=false;
+          try{await commitCatalogTransaction({handle:dir,catalogId:catalog.id,changes,transactionId:'browser-stale'});}
+          catch(error){staleRefused=/changed on disk/.test(error.message);}
+          return {staleRefused,tags:await readJson(dir,'tags.json'),
+            journal:await inspectPendingCatalogTransaction(dir,catalog.id)};
+        },{folderName,catalog,changes});
+        assert.equal(result.staleRefused,true);
+        assert.deepEqual(result.tags,changes[0].after);
+        assert.equal(result.journal,null);
+        assert.deepEqual(pageErrors,[]);
+      }finally{
+        await page.evaluate(async folderName=>{
+          window.__releaseCatalogLock?.();
+          const root=await navigator.storage.getDirectory();
+          try{await root.removeEntry(folderName,{recursive:true});}catch{}
+        },folderName);
+        await second.close();
+      }
+    });
+
+    process.stdout.write('Chromium smoke '+passed+'/8 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
   }finally{
     await browser?.close();
     await new Promise(resolveClose=>server.close(resolveClose));

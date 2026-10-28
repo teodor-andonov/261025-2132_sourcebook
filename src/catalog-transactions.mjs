@@ -3,6 +3,7 @@
 // This is NOT a cross-device lock or a filesystem-wide atomic commit.
 import {readJson,writeJson} from './storage.mjs';
 import {assertNoCatalogConflictCopies} from './catalog-conflicts.mjs';
+import {withCatalogWriteLock} from './catalog-write-lock.mjs';
 
 export const CATALOG_JOURNAL='.sourcebook-pending.json';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -117,7 +118,8 @@ async function applyJournal(handle,catalogId,journal){
   if(await readJson(handle,CATALOG_JOURNAL,null)!==null)throw Error('Catalog recovery journal could not be cleared');
   return journal.changes.length;
 }
-export async function commitCatalogTransaction({handle,catalogId,changes,transactionId=crypto.randomUUID()}){
+export async function commitCatalogTransaction({handle,catalogId,changes,transactionId=crypto.randomUUID(),locks=globalThis.navigator?.locks}){
+  return withCatalogWriteLock(async()=>{
   if(!handle||!validId(catalogId)||!validId(transactionId))throw Error('Invalid catalog transaction identity');
   const checked=validateCatalogChanges(changes);
   const identityChange=checked.find(change=>change.path==='catalog.json');
@@ -139,8 +141,10 @@ export async function commitCatalogTransaction({handle,catalogId,changes,transac
     if(!same(await readJournal(handle,catalogId),journal))throw Error('Could not verify catalog recovery journal');
     return await applyJournal(handle,catalogId,journal);
   }finally{inFlight.delete(handle);}
+  },{locks});
 }
-export async function resumeCatalogTransaction(handle,catalogId){
+export async function resumeCatalogTransaction(handle,catalogId,{locks=globalThis.navigator?.locks}={}){
+  return withCatalogWriteLock(async()=>{
   if(!handle||!validId(catalogId))throw Error('Invalid catalog recovery identity');
   if(inFlight.has(handle))throw Error('Another catalog write is already in progress');
   inFlight.add(handle);
@@ -150,4 +154,5 @@ export async function resumeCatalogTransaction(handle,catalogId){
     if(!journal)throw Error('No pending catalog save to recover');
     return await applyJournal(handle,catalogId,journal);
   }finally{inFlight.delete(handle);}
+  },{locks});
 }

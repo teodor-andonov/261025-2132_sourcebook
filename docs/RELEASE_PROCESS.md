@@ -31,6 +31,7 @@ No scheduled screenshot capture or separate branch-based website build is requir
 - Pushing `main` now triggers deployment checks automatically; this replaces the former manual-only release policy. It can make releases without another chat confirmation **after an approved/CI-passing squash merge**. This behavior is intentional.
 - Do not manually run the screenshot workflow or download/capture screenshots unless explicitly requested. Its workflow is artifact-only and may not push directly to `main`.
 - Catalog and source-file mutations are separate from release management. Never overwrite ordinary user data while testing or publishing.
+- Catalog JSON commit/recovery and ordinary-file creation use separate cooperative same-origin Web Locks where available. These do **not** lock external filesystems, other browser profiles, Syncthing or devices; retain the journal, stale-snapshot checks and manual conflict review. Do not claim multi-device safety from a green CI run.
 - Publishing code does not guarantee every installed PWA has activated its updated service worker. Never force-reload during a catalog write.
 - Actual Windows and Android testing must be reported separately from CI or a hosted deployment.
 
