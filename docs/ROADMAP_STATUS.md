@@ -39,6 +39,10 @@ Track each workstream independently through three stages:
 
 **V0.0.33 candidate:** Device-local link staging is implemented in code; it is not physical-device verified or accepted. Do not count clipboard API presence as a successful Android capture test. See [development log](../logs/development/261028-0332_device-link-capture.md).
 
+## V0.0.37 M0 portable acceptance aids (candidate; device unverified)
+
+Device checks now includes an opt-in, **empty disposable parent** portable .sb Catalog fixture writer and read-only verifier. The fixture exercises the actual journal, nested stable-ID Tags, URL metadata, saved View and allocator, and remains in place for explicit restart/Syncthing roundtrip tests. An offline shell cache diagnostic distinguishes cached assets from an actual offline run. All M0 outcomes stay **Not tested** until physical evidence is recorded. Fixture creation is a Catalog write test, not proof of Android filesystem support. See [development log](../logs/development/261028-0724_m0-portable-acceptance.md).
+
 ## Immediate priority — close the M0 device feasibility gate
 
 The next real milestone is **not another index feature**. Validate and record each line below on *both* target devices. A person using the devices must complete these checks; an agent must not invent a passing result.

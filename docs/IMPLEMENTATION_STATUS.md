@@ -1,3 +1,10 @@
+## 2026-10-28 07:24 Europe/Madrid — M0 portable Catalog and offline diagnostic (V0.0.37 candidate)
+
+- **Code:** Explicitly confirmed empty-disposable-parent `.sb` fixture creator exercises real Catalog journal transactions for stable nested Tags, portable URL resource, saved View and sequence allocator. Read-only verifier checks coherent metadata and clean journal after restart or Syncthing transfer. No ordinary source-file changes and no automatic fixture deletion.
+- **Offline diagnostic:** Reads only Sourcebook-prefixed Cache Storage and active service-worker state. Does not simulate network disconnection or prove offline load.
+- **Safety:** Refuses nonempty parent, generates unpredictable UUID fixture name, preserves partial failed writes for manual inspection, sanitizes exported results. M0 manual statuses never auto-pass. No cross-device locking or filesystem-atomic guarantee.
+- **Verification at authoring:** Simulated provider tests prepared; PR CI and Pages outcome pending. No real Windows Chrome/Pixel 8 or Syncthing roundtrip, no screenshots and no Mindmap changes. See [development log](../logs/development/261028-0724_m0-portable-acceptance.md).
+
 ## 2026-10-28 06:30 Europe/Madrid — Catalog URL bulk Tags (V0.0.36 candidate)
 
 - **Implemented in code on development branch:** Catalog links now supports title/URL/Tag-path filtering, individual/visible selection (up to 250 URLs) and explicit bulk Add/Remove of 1–16 nested Tag paths. Stable Catalog URL IDs, URLs, titles and notes are preserved; no ordinary source files are changed.

@@ -1,6 +1,7 @@
 // Device readiness is local and opt-in. API presence never counts as M0 acceptance.
 import {getLocal,setLocal,removeLocal} from './storage.mjs';
 import {normalizeWriteProbe,normalizeReopenProbe,probeDisposableWriteFolder,rememberDisposableReadFolder,recheckDisposableReadFolder,forgetDisposableReadFolder} from './m0-feasibility.mjs';
+import {normalizePortableProbe,normalizeOfflineProbe,createM0PortableCatalogFixture,verifyM0PortableCatalogFixture,inspectM0OfflineShell} from './m0-acceptance.mjs';
 export const M0_CASES=[
   ['M0-01','Standalone PWA installation','Record OS, Chrome and published commit.'],
   ['M0-02','Real Folder browsing and Tabs','Mixed files, nested paths, previews and unchanged originals.'],
@@ -38,6 +39,9 @@ export function normalizeM0Record(input,now=new Date().toISOString()){
     releaseCommit:/^[a-f0-9]{7,40}$/i.test(value.releaseCommit||'')?value.releaseCommit:'',
     results,
     writeProbe:normalizeWriteProbe(value.writeProbe),
+    portableCreateProbe:normalizePortableProbe(value.portableCreateProbe),
+    portableVerifyProbe:normalizePortableProbe(value.portableVerifyProbe),
+    offlineProbe:normalizeOfflineProbe(value.offlineProbe),
     reopenProbe:normalizeReopenProbe(value.reopenProbe),
     probe:{
       status:['not-run','ok','unsupported','cancelled','denied','error'].includes(probe.status)?probe.status:'not-run',
@@ -108,6 +112,8 @@ export function exportM0Report(record,capabilities,now=new Date().toISOString())
     capabilities:capabilities.features,releaseCommit:value.releaseCommit,
     results:value.results,readOnlyFolderProbe:value.probe,
     disposableWriteProbe:value.writeProbe,savedReadHandleProbe:value.reopenProbe,
+    portableCatalogCreateProbe:value.portableCreateProbe,portableCatalogVerifyProbe:value.portableVerifyProbe,
+    offlineCacheProbe:value.offlineProbe,
     caveat:'API presence and the read-only probe are not physical-device acceptance. All Pass/Fail/Blocked outcomes are manually entered.'
   };
 }
@@ -121,6 +127,20 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
     catch{toast('Device checklist could not be stored in this browser.',true);}
   };
   let lastLeftoverName='';
+  let lastFixtureName='';
+  const portableSummary=()=>{
+    const created=record.portableCreateProbe,verified=record.portableVerifyProbe;
+    return 'Create '+created.status+' · transaction '+(created.transactionVerified?'verified':'not verified')+
+      ' · local readback '+(created.portableVerified?'verified':'not verified')+
+      ' · re-open '+verified.status+(created.cleanupRequired?' · PARTIAL FIXTURE: MANUAL REVIEW REQUIRED':'')+
+      '. No device acceptance is automatic.';
+  };
+  const offlineSummary=()=>{
+    const p=record.offlineProbe;
+    return 'Cache '+p.status+' · controller '+(p.controllerActive?'active':'inactive')+
+      ' · shell '+(p.shellCached?'present':'not verified')+' · module '+(p.appModuleCached?'present':'not verified')+
+      '. This does not prove offline navigation.';
+  };
   const writeSummary=()=>{
     const p=record.writeProbe;
     return p.status==='not-run'?'Not run. Explicit consent and a disposable Folder are required.':
@@ -156,6 +176,11 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
       '<div class="m0-probe"><strong>Disposable Folder feasibility</strong><p>Use an empty throwaway Folder, never a project/source or .sb Catalog. Write test creates one unpredictable probe file, verifies its contents and removes it. A failure may leave that synthetic file for manual cleanup.</p>'+
       '<div class="m0-probe-actions"><button class="secondary" type="button" data-m0-write '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Test write / read / remove</button><button class="secondary" type="button" data-m0-remember '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Remember read handle</button><button class="secondary" type="button" data-m0-recheck>Recheck after restart</button><button class="secondary" type="button" data-m0-forget>Forget handle</button></div>'+
       '<p role="status" data-m0-write-result>'+escapeHTML(writeSummary())+'</p><p role="status" data-m0-reopen-result>'+escapeHTML(reopenSummary())+'</p></div>'+
+      '<div class="m0-probe"><strong>Portable .sb roundtrip fixture</strong><p>Choose an EMPTY disposable parent. Sourcebook creates a new UUID-named .sb Catalog containing one harmless URL, nested stable-ID Tags and a saved View, using its recovery journal. It leaves the fixture in place for restart or Syncthing testing. Never select real project data; no automatic deletion.</p>'+
+      '<div class="m0-probe-actions"><button class="secondary" type="button" data-m0-portable-create '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Create disposable .sb</button><button class="secondary" type="button" data-m0-portable-verify '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Verify .sb (read-only)</button></div>'+
+      '<p role="status" data-m0-portable-result>'+escapeHTML(portableSummary())+'</p></div>'+
+      '<div class="m0-probe"><strong>Offline shell diagnostic</strong><p>Inspect this app\'s Cache Storage and service-worker controller without going offline or changing caches. A cached shell does not establish offline acceptance.</p>'+
+      '<button class="secondary" type="button" data-m0-offline>Inspect cached shell</button><p role="status" data-m0-offline-result>'+escapeHTML(offlineSummary())+'</p></div>'+
       '<label class="m0-commit">Published commit (optional, verify in Actions)<input data-m0-commit maxlength="40" value="'+escapeHTML(record.releaseCommit)+'" placeholder="7–40 hex characters"></label>'+
       '<div class="m0-checks">'+rows+'</div><p class="m0-warning">Do not enter private paths, filenames, file contents, device IDs or secrets in notes.</p>'+
       '<div class="dialog-actions"><button class="secondary" type="button" data-m0-reset>Clear local results</button><button class="secondary" type="button" data-m0-export>Export JSON</button><button class="primary" type="button" data-action="dismiss">Done</button></div></div>');
@@ -220,6 +245,32 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
       }catch{toast('Could not remove the saved disposable Folder handle.',true);}
       finally{button.disabled=false;}
     });
+    root.querySelector('[data-m0-portable-create]')?.addEventListener('click',async event=>{
+      if(typeof env.confirm!=='function'||!env.confirm('Select an EMPTY disposable parent Folder only. Sourcebook will create a new .sb fixture with test metadata, leave it there for cross-device verification, and never delete it automatically. A failure may leave a partial Catalog. Continue?'))return;
+      const button=event.currentTarget;button.disabled=true;
+      try{
+        const result=await createM0PortableCatalogFixture(typeof env.showDirectoryPicker==='function'?env.showDirectoryPicker.bind(env):null,{confirmed:true});
+        lastFixtureName=result.fixtureName||'';
+        record.portableCreateProbe=normalizePortableProbe(result);save();
+        root.querySelector('[data-m0-portable-result]').textContent=portableSummary()+
+          (lastFixtureName?' Fixture: '+lastFixtureName+'. Retain for re-open/Syncthing test; manually inspect any partial fixture.':'');
+      }catch{toast('Portable fixture test failed. Inspect the disposable parent for a partial .sb Catalog.',true);}
+      finally{button.disabled=false;}
+    });
+    root.querySelector('[data-m0-portable-verify]')?.addEventListener('click',async event=>{
+      const button=event.currentTarget;button.disabled=true;
+      try{
+        record.portableVerifyProbe=normalizePortableProbe(await verifyM0PortableCatalogFixture(typeof env.showDirectoryPicker==='function'?env.showDirectoryPicker.bind(env):null));
+        save();root.querySelector('[data-m0-portable-result]').textContent=portableSummary();
+      }catch{toast('Portable fixture verification failed.',true);}
+      finally{button.disabled=false;}
+    });
+    root.querySelector('[data-m0-offline]')?.addEventListener('click',async event=>{
+      const button=event.currentTarget;button.disabled=true;
+      try{record.offlineProbe=normalizeOfflineProbe(await inspectM0OfflineShell(env));save();
+        root.querySelector('[data-m0-offline-result]').textContent=offlineSummary();}
+      finally{button.disabled=false;}
+    });
     root.querySelector('[data-m0-export]').addEventListener('click',()=>{
       const report=exportM0Report(record,caps);
       const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)+'\n'],{type:'application/json'}));
@@ -233,7 +284,7 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
     root.querySelector('[data-m0-reset]').addEventListener('click',()=>{
       if(typeof env.confirm==='function'&&!env.confirm('Clear the M0 checklist and probe result on this device?'))return;
       record=normalizeM0Record(null);
-      lastLeftoverName='';
+      lastLeftoverName='';lastFixtureName='';
       save();open();
     });
   };

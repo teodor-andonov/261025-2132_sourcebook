@@ -71,3 +71,11 @@ On a Pixel 8 with the installed Sourcebook PWA (not just a browser tab), use And
 ### V0.0.35 portable URL acceptance extension (manual only)
 
 On **each** target device, with a disposable Sample.sb Catalog: explicitly add a manual HTTPS URL, add a nested Tag, save, close and reopen Sourcebook, verify the URL appears in the Links surface and a tag-filtered saved View, and verify the resource JSON retains its stable ID without a sourceId/path. Import one selected device-staged URL and confirm the staged copy remains. With Syncthing enabled, verify the same URL metadata and Tags appear on the other device after regranting the Catalog. Record any permission/IndexedDB/provider failures as **Fail** or **Blocked**, never inferred Pass. Do not share private URLs or personal paths in exported evidence. **Not tested on physical devices as of 2026-10-28.**
+
+## Portable fixture + offline cache diagnostics (V0.0.37 candidate)
+
+In **Device checks**, choose **Create disposable .sb** only after preparing an **empty throwaway parent Folder**. Explicit confirmation is required. Sourcebook creates a unique `Sourcebook-M0-<UUID>.sb` containing a harmless example.org URL, two nested stable-ID Tags and one saved View. It exercises the existing Catalog recovery journal and verifies readback. The fixture is **left in place**, not automatically deleted. If the probe fails, inspect the named partial fixture and any pending journal manually; never test against real project data.
+
+Close/restart the PWA, choose **Verify .sb (read-only)** and select that exact fixture. For a Syncthing test, sync the disposable fixture to the second device, regrant the Folder and verify it there, then record the actual storage provider, browser version, release commit and outcome. A local or simulated verification is **not** cross-device acceptance. The exported report contains only sanitized probe statuses, not the fixture name or paths.
+
+Choose **Inspect cached shell** to inspect service-worker control and Sourcebook-prefixed cached index/module entries without modifying caches or going offline. This does **not** prove offline navigation: separately disable network on the actual device, restart and open Sourcebook, record results, then restore connectivity. Never interrupt a Catalog write to test updates.

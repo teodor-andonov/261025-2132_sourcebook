@@ -36,6 +36,8 @@
 
 > **Overlap review implementation update (28 Oct 2026, V0.0.30 candidate):** Catalog metadata with competing records under live-verified overlapping registered Folders can be compared read-only from Settings or a conflicted saved View result. Individual descendant file handles are rechecked with `isSameEntry` and reported as same/different/missing/unverified; differences in Tags, notes, kinds and other fields are exposed, with explicit JSON export and Show in folder. **No automatic reconciliation, deletion or record reassignment.** See implementation status for verification and limits.
 
+> **M0 portable acceptance aids (28 Oct 2026, V0.0.37 candidate):** Device checks can explicitly create a disposable, UUID-named .sb Catalog with journaled nested Tags, URL and saved View, then verify it read-only after restart or Syncthing transfer. Cache inspection is not an offline run. Fixture remains on disk; M0 physical acceptance still open. See [development log](../logs/development/261028-0724_m0-portable-acceptance.md).
+
 ## 00 — Executive product promise
 
 **Sourcebook makes ordinary folders feel like a beautifully curated, searchable, visual library — without taking the files hostage.**
