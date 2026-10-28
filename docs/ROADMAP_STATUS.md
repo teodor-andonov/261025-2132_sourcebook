@@ -1,3 +1,5 @@
+> **V0.0.52 candidate (28 Oct 2026):** Headless Chromium PR smoke checks offline PWA, file-bearing Share Target and no-picker `.url` Download. Device verification remains **Not tested**; M0 and released/accepted remain **Open**. [Log](../logs/development/261028-2122_chromium-m0-smoke.md).
+
 > **V0.0.51 candidate (28 Oct 2026):** Android incoming-file share fallback now separates asynchronous staged-file integrity preparation from the final trusted-click OS share invocation. One-shot memory preparation expires after two minutes and never clears staging. **Implemented in code: candidate; Device verified: Not tested; Released & accepted: No.** M0 remains open. [Development log](../logs/development/261028-2024_activation-safe-share-handoff.md).
 
 > **V0.0.50 candidate (2026-10-28):** File-bearing OS handoff is implemented in code for reviewed .url/.md captures and integrity-checked incoming attachments. **Device verified: No. Released & accepted: No.** External share targets cannot be assumed to save to a chosen Folder. M0 physical provider gate remains open.

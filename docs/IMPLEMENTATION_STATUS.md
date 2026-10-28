@@ -1,3 +1,8 @@
+## 2026-10-28 21:22 Europe/Madrid — V0.0.52 candidate: Chromium-engine M0 smoke
+- **Implementation:** Added a real-browser (headless Chromium) PR CI gate for installed service-worker control, offline shell, manifest identity, multipart file-share staging and `.url` Download fallback without a directory picker. Landing hides unsupported Folder/Catalog picker actions while leaving capture/inbox/device diagnostics available. No Catalog-only Resources or ordinary source file writes.
+- **Evidence boundary:** CI browser-engine evidence is stronger than Node mocks but remains synthetic Linux Chromium, not real Windows Chrome, Pixel 8, Syncthing or Android share-sheet acceptance. CI and Pages outcomes must be linked after runs. No screenshots/traces/videos are produced.
+- **Log:** [Chromium M0 smoke](../logs/development/261028-2122_chromium-m0-smoke.md).
+
 ## 2026-10-28 20:24 Europe/Madrid — V0.0.51 candidate: activation-safe staged file handoff
 - **Code:** Incoming Android file shares now use two deliberate gestures: first retrieve and integrity-check staged Blobs, then synchronously invoke navigator.share({files}) from a second click. The prepared batch is one-shot, memory-only and expires after two minutes. This fixes the previous asynchronous IndexedDB-before-share call path that could lose transient user activation.
 - **Safety:** No source/Catalog writes, no automatic inbox removal, no text-only Web Share substitution, no screenshots. Unsupported targets, cancellation and expired preparations remain explicit; external file persistence is unverified.
