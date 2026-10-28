@@ -69,3 +69,29 @@ export async function writeCapturedFile(directory,plan){
   if(saved!==plan.text)throw Error('Saved file differs from input; inspect destination before retrying');
   return {name:plan.name,kind:plan.kind,handle};
 }
+
+/**
+ * Explicit fallback for browsers without a writable Folder picker.
+ * This requests a browser download, NOT a verified write to a selected
+ * directory. The browser chooses the destination and collision naming.
+ */
+export function requestCapturedFileDownload(plan,{env=globalThis}={}){
+  if(!plan||!['url','text'].includes(plan.kind)||
+    typeof plan.name!=='string'||!(/^[\p{L}\p{N} ()_,.\-]+\.(url|md)$/iu.test(plan.name))||
+    (plan.kind==='url'?(!plan.name.endsWith('.url')||!parseInternetShortcut(plan.text)):
+      (!plan.name.endsWith('.md')||typeof plan.text!=='string'||plan.text.length>MAX_TEXT+1)))
+    throw Error('Invalid download capture plan');
+  const doc=env.document,api=env.URL;
+  if(!doc?.createElement||!doc?.body||typeof api?.createObjectURL!=='function'||
+    typeof api?.revokeObjectURL!=='function')throw Error('Browser download is unavailable');
+  const blob=new Blob([plan.text],{type:plan.type||'text/plain'});
+  const url=api.createObjectURL(blob);
+  try{
+    const anchor=doc.createElement('a');
+    anchor.href=url;anchor.download=plan.name;anchor.style.display='none';
+    doc.body.append(anchor);
+    try{anchor.click();}finally{anchor.remove();}
+  }catch(error){api.revokeObjectURL(url);throw error;}
+  (env.setTimeout||setTimeout)(()=>api.revokeObjectURL(url),60000);
+  return {name:plan.name,kind:plan.kind,delivery:'browser-download',verified:false};
+}
