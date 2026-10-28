@@ -1,3 +1,10 @@
+# 2026-10-28 03:32 Europe/Madrid — Device-local URL capture staging (V0.0.33 candidate)
+
+- **Implemented in source:** Capture links is accessible from the launcher, toolbar and Settings even without a directory picker or open Catalog. Manual multiline HTTP(S) paste and user-triggered clipboard reading lead to an explicit Save action. The local tray supports normalized deduplication, safe external open, copy with manual fallback, title editing, explicit removal and JSON export.
+- **Safety:** URL scheme/credential/control validation; 20 links per batch, 200 device-local links maximum; corrupt stored data fails closed; optimistic stale-tab checks and readback verification. No ordinary source-file or portable Catalog metadata writes, no remote fetch. IndexedDB is not a cross-tab atomic CAS, is not Syncthing and can be evicted.
+- **Scope honesty:** This is a device-only staging tray, **not** a first-class portable Catalog URL resource, Android incoming share target or verified Pixel 8 clipboard experience. M0 physical-device acceptance remains **Not tested**. PR CI/Pages status must be checked after this candidate is proposed.
+- **Evidence:** [Development log](../logs/development/261028-0332_device-link-capture.md); `tests/link-capture.test.mjs`. No screenshot/fixture capture requested or run.
+
 # 2026-10-28 02:27 Europe/Madrid — M0 disposable Folder and restart feasibility (V0.0.32 candidate)
 
 - **Implemented in source on development branch:** Explicit, confirmed disposable Folder write/readback/remove test. Requests `readwrite` only through the user-triggered picker, checks permission, generates a UUID synthetic filename, refuses preexisting collisions, verifies exact marker bytes and the original handle identity before removal, and confirms absence. Failures that leave a synthetic file are surfaced for manual cleanup; no Catalog or existing source file is touched by design. Permission, provider and cleanup failures return sanitized statuses.
