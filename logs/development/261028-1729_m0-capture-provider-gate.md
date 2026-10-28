@@ -8,7 +8,7 @@ M0 physical Windows Chrome and Pixel 8 Android Chrome filesystem acceptance is s
 
 - Added `src/m0-capture-acceptance.mjs`: explicit confirmation and empty-parent checks, unpredictable UUID-named child Folder, production `planFileCapture` / `writeCapturedFile` creation of one physical `.url` and one `.md`, independent exact readback and a separate read-only fixture verifier.
 - Provider failures, cancellation, permission denial, existing/nonempty parents, malformed fixture identity, unexpected files, content tampering and partial writes are surfaced conservatively. No automatic cleanup of questionable fixtures.
-- Integrated Create/Verify actions into **Device checks**, exported only normalized outcomes and hashed synthetic fixture identity; never export raw paths, filenames, bytes or FileSystemHandles.
+- Integrated Create/Verify actions into **Device checks**, exported only normalized outcomes and hashed synthetic fixture identity; never export raw paths, filenames, bytes or FileSystemHandles. The cross-device M0 report comparator now optionally checks matching verified physical capture fixture proofs; mismatch or one-sided evidence warns but no result automatically passes acceptance.
 - Added test coverage for success, simulated Syncthing copy/reopen, tampering, failure and no-write guards; updated scoped service-worker precache and the roadmap, design contract, implementation status, M0 checklist and device run instructions.
 
 ## Release process and evidence
