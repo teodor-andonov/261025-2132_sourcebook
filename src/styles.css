@@ -338,3 +338,9 @@ video.side-preview-media{max-height:240px}
 .m0-evidence-table th,.m0-evidence-table td{padding:5px 7px;border-bottom:1px solid var(--line,#8884)}
 .m0-readiness [data-m0-comparison]{overflow-x:auto;max-width:100%}
 .m0-readiness [data-m0-report]{max-width:100%;display:block;margin-top:5px}
+
+/* Explicit review for pasted/dropped text stays compact and usable on mobile. */
+.dialog:has(#capture-file-form){width:min(540px,100%);max-height:92dvh;overflow-y:auto}
+#capture-file-form textarea{width:100%;min-height:110px;max-height:40dvh;resize:vertical;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);padding:10px;font:inherit;font-weight:400}
+#capture-intake-status{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+#capture-file-form [data-action="capture-read-clipboard"]{align-self:flex-start;font-size:12px}
