@@ -1,6 +1,7 @@
 // A Sourcebook resource always has a filesystem representation.
 // URL and text captures are ordinary files, not Catalog-only resource rows.
 import {normalizeCaptureURL} from './link-capture.mjs';
+import {withPhysicalWriteLock} from './physical-write-lock.mjs';
 
 const MAX_TEXT=1024*1024;
 const safeLabel=value=>String(value||'').normalize('NFKC')
@@ -51,33 +52,35 @@ export async function writeCapturedFile(directory,plan){
     (plan.kind==='url'?(!plan.name.endsWith('.url')||!parseInternetShortcut(plan.text)):
       (!plan.name.endsWith('.md')||plan.text.length>MAX_TEXT+1)))
     throw Error('Invalid file capture plan');
-  // Refuse case-only collisions as well as exact matches. The provider must
-  // support enumeration; no atomic create-exclusive operation is available.
-  if(typeof directory.entries!=='function')throw Error('Cannot enumerate destination safely');
-  let count=0;
-  for await(const [name] of directory.entries()){
-    if(++count>50000)throw Error('Destination too large for safe collision check');
-    if(String(name).normalize('NFKC').toLocaleLowerCase()===plan.name.normalize('NFKC').toLocaleLowerCase())
-      throw Error('Capture filename already exists (including case-only collision)');
-  }
-  // Browser File System Access has no atomic O_EXCL. A last-moment race remains.
-  try{await directory.getFileHandle(plan.name);throw Error('Capture filename already exists; retry');}
-  catch(error){if(error.name!=='NotFoundError')throw error;}
-  const handle=await directory.getFileHandle(plan.name,{create:true});
-  const existing=await handle.getFile();
-  if(existing.size!==0)throw Error('Capture destination unexpectedly exists; it was not overwritten');
-  let writable;
-  try{
-    writable=await handle.createWritable();
-    await writable.write(plan.text);
-    await writable.close();
-  }catch(error){
-    try{await writable?.abort();}catch{}
-    throw Error('File capture failed; a partial new file may remain: '+error.message);
-  }
-  const saved=await (await handle.getFile()).text();
-  if(saved!==plan.text)throw Error('Saved file differs from input; inspect destination before retrying');
-  return {name:plan.name,kind:plan.kind,handle};
+  return withPhysicalWriteLock(async()=>{
+    // Refuse case-only collisions as well as exact matches. The provider must
+    // support enumeration; no atomic create-exclusive operation is available.
+    if(typeof directory.entries!=='function')throw Error('Cannot enumerate destination safely');
+    let count=0;
+    for await(const [name] of directory.entries()){
+      if(++count>50000)throw Error('Destination too large for safe collision check');
+      if(String(name).normalize('NFKC').toLocaleLowerCase()===plan.name.normalize('NFKC').toLocaleLowerCase())
+        throw Error('Capture filename already exists (including case-only collision)');
+    }
+    // Browser File System Access has no atomic O_EXCL. A last-moment race remains.
+    try{await directory.getFileHandle(plan.name);throw Error('Capture filename already exists; retry');}
+    catch(error){if(error.name!=='NotFoundError')throw error;}
+    const handle=await directory.getFileHandle(plan.name,{create:true});
+    const existing=await handle.getFile();
+    if(existing.size!==0)throw Error('Capture destination unexpectedly exists; it was not overwritten');
+    let writable;
+    try{
+      writable=await handle.createWritable();
+      await writable.write(plan.text);
+      await writable.close();
+    }catch(error){
+      try{await writable?.abort();}catch{}
+      throw Error('File capture failed; a partial new file may remain: '+error.message);
+    }
+    const saved=await (await handle.getFile()).text();
+    if(saved!==plan.text)throw Error('Saved file differs from input; inspect destination before retrying');
+    return {name:plan.name,kind:plan.kind,handle};
+  });
 }
 
 /**
