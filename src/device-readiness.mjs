@@ -250,6 +250,7 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
           const rows=result.rows.map(row=>'<tr><th>'+row.id+'</th><td>'+escapeHTML(row.windows)+(row.windowsEvidence?' · evidence':'')+'</td><td>'+escapeHTML(row.android)+(row.androidEvidence?' · evidence':'')+'</td></tr>').join('');
           comparison.innerHTML='<p><strong>Same published commit:</strong> '+(result.sameCommit?'Yes':'Not verified')+
             ' · <strong>Same verified .sb fixture:</strong> '+(result.sameFixture?'Hash matches':'Not verified')+
+            ' · <strong>Same .url/.md fixture:</strong> '+(result.sameCaptureFixture?'Hash matches':'Not verified')+
             ' · <strong>Acceptance:</strong> Manual review required</p>'+
             '<table class="m0-evidence-table"><thead><tr><th>Case</th><th>Windows</th><th>Android</th></tr></thead><tbody>'+rows+'</tbody></table>'+
             (result.warnings.length?'<p>'+result.warnings.map(w=>escapeHTML(w)).join('<br>')+'</p>':
