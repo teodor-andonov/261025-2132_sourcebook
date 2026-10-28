@@ -1,3 +1,10 @@
+## 2026-10-28 17:29 Europe/Madrid — V0.0.48 candidate: physical capture provider gate
+
+- **Implemented in code on development branch:** Device checks can explicitly create a disposable UUID-named Folder containing real `.url` and `.md` files through the same writer as everyday capture, then read back both files. Separate read-only verification can be run after restart or a user-managed Syncthing transfer; a hashed synthetic fixture identity is exported without names/paths.
+- **Safety:** Requires confirmation and empty parent; no automatic cleanup, overwrite, Catalog-only Resources, background file writes or screenshot capture. Partial fixtures are retained for inspection. Browser Download is not a verified Folder write; unsupported Android directory pickers must be recorded as Blocked.
+- **Evidence at authoring:** Node tests cover creation, cancellation, denial, tampering, extra/missing files, read-only reopening and partial provider writes. PR CI, main CI, Pages and cleanup are separately verified after Actions complete. Physical Windows Chrome, Pixel 8 and Syncthing remain **Not tested**; M0 remains open.
+- **Log:** [M0 capture provider gate](../logs/development/261028-1729_m0-capture-provider-gate.md).
+
 ## 2026-10-28 16:26 Europe/Madrid — V0.0.47 candidate: share integrity and storage readiness
 - **Code:** Hash new bounded Android file-share attachments with SHA-256 before atomic IndexedDB staging, and rehash on retrieval before reviewed import or unverified Download. Detect same-size corruption/reordering. Existing v2 records without digests remain readable as legacy. No Catalog-only Resources or automatic ordinary-file writes.
 - **M0:** Device checks can inspect coarse origin-wide storage pressure and persisted state, plus an explicit user-triggered persistence request. The exported report contains no exact quota, filenames, raw browser UA or private paths. Storage API presence and persistence do not mark acceptance.
