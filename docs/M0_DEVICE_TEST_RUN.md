@@ -47,3 +47,11 @@ Copy this file to a new timestamped test log for **each device**. Never mark tes
 - **Cross-device M0 complete?** No until this file exists for both platforms and the Syncthing roundtrip is verified
 
 Do **not** upload private source files, credentials, personal directory paths or device identifiers to public GitHub issues. Synthetic fixtures may be used for reproduction; they do not replace actual device testing.
+
+## In-app readiness workflow (V0.0.31 candidate)
+
+Open **Device checks** from the Sourcebook launcher or Settings. Record the actual Chrome version, whether the app is standalone, and the published commit (from GitHub Actions). The capability table is diagnostic only: **API present ≠ operation works**. Optionally select a **disposable test Folder** with **Probe a Folder (read-only)**. It enumerates at most ten entries, reads metadata from at most one file and checks handle identity where available; it does not write to the Folder or request write permission.
+
+Perform M0-01…M0-08 manually on both real devices, marking Pass / Fail / Blocked and noting the storage provider, failure steps and evidence URL. The dialog stores these entries only in this browser's local storage. **Export JSON** to retain evidence before clearing browser storage; no automatic upload occurs. The exported report contains no file names, contents, raw user-agent string or source paths. Do not paste private paths or secrets into manual notes.
+
+The read-only probe alone does **not** establish Catalog write permission, offline survival, Syncthing portability, Android sharing or acceptance. These require the full checklist above.

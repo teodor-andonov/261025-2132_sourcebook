@@ -293,3 +293,26 @@ video.side-preview-media{max-height:240px}
 .overlap-review-record strong{display:block;font-size:12px}
 .overlap-review-record code{display:block;white-space:normal;overflow-wrap:anywhere;color:var(--muted)}
 .overlap-review-record button{margin-top:5px}
+
+
+/* M0 readiness: compact, manual-only device acceptance and read-only probe. */
+.dialog:has(.m0-readiness){width:min(720px,96vw);max-height:92dvh;overflow-y:auto}
+.m0-readiness{font-size:12px;line-height:1.45}
+.m0-readiness>p{color:var(--muted)}
+.m0-capabilities,.m0-probe{border:1px solid var(--border);border-radius:7px;padding:10px;margin:10px 0}
+.m0-cap-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;margin-top:8px}
+.m0-cap-grid span:nth-child(2n){color:var(--muted);text-align:right}
+.m0-probe p{margin:7px 0 0;color:var(--muted)}
+.dialog .m0-commit{display:block;margin:12px 0;font-size:12px}
+.dialog .m0-commit input{display:block;width:100%;margin-top:4px}
+.m0-checks{border-top:1px solid var(--border)}
+.m0-row{border-bottom:1px solid var(--border);padding:10px 0}
+.m0-row-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.m0-row-head strong{font-weight:600}
+.m0-row-head select{flex:none;max-width:125px}
+.m0-row small{display:block;color:var(--muted);margin-top:3px}
+.m0-row details{margin-top:5px}
+.m0-row summary{cursor:pointer;color:var(--muted)}
+.dialog .m0-row textarea,.dialog .m0-row input{display:block;width:100%;margin-top:6px}
+.m0-warning{font-size:11px}
+@media(max-width:520px){.m0-row-head{align-items:flex-start}.m0-row-head strong{max-width:62%}.m0-cap-grid{gap:4px 6px}}
