@@ -136,3 +136,9 @@ Device checks remain an optional dialog available without a Catalog. A write pro
 - Catalog-wide Tags and saved Views can discover URLs by title/domain, filter Links, and show them without a registered source. Source/folder-scoped Views exclude URLs. File scans, missing-file warnings, physical overlap detection and file operations must never treat URLs as filesystem entries.
 - Opening a URL is an explicit user gesture to an external browser tab with noopener,noreferrer; no page crawling, screenshot capture, remote metadata fetch or automatic navigation occurs. Editing title, notes and Tags preserves URL and stable ID.
 - Selective backup restoration must support missing URL records without requiring a registered Folder, and refuse duplicate canonical URL identities. Actual Windows/Pixel 8 persistence and Syncthing roundtrip remain **Not tested**.
+
+## M0 acceptance fixture boundary (V0.0.37 candidate)
+
+- Device checks may create a **new** uniquely named `.sb` fixture only in an explicitly selected **empty disposable parent** after consent. It uses the ordinary recoverable Catalog transaction journal for Tags, a URL resource, saved View and sequence allocator. It does not write registered source Folders, reuse existing Catalogs, or silently delete test data.
+- The fixture remains available for restart/Syncthing verification. A read-only verifier checks identity and metadata coherence without requesting write permission; missing or changed metadata must fail closed. Partial fixtures and pending journals require manual inspection.
+- Offline Cache Storage inspection is diagnostic only. Cached shell/module plus active controller cannot mark M0-06 passed. Exported reports exclude synthetic fixture names and private paths. M0 statuses remain manually entered and physical-device acceptance remains open.
