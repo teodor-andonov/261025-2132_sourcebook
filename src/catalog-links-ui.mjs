@@ -65,6 +65,7 @@ export function createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal
     return true;
   }
   async function importLinks(links,tagPaths){
+    throw Error('Catalog-only URL creation is retired. Use Save URL/text as file; existing legacy links remain available for inspection and migration.');
     return write(({catalog,taxonomy,rawTags,records})=>{
       const tagged=withTags(taxonomy,tagPaths);
       const plan=planCatalogURLImport(catalog,records,links,{tagIds:tagged.tagIds});
@@ -107,7 +108,7 @@ export function createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal
   }
   async function open(){
     if(!state.catalog)return toast('Open a Catalog to store portable links.',true);
-    openDialog('<h2>Catalog links</h2><p>Portable URL resources in this .sb Catalog. No page fetches or source-file changes. Import keeps device-staged links intact.</p>'+
+    openDialog('<h2>Legacy Catalog links</h2><p>These older URL records have no corresponding filesystem file. No new catalog-only links can be added. Use Save URL/text as file to create .url files in an actual Folder. Existing records are retained until an explicit migration is available.</p>'+
       '<div class="dialog-actions"><button type="button" class="secondary" data-catalog-links="show">Show links in results</button></div>'+
       '<form id="catalog-links-form"><label>Add URLs (one per line, up to 20)<textarea name="urls" rows="3" maxlength="45000" placeholder="https://example.org/reference"></textarea></label>'+
       '<label>Tags (optional, comma-separated paths)<input name="tags" maxlength="1000" placeholder="Architecture / References, Research"/></label>'+
@@ -123,6 +124,9 @@ export function createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal
       '<div class="capture-list" id="catalog-url-list"></div>'+
       '<div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Done</button></div>');
     const dialog=$('#dialog'),selectedIds=new Set();
+    // Hide the retired fileless-link creation controls while preserving legacy editing.
+    dialog.querySelector('#catalog-links-form').hidden=true;
+    dialog.querySelector('#catalog-staged-list').hidden=true;
     let filterText='';
     function visibleRecords(saved){
       const needle=filterText.trim().replace(/^#/u,'').toLocaleLowerCase();

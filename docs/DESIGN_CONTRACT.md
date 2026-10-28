@@ -1,3 +1,16 @@
+## Superseding resource model: filesystem-backed capture (28 October 2026)
+
+**Every durable Sourcebook Resource is an actual ordinary filesystem file or folder.** The portable `.sb` Catalog stores optional metadata (identities, Tags, Notes, Views and derivative previews) referencing existing filesystem entries; Catalog JSON alone is not a second resource-content store. The device-local Capture links tray is **temporary staging**, not a saved Resource.
+
+- Capture HTTP(S) URL → real portable plain-text **`.url` Internet Shortcut** in a user-granted Folder. Format: `[InternetShortcut]` then `URL=https://…`. Windows has native association; Android may only open this as text, so real-device validation is essential.
+- Paste/drop ordinary text into the browser's active writable Folder → ordinary **`.md`** file containing that text. A single canonical HTTP(S) URL becomes `.url`; other text becomes Markdown. Dragging physical files should create/refer to real files, never phantom catalog entries.
+- Explicit **Save URL/text as file** can use the active physical Folder or choose another. Writing requires user-granted Folder permission, unique non-overwriting names, validation and readback. No invisible move/rename/overwrite of original files, no page crawling and no silent Catalog objectification. Browser File System Access cannot guarantee atomic create-exclusive file creation; last-second races and partial new files must be reported.
+- Several independent `.sb` Catalogs may annotate the same physical `.url`/`.md` file with their own metadata, but those files must remain usable without Sourcebook.
+- **Legacy exception:** V0.0.35–V0.0.38 introduced `kind=url` Catalog JSON records without physical `sourceId/path`. Keep existing records readable/editable; block creation of new fileless URL resources. A future user-confirmed migration must create physical `.url` files, preserve IDs/Tags/Notes and explicitly rebind metadata without deleting original records until verified. No silent or automatic migration.
+- Pending Android shares and device-local link capture records are **inboxes**, not durable Resources. Use language such as *stage for review*, not *save resource*. Existing M0 disposable test fixtures that create legacy `kind=url` must be revised to match this decision.
+
+This section supersedes contradictory historical Catalog-only URL resource decisions below; historical descriptions remain as an implementation record only.
+
 # Sourcebook — Minimal Utility Design Contract
 
 **Accepted product direction, 27 October 2026.** Reference applications (Allusion, Fold, Eagle, File Pilot) inform interaction quality only; **our terminology and architecture remain authoritative**.

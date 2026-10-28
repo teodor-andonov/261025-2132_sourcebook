@@ -3,6 +3,7 @@ import {createDeviceReadinessUI} from './device-readiness.mjs';
 import {createLinkCaptureUI} from './link-capture.mjs';
 import {createShareInboxUI} from './share-inbox.mjs';
 import {createCatalogLinksUI} from './catalog-links-ui.mjs';
+import {classifyPastedText,planFileCapture,writeCapturedFile,parseInternetShortcut} from './file-capture.mjs';
 import {planCatalogURLImport,validateCatalogURLRecord} from './catalog-urls.mjs';
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
@@ -28,6 +29,7 @@ import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagP
 const $=(query,root=document)=>root.querySelector(query);
 const state={
   sidePreviewSerial:0,sidePreviewUrl:null,
+  captureWriting:false,
   catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,catalogLinksView:false,activeViewId:null,views:[],viewSaving:false,sort:'name',groupBy:'none',tableColumns:[...DEFAULT_TABLE_COLUMNS],fileType:'all',fileStatus:'all',
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,
   search:'', view:localStorage.getItem('sb-view')||'gallery',
@@ -362,10 +364,55 @@ function openDialog(inner){
   outer.addEventListener('click',event=>{if(event.target===outer||event.target.closest('[data-action="dismiss"]'))outer.remove();});
   document.body.append(outer);outer.querySelector('input')?.focus();
 }
+// Capture always produces a real file inside an explicitly granted Folder.
+async function writeCapture(input,{choose=false,allowPicker=true}={}){
+  if(state.captureWriting)throw Error('Finish the current file capture first');
+  if(state.bulkSaving||state.resourceSaving||state.viewSaving||state.backupBusy)throw Error('Finish the current operation first');
+  state.captureWriting=true;
+  try{
+    let folder,here=false;
+    if(!choose&&!viewsUI.inResults()&&state.sourceId){
+      const root=sourceHandle();
+      if(root){
+        folder=await nested(root,state.parts);
+        here=true;
+      }
+    }
+    if(!folder){
+      if(!allowPicker)throw Error('Open a physical Folder before pasting or dropping text');
+      if(typeof window.showDirectoryPicker!=='function')throw Error('Folder writing is not supported by this browser');
+      folder=await window.showDirectoryPicker({mode:'readwrite'});
+    }
+    if(!await authorized(folder,'readwrite'))throw Error('Write permission for destination Folder was not granted');
+    const plan=planFileCapture(input,{now:new Date(),random:crypto.randomUUID().replaceAll('-','').slice(0,10)});
+    const result=await writeCapturedFile(folder,plan);
+    toast('Saved '+result.name+' as a real file');
+    if(here&&!viewsUI.inResults())await navigate(state.sourceId,[...state.parts]);
+    return result;
+  }finally{state.captureWriting=false;}
+}
+function openFileCapture(){
+  const current=!viewsUI.inResults()&&state.sourceId;
+  openDialog('<h2>Save a resource as a file</h2><p>Web links become .url shortcut files. Pasted text becomes .md Markdown files. Nothing is saved only in the Catalog.</p>'+
+    '<form id="capture-file-form">'+
+    '<label>Content<textarea name="content" rows="5" maxlength="1048576" required placeholder="Paste a URL or text…"></textarea></label>'+
+    '<label>Filename title (optional)<input name="title" maxlength="65" placeholder="Uses domain or first line"/></label>'+
+    '<label>Destination<select name="destination">'+(current?'<option value="current">Current Folder</option>':'')+
+    '<option value="choose">Choose another Folder…</option></select></label>'+
+    '<div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button>'+
+    '<button class="primary" type="submit">Create file</button></div></form>');
+}
+async function saveFileCaptureForm(form){
+  try{
+    const input=classifyPastedText(form.elements.content.value);
+    const result=await writeCapture({...input,title:form.elements.title.value},{choose:form.elements.destination.value==='choose'});
+    if(result)$('#dialog')?.remove();
+  }catch(error){if(error?.name!=='AbortError')toast('File capture: '+errorText(error),true);}
+}
 function landing(){
   clearSidePreview();
   forgetImages();
-  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>Sourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions"><button class="primary" data-action="open-folder">'+icon('folder')+' Open folder</button><button class="secondary" data-action="open-catalog">'+icon('database')+' Open catalog</button><button class="secondary" data-action="create-catalog">'+icon('plus')+' New catalog</button><button class="secondary" data-action="capture-links">'+icon('link')+' Capture links</button><button class="secondary" data-action="incoming-shares">'+icon('link')+' Incoming shares</button></div><div id="recent-area"></div><button class="secondary" data-action="device-checks" title="Check browser capabilities and record device acceptance">Device checks</button><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
+  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>Sourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions"><button class="primary" data-action="open-folder">'+icon('folder')+' Open folder</button><button class="secondary" data-action="open-catalog">'+icon('database')+' Open catalog</button><button class="secondary" data-action="create-catalog">'+icon('plus')+' New catalog</button><button class="secondary" data-action="capture-file">'+icon('file')+' Save file from URL/text</button><button class="secondary" data-action="capture-links">'+icon('link')+' Review staged links</button><button class="secondary" data-action="incoming-shares">'+icon('link')+' Incoming shares</button></div><div id="recent-area"></div><button class="secondary" data-action="device-checks" title="Check browser capabilities and record device acceptance">Device checks</button><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
   getLocal('recent').then(value=>{
     if(value&&$('#recent-area'))$('#recent-area').innerHTML='<div class="eyebrow">RECENT CATALOG</div><button class="recent-item" data-action="recent">'+icon('database')+'<span>'+escapeHTML(value.name)+'</span>'+icon('chevron',15)+'</button>';
   }).catch(console.warn);
@@ -775,7 +822,7 @@ function render(){
   const viewRows=sortViewsForSidebar(state.views).map(v=>'<div class="view-row"><button class="nav-item '+(state.activeViewId===v.id?'selected':'')+'" data-open-view="'+escapeHTML(v.id)+'" title="'+escapeHTML(v.name)+'">'+icon('bookmark',15)+'<span>'+escapeHTML(v.name)+'</span></button><button class="view-pin" data-pin-view="'+escapeHTML(v.id)+'" aria-label="'+(v.pinned?'Unpin':'Pin')+' View '+escapeHTML(v.name)+'" title="'+(v.pinned?'Unpin':'Pin')+' View" aria-pressed="'+v.pinned+'">'+icon('pin',12)+'</button><button class="view-delete" data-delete-view="'+escapeHTML(v.id)+'" aria-label="Delete View '+escapeHTML(v.name)+'" title="Delete View">'+icon('close',12)+'</button></div>').join('');
   const catalogSection=plain
     ?'<div class="section-head"><span>CATALOG</span></div><nav><button class="nav-item" data-action="open-catalog">'+icon('database',16)+'<span>Open catalog</span></button><button class="nav-item" data-action="create-catalog">'+icon('plus',16)+'<span>New catalog</span></button></nav>'
-    :'<div class="section-head"><span>LINKS</span>'+button('Add Catalog links','plus','catalog-links')+'</div><nav><button class="nav-item '+(state.catalogLinksView?'selected':'')+'" data-action="show-catalog-links">'+icon('link',15)+'<span>Links</span></button></nav><div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="section-head"><span>VIEWS</span>'+button('Save View','plus','save-view')+'</div><nav>'+viewRows+'</nav>';
+    :'<div class="section-head"><span>LEGACY LINKS</span>'+button('Review legacy Catalog links','link','catalog-links')+'</div><nav><button class="nav-item '+(state.catalogLinksView?'selected':'')+'" data-action="show-catalog-links">'+icon('link',15)+'<span>Links</span></button></nav><div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="section-head"><span>VIEWS</span>'+button('Save View','plus','save-view')+'</div><nav>'+viewRows+'</nav>';
   const header='<button class="catalog-chip" data-action="home">'+icon(plain?'folder':'database',16)+'<span>'+escapeHTML(plain?'Browse':state.catalog.name)+'</span>'+icon('chevron',13)+'</button>';
   const recoveryNotice=!plain&&state.pendingTransaction?'<div class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'Catalog recovery needs manual repair':'Interrupted catalog save · '+state.pendingTransaction.applied+'/'+state.pendingTransaction.total+' changes')+'</span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'':'<button class="secondary" data-action="recover-catalog" title="Resume catalog-only save">'+icon('refresh',14)+' Resume</button>')+'</div>':'';
   const conflictNotice=!plain&&(state.catalogConflicts?.count||state.catalogConflicts?.error)?'<div id="catalog-conflict-notice" class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.catalogConflicts.error?'Conflict scan needs attention':state.catalogConflicts.count+' Catalog sync conflict copy/copies')+'</span><button class="secondary" data-action="inspect-catalog-conflicts" title="Inspect sync conflict copies">Inspect</button></div>':'';
@@ -803,7 +850,7 @@ function render(){
     ?'<button class="icon-button" title="Back" aria-label="Back" data-action="tab-back" '+(backward?'':'disabled')+'>'+icon('back')+'</button><button class="icon-button" title="Forward" aria-label="Forward" data-action="tab-forward" '+(nextward?'':'disabled')+'>'+icon('forward')+'</button>'
     :'';
   clearSidePreview();
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+recoveryNotice+conflictNotice+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div id="sidebar-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize sidebar" aria-orientation="vertical"></div><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh')+button('Capture links','link','capture-links')+'<div class="layout-buttons" role="group" aria-label="Layout">'+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+'</div>'+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+statusControl+sortControl+groupControl+columnsButton+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<div id="inspector-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize side preview" aria-orientation="vertical"></div><aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="side-preview" class="side-preview" aria-label="Selected file preview"></div><div id="inspector-data"></div></aside>':'')+'</div>';
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+recoveryNotice+conflictNotice+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div id="sidebar-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize sidebar" aria-orientation="vertical"></div><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh') +button('Save URL or text as file','file','capture-file')+'<div class="layout-buttons" role="group" aria-label="Layout">'+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+'</div>'+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+statusControl+sortControl+groupControl+columnsButton+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<div id="inspector-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize side preview" aria-orientation="vertical"></div><aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="side-preview" class="side-preview" aria-label="Selected file preview"></div><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML=viewsUI.inResults()?'<button data-action="exit-catalog-tag">'+icon('database',16)+' Catalog</button><span class="crumb">'+icon('chevron',13)+'</span><button>'+icon('tag',14)+' '+escapeHTML(viewsUI.title())+'</button>':'<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
@@ -971,7 +1018,10 @@ async function renderSidePreview(item){
     if(!handle||typeof handle.getFile!=='function')throw Error('Reconnect folder to preview');
     const file=await handle.getFile(),format=sidePreviewKind(item,file.size);
     let body;
-    if(format==='text'){
+    if(format==='shortcut'){
+      const url=parseInternetShortcut(await file.slice(0,8192).text());
+      body=url?'<div class="side-preview-symbol">'+fileSymbol(item)+'<a href="'+escapeHTML(url)+'" target="_blank" rel="noopener noreferrer" title="Open external link">'+escapeHTML(url)+'</a></div>':'<div class="side-preview-symbol">Invalid .url shortcut</div>';
+    }else if(format==='text'){
       const text=await file.slice(0,120000).text();
       body='<pre class="side-preview-text">'+escapeHTML(text)+'</pre>';
     }else if(['image','pdf','video','audio'].includes(format)){
@@ -1264,6 +1314,7 @@ document.addEventListener('keydown',event=>{
   localStorage.setItem(config.key,String(val));
 },true);
 document.addEventListener('submit',event=>{
+  if(event.target.id==='capture-file-form'){event.preventDefault();void saveFileCaptureForm(event.target);}
   if(event.target.id==='catalog-form'){event.preventDefault();submitCatalog(event.target);}
   if(event.target.id==='table-columns-form'){
     event.preventDefault();
@@ -1386,12 +1437,13 @@ document.addEventListener('click',async event=>{
     case 'bulk-add':void bulkTags('add');break;
     case 'bulk-remove':void bulkTags('remove');break;
     case 'device-checks':deviceReadiness.open();break;
+    case 'capture-file':openFileCapture();break;
     case 'capture-links':linkCapture.open();break;
     case 'catalog-links':void catalogLinksUI.open().catch(error=>toast('Catalog links: '+errorText(error),true));break;
     case 'show-catalog-links':showCatalogLinks();break;
     case 'edit-catalog-link':{const item=state.items.find(x=>state.selected.has(x.id));if(item?.kind==='url')catalogLinksUI.openEdit(item.record.id);break;}
     case 'incoming-shares':void shareInbox.open().catch(error=>toast('Incoming shares: '+errorText(error),true));break;
-    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button> <button type="button" class="secondary" data-action="inspect-catalog-conflicts">Inspect conflicts</button> <button type="button" class="secondary" data-action="review-overlap-records">Review overlaps</button> <button type="button" class="secondary" data-action="catalog-links">Catalog links</button></div>':'')+'<div class="backup-tools"><strong>Link capture</strong><p>Device-only URL staging, clipboard and manual paste. Not synced to Catalog.</p><button type="button" class="secondary" data-action="capture-links">Capture links</button> <button type="button" class="secondary" data-action="incoming-shares">Incoming shares</button></div><div class="backup-tools"><strong>Device acceptance</strong><p>Browser capabilities, disposable Folder permission tests and manual M0 record.</p><button type="button" class="secondary" data-action="device-checks">Device checks</button></div><div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
+    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button> <button type="button" class="secondary" data-action="inspect-catalog-conflicts">Inspect conflicts</button> <button type="button" class="secondary" data-action="review-overlap-records">Review overlaps</button> <button type="button" class="secondary" data-action="catalog-links">Catalog links</button></div>':'')+'<div class="backup-tools"><strong>File-backed capture</strong><p>Save URL shortcuts (.url) or pasted text (.md) in a chosen physical Folder. Staged links are temporary.</p><button type="button" class="secondary" data-action="capture-file">Save URL/text as file</button> <button type="button" class="secondary" data-action="capture-links">Staging inbox</button> <button type="button" class="secondary" data-action="incoming-shares">Incoming shares</button></div><div class="backup-tools"><strong>Device acceptance</strong><p>Browser capabilities, disposable Folder permission tests and manual M0 record.</p><button type="button" class="secondary" data-action="device-checks">Device checks</button></div><div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
     case 'reset-accent':applyAccent('#5276bd');if($('#accent-color'))$('#accent-color').value='#5276bd';break;
     case 'save-resource':saveResource();break;
     case 'preview':showPreview();break;
@@ -1402,6 +1454,35 @@ document.addEventListener('click',async event=>{
 });
 // Contextual folder action is read-only. Long-press on supported touch browsers
 // maps to contextmenu; no source directory is moved or renamed here.
+// Paste/drop in the file browser is an explicit create-file gesture. Text
+// controls are excluded; unsupported destinations fail without a hidden write.
+function pasteDropEligible(target){
+  return !!target?.closest?.('#scroller')&&!target.closest('input,textarea,select,[contenteditable="true"]');
+}
+document.addEventListener('paste',event=>{
+  if(!pasteDropEligible(event.target))return;
+  const value=event.clipboardData?.getData('text/plain');
+  if(!value)return;
+  event.preventDefault();
+  try{const input=classifyPastedText(value);
+    void writeCapture(input,{allowPicker:false}).catch(error=>toast('Paste: '+errorText(error),true));
+  }catch(error){toast('Paste: '+errorText(error),true);}
+});
+document.addEventListener('dragover',event=>{
+  if(!pasteDropEligible(event.target)||event.dataTransfer?.types?.includes('Files'))return;
+  if(event.dataTransfer?.types?.includes('text/plain')||event.dataTransfer?.types?.includes('text/uri-list')){
+    event.preventDefault();event.dataTransfer.dropEffect='copy';
+  }
+});
+document.addEventListener('drop',event=>{
+  if(!pasteDropEligible(event.target)||event.dataTransfer?.types?.includes('Files'))return;
+  const value=event.dataTransfer?.getData('text/uri-list')||event.dataTransfer?.getData('text/plain');
+  if(!value)return;
+  event.preventDefault();
+  try{const input=classifyPastedText(value);
+    void writeCapture(input,{allowPicker:false}).catch(error=>toast('Drop: '+errorText(error),true));
+  }catch(error){toast('Drop: '+errorText(error),true);}
+});
 document.addEventListener('contextmenu',event=>{
   if(state.catalog)return;
   const tile=event.target.closest('[data-item]');

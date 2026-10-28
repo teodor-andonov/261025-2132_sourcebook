@@ -1,3 +1,5 @@
+> **Resource model correction (2026-10-28):** durable captures are ordinary filesystem files: links as `.url` and text as `.md`. Existing V0.0.35–0.0.38 Catalog-only URL rows are legacy and not a valid V1 resource model. Sourcebook retains them until explicit migration. [Design contract](DESIGN_CONTRACT.md). Physical Windows/Android acceptance remains untested.
+
 ## 2026-10-28 08:31 Europe/Madrid — Cross-device M0 evidence comparison (V0.0.38 candidate)
 
 - **Implemented in code:** A read-only, memory-only comparison of two explicitly selected M0 JSON exports (one Windows, one Android), with schema/size validation, per-scenario status matrix, release-commit and standalone checks, timestamp warnings, and missing external M0-05 evidence warnings. Imported reports are not persisted or uploaded.
@@ -73,7 +75,7 @@ If the user cannot perform M0 now, agent development should prepare harmless tes
 ## Development sequence after M0
 
 1. **M0 real-device feasibility + fixes:** verify picker/read/write/grants, offline shell, Syncthing portability and high-value browser interaction. Keep screenshots manual only.
-2. **V0.5 capture:** validate portable URL resource roundtrips and Android Share Target on real devices, then improve URL cards, clipboard/drag-drop capture and explicit physical destination choice.
+2. **V0.5 capture:** verify `.url` / `.md` file creation on Windows and Pixel 8, destination choice and optional Catalog annotation; then integrate Android Share Target and migrate legacy fileless URL rows by explicit confirmation.
 3. **V0.6 physical operations:** capability detection and explicit safe copy/move/rename/create/delete; no overwrites without user choice, clear progress and recovery.
 4. **V0.2 identity completeness + V0.9 hardening:** dual-Catalog token identity, rename/move reconciliation, crash/sync conflicts and acceptance tests.
 5. **V0.7+ rich media, 10k–50k gallery measurements and user-visible polish** based on actual usability feedback.

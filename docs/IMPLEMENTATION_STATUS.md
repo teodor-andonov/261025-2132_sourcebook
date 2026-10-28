@@ -1,3 +1,11 @@
+## 2026-10-28 — File-backed resource capture correction (V0.0.39 candidate)
+
+- **Product decision:** Every durable Sourcebook Resource is an actual file/folder. `.sb` Catalogs annotate filesystem resources; `.url` files represent links and `.md` files hold pasted/dropped text.
+- **Code (pending PR CI):** Bounded URL/text capture planner, unique timestamp+suffix filenames, no-known-overwrite checks, FileSystemHandle create/write/readback, explicit writable Folder picker, current-Folder paste/drop, shortcut parsing/read-only preview and human-visible permission failures. No page fetching or hidden Catalog objectification.
+- **Legacy compatibility:** Keep older fileless `kind=url` Catalog JSON entries readable and editable, but disable adding new ones through the legacy UI. Migration to real `.url` and metadata rebind is not implemented; test fixtures that still generate legacy URLs must be updated.
+- **Verification:** new unit tests for .url/.md planning, safety, and fake FileSystemHandle writes. Browser write providers, Android shortcut association, Windows/Pixel 8/Syncthing physical acceptance remain untested; CI result must be verified independently. No screenshots triggered.
+- **Follow-up:** integrate reviewed device-staged links and incoming Android shares directly with chosen filesystem destination, migrate old Catalog-only links explicitly, and harden concurrent-create protection.
+
 ## 2026-10-28 08:31 Europe/Madrid — Cross-device M0 evidence comparison (V0.0.38 candidate)
 
 - **Implemented in code:** A read-only, memory-only comparison of two explicitly selected M0 JSON exports (one Windows, one Android), with schema/size validation, per-scenario status matrix, release-commit and standalone checks, timestamp warnings, and missing external M0-05 evidence warnings. Imported reports are not persisted or uploaded.
