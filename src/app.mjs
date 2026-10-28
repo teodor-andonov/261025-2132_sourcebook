@@ -364,7 +364,11 @@ function openDialog(inner){
   $('#dialog')?.remove();
   const outer=document.createElement('div');outer.id='dialog';outer.className='dialog-overlay';
   outer.innerHTML='<section class="dialog" role="dialog" aria-modal="true">'+inner+'</section>';
-  outer.addEventListener('click',event=>{if(event.target===outer||event.target.closest('[data-action="dismiss"]'))outer.remove();});
+  outer.addEventListener('click',event=>{if(event.target===outer||event.target.closest('[data-action="dismiss"]')){
+    // Do not hide a running, explicitly confirmed file copy. Use Abort copy instead.
+    if(state.captureWriting&&outer.querySelector('#import-files-form'))return;
+    outer.remove();
+  }});
   document.body.append(outer);outer.querySelector('input')?.focus();
 }
 // Capture always produces a real file inside an explicitly granted Folder.
@@ -1256,20 +1260,26 @@ async function newFolder(){
 }
 // File input works on browsers where showOpenFilePicker is unavailable (including Android).
 // Selection and drag/drop only open a review dialog: writing requires explicit confirmation.
-let pendingFileImport=null;
+let pendingFileImport=null,fileImportController=null;
 function showFileImport(files){
+  if(state.captureWriting)return toast('Finish the current file operation first',true);
   try{
     const plan=planOrdinaryFileImport(files);
     pendingFileImport=plan.items.map(item=>item.file);
     const current=!viewsUI.inResults()&&state.sourceId;
-    openDialog('<h2>Add ordinary files</h2><p>Copies selected files to a user-granted Folder. No automatic renaming, overwriting or Catalog metadata changes. Max 10 files / 50 MiB per batch.</p>'+
+    openDialog('<h2>Add ordinary files</h2><p>Copies selected files to a user-granted Folder. No automatic renaming, overwriting or Catalog metadata changes. Max 10 files / 512 MiB each / 1 GiB per batch. Files over 25 MiB use bounded 1 MiB chunks with byte-for-byte readback.</p>'+
       '<form id="import-files-form"><div class="capture-count">'+plan.items.length+' files · '+(plan.totalBytes/1048576).toFixed(2)+' MiB</div>'+
       plan.items.map(item=>'<div class="capture-row">'+escapeHTML(item.name)+' <small>'+item.size+' bytes</small></div>').join('')+
       '<label>Destination<select name="destination">'+(current?'<option value="current">Current Folder</option>':'')+
       '<option value="choose">Choose Folder…</option></select></label>'+
-      '<p>Import starts only after confirmation. If a provider fails, partial files may remain for inspection.</p>'+
-      '<div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button>'+
+      '<p>Import starts only after confirmation. If a provider fails or you cancel, partial files may remain for inspection. Large files are byte-compared, not SHA-256 hashed.</p>'+ 
+       '<p id="import-progress" role="status" aria-live="polite">Ready to copy</p>'+
+      '<div class="dialog-actions"><button type="button" class="secondary" id="cancel-import">Cancel</button>'+
       '<button class="primary" type="submit">Copy files</button></div></form>');
+    $('#cancel-import')?.addEventListener('click',()=>{
+      if(fileImportController){fileImportController.abort();const button=$('#cancel-import');if(button){button.disabled=true;button.textContent='Cancelling…';}}
+      else{pendingFileImport=null;$('#dialog')?.remove();}
+    });
   }catch(error){pendingFileImport=null;toast('Add files: '+errorText(error),true);}
 }
 function importFiles(){
@@ -1284,7 +1294,11 @@ async function submitFileImportForm(form){
   if(state.scanBusy||state.bulkSaving||state.resourceSaving||state.viewSaving||state.backupBusy)
     return toast('Finish the current operation first',true);
   state.captureWriting=true;
-  let here=false;
+  const controller=new AbortController();fileImportController=controller;
+  const progress=form.querySelector('#import-progress'),submit=form.querySelector('button[type="submit"]');
+  if(submit)submit.disabled=true;
+  if(progress)progress.textContent='Waiting for destination Folder permission…';
+  let here=false,lastProgress=0;
   try{
     let folder;
     if(form.elements.destination.value==='current'&&!viewsUI.inResults()&&state.sourceId){
@@ -1296,15 +1310,26 @@ async function submitFileImportForm(form){
         throw Error('This browser cannot choose a writable Folder. Use the Android file manager to copy the original files; Sourcebook has not imported anything.');
       folder=await window.showDirectoryPicker({mode:'readwrite'});
     }
+    if(controller.signal.aborted)throw Error('Import cancelled before writing');
     if(!await authorized(folder,'readwrite'))throw Error('Destination Folder write permission was not granted');
-    const result=await importOrdinaryFiles(folder,pendingFileImport);
+    if(controller.signal.aborted)throw Error('Import cancelled before writing');
+    const result=await importOrdinaryFiles(folder,pendingFileImport,{signal:controller.signal,onProgress:event=>{
+      const now=Date.now();if(event.phase!=='done'&&now-lastProgress<120)return;
+      lastProgress=now;
+      if(progress?.isConnected)progress.textContent='File '+event.fileIndex+'/'+event.fileCount+' · '+event.phase+' · '+(event.bytes/1048576).toFixed(1)+' / '+(event.size/1048576).toFixed(1)+' MiB · '+event.name;
+    }});
     pendingFileImport=null;$('#dialog')?.remove();
     toast('Verified '+result.saved.length+' file copies; originals unchanged');
     if(here){invalidateScan();await navigate(state.sourceId,[...state.parts]);}
   }catch(error){
+    if(progress?.isConnected)progress.textContent='Stopped: '+errorText(error);
     toast('Add files: '+errorText(error),true);
     if(here){invalidateScan();void navigate(state.sourceId,[...state.parts]).catch(()=>{});}
-  }finally{state.captureWriting=false;}
+  }finally{
+    state.captureWriting=false;fileImportController=null;
+    if(submit?.isConnected)submit.disabled=false;
+    const cancel=form.querySelector('#cancel-import');if(cancel){cancel.disabled=false;cancel.textContent='Cancel';}
+  }
 }
 const paneConfigs={
   'sidebar-resizer':{selector:'.sidebar',cssVar:'--sb-sidebar-width',key:'sb-sidebar-width',min:154,max:360,defaultWidth:206,direction:1},

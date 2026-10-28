@@ -46,7 +46,7 @@ test('unsafe filenames and Windows reserved names are rejected',()=>{
 });
 test('file and batch size limits reject before writing',()=>{
   assert.throws(()=>planOrdinaryFileImport(Array.from({length:11},(_,i)=>file(i+'.md','x'))),/1–10/);
-  assert.throws(()=>planOrdinaryFileImport([{name:'large.bin',size:26*1024*1024,arrayBuffer:async()=>new ArrayBuffer(0)}]),/Unsupported/);
+  assert.throws(()=>planOrdinaryFileImport([{name:'large.bin',size:513*1024*1024,arrayBuffer:async()=>new ArrayBuffer(0),slice:()=>{}}]),/Unsupported/);
 });
 test('missing enumeration or SHA-256 fails closed',async()=>{
   const d=directory();
