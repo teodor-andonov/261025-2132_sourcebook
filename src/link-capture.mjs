@@ -88,7 +88,7 @@ export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLoc
       if(!$('#captured-links-list'))return;
       host.innerHTML=store.links.length?
         '<div class="capture-count">'+store.links.length+' saved on this device</div>'+
-        store.links.map(item=>'<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(item.title||new URL(item.url).hostname)+'</strong><small title="'+escapeHTML(item.url)+'">'+escapeHTML(item.url)+'</small></div><button class="secondary" type="button" data-capture="open" data-link-id="'+escapeHTML(item.id)+'" title="Open in new tab">Open</button><button class="secondary" type="button" data-capture="copy" data-link-id="'+escapeHTML(item.id)+'" title="Copy URL">Copy</button><button class="secondary" type="button" data-capture="remove" data-link-id="'+escapeHTML(item.id)+'" title="Remove from this device">Remove</button></div>').join(''):
+        store.links.map(item=>'<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(item.title||new URL(item.url).hostname)+'</strong><small title="'+escapeHTML(item.url)+'">'+escapeHTML(item.url)+'</small></div><a class="secondary" href="'+escapeHTML(item.url)+'" target="_blank" rel="noopener noreferrer" title="Open in new tab">Open</a><button class="secondary" type="button" data-capture="rename" data-link-id="'+escapeHTML(item.id)+'" title="Edit title">Title</button><button class="secondary" type="button" data-capture="copy" data-link-id="'+escapeHTML(item.id)+'" title="Copy URL">Copy</button><button class="secondary" type="button" data-capture="remove" data-link-id="'+escapeHTML(item.id)+'" title="Remove from this device">Remove</button></div>').join(''):
         '<p>No links captured on this device yet.</p>';
     }catch(error){host.textContent='Cannot read saved links: '+error.message+'. Nothing was changed.';}
   };
@@ -113,7 +113,7 @@ export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLoc
       const input=$('#capture-link-input');
       if(!input||busy)return;
       const text=input.value;
-      const result=await mutate(store=>planCapturedLinks(store,text));
+      const result=await mutate(store=>planCapturedLinks(store,text).next);
       if(result){input.value='';toast('Links saved locally. Duplicates are skipped.');}
     });
     dialog.addEventListener('click',async event=>{
@@ -142,8 +142,9 @@ export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLoc
         }
         const item=await findLink(id);
         if(!item)return toast('Link changed. Reopen Capture.',true);
-        if(action==='open'){
-          env.open(item.url,'_blank','noopener,noreferrer');
+        if(action==='rename'){
+          const title=env.prompt('Link title (optional, up to 120 characters)',item.title);
+          if(title!==null)await mutate(store=>planRenameCapturedLink(store,id,title));
         }else if(action==='copy'){
           if(typeof env.navigator?.clipboard?.writeText==='function')await env.navigator.clipboard.writeText(item.url);
           else {const input=$('#capture-link-input');if(input){input.value=item.url;input.focus();input.select();}toast('Select and copy the URL manually.');}
