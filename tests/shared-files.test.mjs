@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {prepareSharedFiles,validateSharedFileDescriptors,restoreSharedFiles,requestSharedFileDownload,
   MAX_SHARED_FILES,MAX_SHARED_FILE_BYTES,MAX_SHARED_TOTAL_BYTES} from '../src/shared-files.mjs';
-import {prepareIncomingShare,normalizeIncomingRecord} from '../src/share-inbox.mjs';
+import {prepareIncomingShare,normalizeIncomingRecord,assertShareInboxCapacity,SHARE_INBOX_TOTAL_BYTES} from '../src/share-inbox.mjs';
 
 const id='123e4567-e89b-42d3-a456-426614174000';
 const options={idFactory:()=>id,now:()=> '2026-10-28T15:26:00Z'};
@@ -64,6 +64,13 @@ test('inbox rejects altered metadata and file identity',()=>{
   const record=prepareIncomingShare({}, {...options,fileDescriptors:d});
   assert.throws(()=>normalizeIncomingRecord({...record,files:[{...d[0],type:'invalid mime'}]}),/content type/);
   assert.throws(()=>normalizeIncomingRecord({...record,kind:'url'}),/inconsistent/);
+});
+test('inbox-wide quota prevents many valid shares from exhausting temporary storage',()=>{
+  const record=prepareIncomingShare({}, {...options,fileDescriptors:[{name:'large.bin',size:25*1024*1024,type:''}]});
+  const other=prepareIncomingShare({}, {...options,fileDescriptors:[{name:'other.bin',size:25*1024*1024,type:''}]});
+  assert.equal(assertShareInboxCapacity([record,record,record],other),SHARE_INBOX_TOTAL_BYTES);
+  assert.throws(()=>assertShareInboxCapacity([record,record,record,record],other),/100 MiB/);
+  assert.throws(()=>assertShareInboxCapacity(Array.from({length:12},()=>({files:[]})),other),/inbox is full/);
 });
 test('browser download is explicitly unverified and preserves original filename',()=>{
   const f=file('drawing.pdf','test','application/pdf');
