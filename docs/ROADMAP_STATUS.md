@@ -1,6 +1,6 @@
 # Sourcebook — live roadmap status and acceptance
 
-**Updated:** 2026-10-28 · **Source:** `docs/ROADMAP_V1_ULTRA.md` · **Code reference:** V0.0.30 / merged PR #8.
+**Updated:** 2026-10-28 · **Source:** `docs/ROADMAP_V1_ULTRA.md` · **Code reference:** V0.0.31 / merged PR #10; V0.0.32 M0 feasibility candidate on a PR branch.
 
 ## How progress is tracked
 
@@ -62,6 +62,10 @@ If the user cannot perform M0 now, agent development should prepare harmless tes
 
 **Release tracking:** after PR CI passes, squash merge into main, let the main-only Pages workflow deploy, delete the merged `dev/*` branch with verified head match, and update this status file only as evidence changes. Do not mistake deployment or synthetic browser screenshots for Windows/Android acceptance.
 
-## M0 code-side readiness harness (V0.0.31 candidate)
+## M0 code-side readiness harness (V0.0.31 merged; V0.0.32 candidate)
 
 Sourcebook exposes **Device checks** from the launcher (including browsers where the Folder picker is missing) and Settings. The panel reports API *presence* and standalone display state without requesting permissions; an explicitly clicked, read-only Folder probe samples at most ten entries and optionally reads file metadata without accessing file bytes or writing anything. The eight M0 cases remain **Not tested** until a person records actual Windows/Pixel 8 outcomes and evidence. Entries stay device-local until explicitly exported as sanitized JSON. This is not a substitute for a real-device test, Syncthing roundtrip, or offline acceptance. Automated tests cover the probe's read-only boundary and conservative status handling.
+
+### Disposable permission feasibility (V0.0.32 candidate)
+
+**Implemented in code, not device verified:** An explicitly confirmed test uses an empty user-selected disposable Folder and attempts a unique synthetic file create/write/exact-readback/delete/absence check. It does not touch existing source or Catalog files. If the browser cannot prove the synthetic file's identity/content or remove it, the test fails and warns about manual cleanup. A separate read-only picker stores an opt-in handle in device-local IndexedDB; after restart, **Recheck** queries permission and enumerates at most one entry without a new picker or permission request. **Forget handle** removes the stored grant reference. Probe outcomes are sanitized in the manual JSON report; private paths, file contents and synthetic filenames are not exported. Neither result marks M0 accepted; actual Windows Chrome and Pixel 8 observations remain **Not tested**.
