@@ -1,3 +1,8 @@
+## 2026-10-28 22:31 Europe/Madrid — V0.0.53 candidate: Chromium OPFS M0 integration
+- **Implemented:** Three additional headless Chromium browser-engine scenarios use genuine origin-private FileSystemDirectoryHandle APIs (not Node filesystem mocks): exact `.url`/`.md` creation, collision refusal and untouched sentinel; capture fixture verification after reload and IndexedDB handle restoration, with corruption rejection; portable `.sb` fixture with recovery journal, nested Tags, saved View and physical `.url` record, reverified after reload and rejected after tampering.
+- **Boundary:** OPFS is origin-private, not a user-selected Folder, Android SAF provider, Syncthing path or durable external Resource. The synthetic granted-permission adapter is test-only; real Folder permission, device restart and Android sharing remain **Not tested**. No screenshots or visual fixtures. CI and deployment outcomes require independent verification.
+- **Log:** [Chromium OPFS acceptance](../logs/development/261028-2231_chromium-opfs-acceptance.md).
+
 ## 2026-10-28 — User-reported positive Android smoke test (feedback, not formal M0 acceptance)
 - **Feedback:** User tested Sourcebook on Android and reported that it is **working well**. This is real-user qualitative feedback, not a model-run test or synthetic CI fixture.
 - **Scope not specified:** Exact commit, device/browser build, storage provider and tested workflows are unknown. Do not infer verified physical Folder writes, .url/.md capture, installed-PWA state, Web Share, offline operation, Syncthing portability or reliability benchmarks.

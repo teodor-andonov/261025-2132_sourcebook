@@ -12,6 +12,12 @@ test('Chromium engine acceptance smoke is required in PR CI without screenshots'
   assert.match(script,/multipart share target stages real File/);
   assert.match(script,/setOffline\(true\)/);
   assert.match(script,/no-directory-picker/);
+  assert.match(script,/real Chromium OPFS \.url\/\.md file writes/);
+  assert.match(script,/fixture survives reload and IndexedDB handle restoration/);
+  assert.match(script,/portable \.sb journal, Tags, View and physical \.url reopen/);
+  assert.match(script,/sourcebook-opfs-m0-smoke-handle/);
+  assert.match(script,/corrupted\.status,'invalid'/);
+  assert.match(script,/origin-private; external Folder/);
   assert.doesNotMatch(script,/\.screenshot\(|recordVideo|tracing\.start/);
   assert.match(script,/NOT physical Windows\/Pixel 8 acceptance/);
 });
