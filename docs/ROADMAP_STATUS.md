@@ -1,3 +1,5 @@
+> **V0.0.43 candidate — large-file import reliability:** Sourcebook implements bounded-chunk ordinary-file copying, byte-for-byte large-file readback, progress and Abort, while keeping SHA-256 for small files. **Implemented in code: candidate, pending CI. Device verified: Not tested. Released & accepted: No.** The M0 device gate remains open. [Development log](../logs/development/261028-1230_streamed-file-import.md).
+
 > **V0.0.42 candidate:** Ordinary file import is an explicit picker/drop → review → destination confirmation → checksum-verified physical copy, without silent collision renaming or Catalog-only resource creation. Device verification **Not tested**; release acceptance **No**. [Development log](../logs/development/261028-1126_safe-file-import.md).
 
 **V0.0.41 candidate:** Explicit legacy URL to physical .url migration implemented in code; device verification and release acceptance remain open. [Development log](../logs/development/261028-1025_legacy-url-file-migration.md).

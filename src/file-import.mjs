@@ -1,8 +1,10 @@
 // Explicit import of ordinary files into a user-granted physical Folder.
 // Never rename, replace, or objectify source files; Catalog metadata is untouched.
+import {copyAndVerifyStreamedFile} from './file-stream-import.mjs';
 export const MAX_IMPORT_FILES=10;
-export const MAX_IMPORT_FILE_BYTES=25*1024*1024;
-export const MAX_IMPORT_TOTAL_BYTES=50*1024*1024;
+export const MAX_IMPORT_FILE_BYTES=512*1024*1024;
+export const MAX_IMPORT_TOTAL_BYTES=1024*1024*1024;
+export const STREAM_IMPORT_THRESHOLD=25*1024*1024;
 const MAX_SCAN_ENTRIES=50000;
 const fold=name=>name.normalize('NFKC').toLocaleLowerCase();
 const WINDOWS_RESERVED=/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i;
@@ -19,14 +21,15 @@ export function planOrdinaryFileImport(files){
       /^[.]/u.test(name)||/[. ]$/u.test(name)||WINDOWS_RESERVED.test(name)||
       /[\/\\<>:"|?*\u0000-\u001f\u007f]/u.test(name)||
       !Number.isSafeInteger(file.size)||file.size<0||file.size>MAX_IMPORT_FILE_BYTES||
-      typeof file.arrayBuffer!=='function')
+      typeof file.arrayBuffer!=='function'||
+      (file.size>STREAM_IMPORT_THRESHOLD&&typeof file.slice!=='function'))
       throw Error('Unsupported file name or size: '+String(name||'(unnamed)').slice(0,60));
     const key=fold(name);
     if(names.has(key))throw Error('Selected files have colliding names (including case-only variants)');
     names.add(key);totalBytes+=file.size;
     return {name,size:file.size,file};
   });
-  if(totalBytes>MAX_IMPORT_TOTAL_BYTES)throw Error('Selected files exceed the 50 MiB batch limit');
+  if(totalBytes>MAX_IMPORT_TOTAL_BYTES)throw Error('Selected files exceed the 1 GiB batch limit');
   return {items,totalBytes};
 }
 export async function assertImportDestinationAvailable(directory,items){
@@ -41,25 +44,41 @@ export async function assertImportDestinationAvailable(directory,items){
   }
 }
 const hex=bytes=>Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');
-export async function importOrdinaryFiles(directory,files,{cryptoApi=globalThis.crypto}={}){
+export async function importOrdinaryFiles(directory,files,{cryptoApi=globalThis.crypto,signal,onProgress}={}){
   const plan=planOrdinaryFileImport(files);
-  if(typeof cryptoApi?.subtle?.digest!=='function')
+  if(plan.items.some(item=>item.size<=STREAM_IMPORT_THRESHOLD)&&typeof cryptoApi?.subtle?.digest!=='function')
     throw Error('SHA-256 verification is unavailable; no files were written');
   await assertImportDestinationAvailable(directory,plan.items);
   const saved=[];
+  const abortIfRequested=()=>{if(signal?.aborted)throw Error('Import cancelled; inspect destination before retrying');};
+  const report=(event)=>{try{onProgress?.({...event,fileIndex:Math.min(saved.length+(event.phase==='done'?0:1),plan.items.length),fileCount:plan.items.length});}catch{}};
   for(const item of plan.items){
     try{
       // Recheck before each write: another tab/provider may have added a file.
+      abortIfRequested();
       await assertImportDestinationAvailable(directory,[item]);
+      // A second existence check narrows (but cannot eliminate) the empty-file race.
+      try{await directory.getFileHandle(item.name);throw Error('Destination filename already exists; no overwrite attempted');}
+      catch(error){if(error.name!=='NotFoundError')throw error;}
+      if(item.size>STREAM_IMPORT_THRESHOLD){
+        const handle=await directory.getFileHandle(item.name,{create:true});
+        if((await handle.getFile()).size!==0)throw Error('Destination unexpectedly contains data; no overwrite attempted');
+        const result=await copyAndVerifyStreamedFile(handle,item.file,{signal,onProgress:event=>report({...event,name:item.name})});
+        saved.push(result);
+        report({phase:'done',name:item.name,bytes:item.size,size:item.size});
+        continue;
+      }
       const original=await item.file.arrayBuffer();
       if(original.byteLength!==item.size)throw Error('Selected file changed before import');
       const expected=hex(await cryptoApi.subtle.digest('SHA-256',original));
+      abortIfRequested();
       const handle=await directory.getFileHandle(item.name,{create:true});
       if((await handle.getFile()).size!==0)
         throw Error('Destination unexpectedly contains data; no overwrite attempted');
       let writable;
       try{
         writable=await handle.createWritable();
+        abortIfRequested();
         await writable.write(new Uint8Array(original));
         await writable.close();
       }catch(error){
@@ -70,7 +89,9 @@ export async function importOrdinaryFiles(directory,files,{cryptoApi=globalThis.
       if(verified.byteLength!==original.byteLength||
         hex(await cryptoApi.subtle.digest('SHA-256',verified))!==expected)
         throw Error('Readback checksum differs; inspect file');
-      saved.push({name:item.name,size:item.size,sha256:expected});
+      abortIfRequested();
+      saved.push({name:item.name,size:item.size,sha256:expected,verification:'sha256'});
+      report({phase:'done',name:item.name,bytes:item.size,size:item.size});
     }catch(error){
       throw Error('Import stopped after '+saved.length+'/'+plan.items.length+
         ' verified files. Inspect '+item.name+' and destination before retrying; a partial file may remain. '+error.message);
