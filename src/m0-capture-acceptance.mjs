@@ -96,6 +96,10 @@ export async function createM0CaptureFixture(picker,{confirmed=false,randomUUID=
     catch(error){if(error?.name!=='NotFoundError')throw error;}
     const dir=await parent.getDirectoryHandle(name,{create:true});
     const result={...blank(),status:'error',permission:grant,created:true,cleanupRequired:true,fixtureName:name};
+    // A provider race could return a pre-existing child. Refuse to write into it.
+    if(dir?.kind!=='directory'||typeof dir.values!=='function')return result;
+    try{for await(const _ of dir.values())return {...result,status:'collision'};}
+    catch{return result;}
     try{
       for(const plan of plans(id))await writeCapturedFile(dir,plan);
       const checked=await inspectFixture(dir,id);
