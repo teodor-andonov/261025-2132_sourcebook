@@ -107,7 +107,146 @@ async function main(){
       for await(const chunk of await download.createReadStream())chunks.push(chunk);
       assert.equal(Buffer.concat(chunks).toString('utf8'),'[InternetShortcut]\r\nURL=https://example.org/sourcebook-smoke\r\n');
     });
-    process.stdout.write('Chromium smoke '+passed+'/3 passed. Synthetic Linux browser only; M0 device acceptance OPEN.\n');
+
+    // OPFS is origin-private browser storage, NOT a user-selected ordinary Folder,
+    // Android SAF provider, Syncthing root or proof of external filesystem access.
+    // It does exercise genuine Chromium FileSystemDirectoryHandle/write/read APIs.
+    await scenario('real Chromium OPFS .url/.md file writes, collision refusal and source preservation',async(_context,page)=>{
+      await controlled(page);
+      const result=await page.evaluate(async()=>{
+        const {planFileCapture,writeCapturedFile}=await import('./src/file-capture.mjs');
+        const root=await navigator.storage.getDirectory();
+        const parentName='sourcebook-opfs-copy-'+crypto.randomUUID();
+        const parent=await root.getDirectoryHandle(parentName,{create:true});
+        try{
+          const sentinel=await parent.getFileHandle('untouched-source.txt',{create:true});
+          const writer=await sentinel.createWritable();
+          await writer.write('source must remain untouched\n');await writer.close();
+          const options={now:new Date('2026-10-28T00:00:00.000Z'),random:'abc123def456'};
+          const shortcut=planFileCapture({kind:'url',value:'https://example.org/sourcebook-opfs',title:'OPFS link'},options);
+          const note=planFileCapture({kind:'text',value:'# OPFS test\n\nSynthetic fixture',title:'OPFS note'},options);
+          const before=[];
+          for await(const [name] of parent.entries())before.push(name);
+          await writeCapturedFile(parent,shortcut);
+          await writeCapturedFile(parent,note);
+          const urlText=await (await (await parent.getFileHandle(shortcut.name)).getFile()).text();
+          const mdText=await (await (await parent.getFileHandle(note.name)).getFile()).text();
+          let exactCollision=false,caseCollision=false;
+          try{await writeCapturedFile(parent,shortcut);}catch(error){exactCollision=/already exists/.test(error.message);}
+          try{await writeCapturedFile(parent,{...shortcut,name:shortcut.name.replace('OPFS','opfs')});}
+          catch(error){caseCollision=/already exists/.test(error.message);}
+          const unchanged=await (await sentinel.getFile()).text();
+          const after=[];
+          for await(const [name] of parent.entries())after.push(name);
+          return {before,after,urlText,mdText,unchanged,exactCollision,caseCollision};
+        }finally{await root.removeEntry(parentName,{recursive:true});}
+      });
+      assert.deepEqual(result.before,['untouched-source.txt']);
+      assert.equal(result.after.length,3);
+      assert.equal(result.urlText,'[InternetShortcut]\r\nURL=https://example.org/sourcebook-opfs\r\n');
+      assert.equal(result.mdText,'# OPFS test\n\nSynthetic fixture\n');
+      assert.equal(result.unchanged,'source must remain untouched\n');
+      assert.equal(result.exactCollision,true);
+      assert.equal(result.caseCollision,true);
+    });
+    await scenario('real Chromium OPFS .url/.md fixture survives reload and IndexedDB handle restoration',async(_context,page)=>{
+      await controlled(page);
+      const setup=await page.evaluate(async()=>{
+        const {createM0CaptureFixture}=await import('./src/m0-capture-acceptance.mjs');
+        const {setLocal}=await import('./src/storage.mjs');
+        const root=await navigator.storage.getDirectory();
+        const parentName='sourcebook-opfs-m0-'+crypto.randomUUID();
+        const parent=await root.getDirectoryHandle(parentName,{create:true});
+        // Permission shim ONLY: OPFS is origin-owned, never a real picker grant.
+        const grant=h=>({kind:h.kind,name:h.name,queryPermission:async()=> 'granted',
+          values:()=>h.values(),entries:()=>h.entries(),
+          getFileHandle:(...args)=>h.getFileHandle(...args),
+          getDirectoryHandle:(...args)=>h.getDirectoryHandle(...args),
+          removeEntry:(...args)=>h.removeEntry(...args)});
+        const result=await createM0CaptureFixture(async()=>grant(parent),{confirmed:true});
+        if(result.status!=='ok')throw Error('OPFS capture creation failed: '+JSON.stringify(result));
+        const child=await parent.getDirectoryHandle(result.fixtureName);
+        await setLocal('sourcebook-opfs-m0-smoke-handle',child);
+        return {parentName,fixtureName:result.fixtureName,fixtureProof:result.fixtureProof};
+      });
+      await page.reload({waitUntil:'load'});
+      const checked=await page.evaluate(async setup=>{
+        const {verifyM0CaptureFixture}=await import('./src/m0-capture-acceptance.mjs');
+        const {getLocal,removeLocal}=await import('./src/storage.mjs');
+        const root=await navigator.storage.getDirectory();
+        const parent=await root.getDirectoryHandle(setup.parentName);
+        const actual=await parent.getDirectoryHandle(setup.fixtureName);
+        const stored=await getLocal('sourcebook-opfs-m0-smoke-handle');
+        const sameEntry=!!stored&&await stored.isSameEntry(actual);
+        const grant=h=>({kind:h.kind,name:h.name,queryPermission:async()=> 'granted',
+          values:()=>h.values(),entries:()=>h.entries(),
+          getFileHandle:(...args)=>h.getFileHandle(...args)});
+        const verified=await verifyM0CaptureFixture(async()=>grant(stored));
+        const names=[];
+        for await(const [name] of actual.entries())names.push(name);
+        const markdown=names.find(name=>name.endsWith('.md'));
+        const handle=await actual.getFileHandle(markdown);
+        const writer=await handle.createWritable();await writer.write('synthetic corruption\n');await writer.close();
+        const corrupted=await verifyM0CaptureFixture(async()=>grant(actual));
+        await removeLocal('sourcebook-opfs-m0-smoke-handle');
+        await root.removeEntry(setup.parentName,{recursive:true});
+        return {sameEntry,verified,corrupted,files:names.length};
+      },setup);
+      assert.equal(checked.sameEntry,true);
+      assert.equal(checked.verified.status,'ok');
+      assert.equal(checked.verified.urlVerified,true);
+      assert.equal(checked.verified.textVerified,true);
+      assert.equal(checked.verified.fixtureProof,setup.fixtureProof);
+      assert.equal(checked.files,2);
+      assert.equal(checked.corrupted.status,'invalid');
+    });
+    await scenario('real Chromium OPFS portable .sb journal, Tags, View and physical .url reopen',async(_context,page)=>{
+      await controlled(page);
+      const setup=await page.evaluate(async()=>{
+        const {createM0PortableCatalogFixture}=await import('./src/m0-acceptance.mjs');
+        const root=await navigator.storage.getDirectory();
+        const parentName='sourcebook-opfs-portable-'+crypto.randomUUID();
+        const parent=await root.getDirectoryHandle(parentName,{create:true});
+        const grant=h=>({kind:h.kind,name:h.name,queryPermission:async()=> 'granted',
+          values:()=>h.values(),entries:()=>h.entries(),
+          getFileHandle:(...args)=>h.getFileHandle(...args),
+          getDirectoryHandle:(...args)=>h.getDirectoryHandle(...args)});
+        const created=await createM0PortableCatalogFixture(async()=>grant(parent),{confirmed:true});
+        if(created.status!=='ok')throw Error('OPFS portable fixture creation failed: '+JSON.stringify(created));
+        return {parentName,fixtureName:created.fixtureName,fixtureProof:created.fixtureProof,
+          transactionVerified:created.transactionVerified,journalClear:created.journalClear};
+      });
+      assert.equal(setup.transactionVerified,true);
+      assert.equal(setup.journalClear,true);
+      await page.reload({waitUntil:'load'});
+      const checked=await page.evaluate(async setup=>{
+        const {verifyM0PortableCatalogFixture}=await import('./src/m0-acceptance.mjs');
+        const root=await navigator.storage.getDirectory();
+        const parent=await root.getDirectoryHandle(setup.parentName);
+        const dir=await parent.getDirectoryHandle(setup.fixtureName);
+        const grant=h=>({kind:h.kind,name:h.name,queryPermission:async()=> 'granted',
+          values:()=>h.values(),entries:()=>h.entries(),
+          getFileHandle:(...args)=>h.getFileHandle(...args),
+          getDirectoryHandle:(...args)=>h.getDirectoryHandle(...args)});
+        const verified=await verifyM0PortableCatalogFixture(async()=>grant(dir));
+        const record=JSON.parse(await (await (await (await dir.getDirectoryHandle('resources')).getFileHandle('mt1.json')).getFile()).text());
+        const source=await dir.getDirectoryHandle('source-files');
+        const handle=await source.getFileHandle(record.path);
+        const writer=await handle.createWritable();
+        await writer.write('[InternetShortcut]\r\nURL=https://example.org/modified\r\n');await writer.close();
+        const corrupted=await verifyM0PortableCatalogFixture(async()=>grant(dir));
+        await root.removeEntry(setup.parentName,{recursive:true});
+        return {verified,corrupted,recordKind:record.kind};
+      },setup);
+      assert.equal(checked.verified.status,'ok');
+      assert.equal(checked.verified.portableVerified,true);
+      assert.equal(checked.verified.journalClear,true);
+      assert.equal(checked.verified.fixtureProof,setup.fixtureProof);
+      assert.equal(checked.recordKind,'file');
+      assert.equal(checked.corrupted.status,'invalid');
+    });
+
+    process.stdout.write('Chromium smoke '+passed+'/6 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
   }finally{
     await browser?.close();
     await new Promise(resolveClose=>server.close(resolveClose));
