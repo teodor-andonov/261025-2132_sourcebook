@@ -104,3 +104,7 @@ Typed custom schemas, manual ratings, tag colors, elaborate forms, kanban, AI-ta
   guarantee of permanent physical identity. Refresh before making any manual
   decision; a report is a timestamped snapshot.
 
+
+## M0 disposable probes (28 October 2026)
+
+Device checks remain an optional dialog available without a Catalog. A write probe is permitted **only after explicit user confirmation** and a fresh user-chosen disposable Folder; it must never touch a registered source, existing file or portable `.sb` data by default. Use unpredictable synthetic names, exact readback, identity checks and verified cleanup; if deletion cannot be proven safe, preserve the file and warn. A separate opt-in IndexedDB handle can be rechecked after restart without requesting permission or auto-marking acceptance. No device probes run on launch, and all outcomes remain manual evidence, not device acceptance.
