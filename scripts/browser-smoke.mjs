@@ -7,7 +7,7 @@ import {resolve,sep,extname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {chromium} from 'playwright';
 
-const ROOT=fileURLToPath(new URL('../',import.meta.url));
+const ROOT=resolve(fileURLToPath(new URL('../',import.meta.url)));
 const PREFIX='/261025-2132_sourcebook/';
 const MIME={'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.json':'application/json','.webmanifest':'application/manifest+json','.svg':'image/svg+xml','.png':'image/png'};
 const server=createServer(async(req,res)=>{
