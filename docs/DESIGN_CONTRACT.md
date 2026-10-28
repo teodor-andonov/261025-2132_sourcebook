@@ -108,3 +108,10 @@ Typed custom schemas, manual ratings, tag colors, elaborate forms, kanban, AI-ta
 ## M0 disposable probes (28 October 2026)
 
 Device checks remain an optional dialog available without a Catalog. A write probe is permitted **only after explicit user confirmation** and a fresh user-chosen disposable Folder; it must never touch a registered source, existing file or portable `.sb` data by default. Use unpredictable synthetic names, exact readback, identity checks and verified cleanup; if deletion cannot be proven safe, preserve the file and warn. A separate opt-in IndexedDB handle can be rechecked after restart without requesting permission or auto-marking acceptance. No device probes run on launch, and all outcomes remain manual evidence, not device acceptance.
+
+## Device-local link staging (V0.0.33 candidate)
+
+- **Capture links** is a lightweight, optional browser-local tray available without a Catalog or directory picker. Manual URL paste and explicitly requested clipboard read must never trigger source-file or Catalog writes. Save is separate from clipboard reading.
+- Only canonical HTTP(S) URLs without embedded credentials are accepted. Validate all pasted lines before saving, deduplicate by canonical URL, bound record count and reject malformed saved data. Do not fetch URL contents or treat arbitrary pasted HTML as trusted markup.
+- The tray is **not** a Collection, a View or a portable `.sb` URL record. It is explicitly device-only until a separately reviewed Catalog URL schema exists. Do not imply Android incoming share-target or cross-device sync support.
+- Export may disclose private URLs and requires explicit confirmation. IndexedDB persistence is subject to eviction and cross-tab races; verification is not atomic locking.
