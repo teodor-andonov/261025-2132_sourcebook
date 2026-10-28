@@ -84,7 +84,8 @@ test('UI offers explicit file handoff but cannot clear pending shares on handoff
   assert.match(inbox,/data-share="share-files"/);
   const handoff=inbox.slice(inbox.indexOf("['share-file','share-files']"),inbox.indexOf("button.dataset.share==='download-file'",inbox.indexOf("['share-file','share-files']")));
   assert.match(handoff,/getIncomingShareFiles/);
-  assert.match(handoff,/shareIncomingFiles/);
+  assert.match(handoff,/handoff.prepare/);
+  assert.match(inbox,/data-share="send-prepared"/);
   assert.doesNotMatch(handoff,/removeIncomingShare/);
   assert.match(device,/Web Share files \(API only\)/);
   assert.match(sw,/\.\/src\/file-share-out\.mjs/);
