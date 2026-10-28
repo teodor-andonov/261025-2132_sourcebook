@@ -46,3 +46,14 @@ test('results are deterministic despite input record enumeration order',()=>{
   const reverse=catalogTagResults([...docs].reverse(),roots,t2.tags,'Architecture').map(x=>x.id);
   assert.deepEqual(forward,reverse);
 });
+
+test('ordinary .url shortcut files participate in Links Views without a fileless Catalog record',async()=>{
+  const {catalogFileType,catalogQueryResults}=await import('../src/catalog-search.mjs');
+  assert.equal(catalogFileType({kind:'file',name:'Reference.url'}),'url');
+  assert.equal(catalogFileType({kind:'file',name:'Reference.md'}),'other');
+  const results=catalogQueryResults([{id:'ab5',sourceId:'papers',path:'Reference.url',kind:'file',tagIds:[t1.id]}],
+    roots,t2.tags,{fileType:'url',tagIds:[t1.id]});
+  assert.equal(results.length,1);
+  assert.equal(results[0].kind,'file');
+  assert.equal(results[0].path,'Reference.url');
+});
