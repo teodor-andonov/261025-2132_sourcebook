@@ -56,3 +56,7 @@ Record device, OS version, Chrome version, file provider, action, expected behav
 The hosted PWA opens on both devices. Each device either passes folder enumeration and catalog persistence or reveals a documented platform blocker requiring an architecture decision. No source rename occurs during metadata save. Denied permissions are visible, and catalogs/sources can be reopened after restart.
 
 **Do not mark M0 accepted without actual device observations.**
+
+
+### V0.0.41 manual migration acceptance — not yet performed
+With a disposable legacy fileless URL record, reconnect a registered Folder, confirm Create .url + rebind, inspect the physical shortcut and verify the stable ID, Tags, Notes and content after restart and a real Syncthing roundtrip. Repeat with denied permission and existing same-name file. Record unsupported Android provider operations. Browser Download is not a verified migration. Do not test on irreplaceable data.

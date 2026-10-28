@@ -1,3 +1,6 @@
+### V0.0.41 explicit legacy URL file migration (28 Oct 2026)
+A legacy fileless kind=url record may be converted only after individually selecting **Create .url + rebind**, choosing a registered source Folder and affirmatively confirming. The shortcut uses the existing stable Catalog ID as a filename token, is written only after both grants, and is read back before the existing metadata record is journal-replaced with kind=file/sourceId/path. Tags, Notes, title and ID survive; the old URL/title remain as historical audit metadata, not a second Resource. Fail closed on stale snapshots, pending journals, sync conflict copies and case-insensitive filename collisions. File creation plus Catalog rebinding cannot be atomic; on failure, never automatically delete the new file. Android writes and real-device acceptance are unverified.
+
 ### File-backed capture integration (V0.0.40 candidate, 28 October 2026)
 
 - **One durable Resource = one real file/folder.** The device-local link tray and Android share inbox are temporary; their entries are not Catalog records. A staged link's **Create .url** action requests an explicit destination Folder; a shared single URL can create `.url`, and shared text (including ambiguous multi-URL text) can create `.md`. No automatic filesystem write occurs on receipt.
