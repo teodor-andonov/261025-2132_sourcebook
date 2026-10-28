@@ -101,11 +101,11 @@ export async function removeIncomingShare(id){
     tx.onerror=()=>{failure=tx.error;};
   });
 }
-export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,env=globalThis}){
+export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,onSaveFile,onDownloadFile,env=globalThis}){
   let busy=false;
   const $=selector=>env.document.querySelector(selector);
   async function open(){
-    openDialog('<h2>Incoming shares</h2><p>Shared URLs and text are held on this device until you review them. Nothing is automatically added to captured links or a Catalog.</p><div id="share-inbox-list" aria-live="polite">Loading…</div><div class="dialog-actions"><button class="primary" type="button" data-action="dismiss">Done</button></div>');
+    openDialog('<h2>Incoming shares</h2><p>Shared URLs and text are temporary. Create a real .url or .md in a chosen Folder; browser Download is a fallback with no verified destination. Only verified Folder saves clear a share automatically. No Catalog-only Resource is created.</p><div id="share-inbox-list" aria-live="polite">Loading…</div><div class="dialog-actions"><button class="primary" type="button" data-action="dismiss">Done</button></div>');
     const dialog=$('#dialog');
     async function render(){
       const host=$('#share-inbox-list');if(!host)return;
@@ -113,7 +113,8 @@ export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,env=
         const items=await listIncomingShares();if(!$('#share-inbox-list'))return;
         host.innerHTML=items.length?items.map(item=>
           '<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(item.title||item.candidate||'Shared text')+'</strong><small>'+escapeHTML(item.candidate||(item.kind==='ambiguous'?'Multiple URLs · copy or review manually':'Text only · copy or review manually'))+'</small><textarea readonly rows="2" aria-label="Original shared content">'+escapeHTML(item.text||item.url)+'</textarea></div>'+
-          (item.candidate?'<button class="secondary" type="button" data-share="review" data-share-id="'+item.id+'">Review URL</button>':'')+
+          (item.candidate?'<button class="secondary" type="button" data-share="file-url" data-share-id="'+item.id+'">Create .url</button><button class="secondary" type="button" data-share="download-url" data-share-id="'+item.id+'">Download .url</button><button class="secondary" type="button" data-share="review" data-share-id="'+item.id+'">Stage URL</button>':'')+
+          '<button class="secondary" type="button" data-share="file-text" data-share-id="'+item.id+'">Create .md</button><button class="secondary" type="button" data-share="download-text" data-share-id="'+item.id+'">Download .md</button>'+
           '<button class="secondary" type="button" data-share="copy" data-share-id="'+item.id+'">Copy</button><button class="secondary" type="button" data-share="discard" data-share-id="'+item.id+'">Discard</button></div>'
         ).join(''):'<p>No pending shares.</p>';
       }catch(error){host.textContent='Cannot read incoming shares: '+error.message+'. Nothing was removed.';}
@@ -124,7 +125,19 @@ export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,env=
       try{
         const items=await listIncomingShares(),item=items.find(x=>x.id===button.dataset.shareId);
         if(!item)throw Error('Share changed; reopen the inbox');
-        if(button.dataset.share==='review'&&item.candidate){
+        if(['file-url','download-url','file-text','download-text'].includes(button.dataset.share)){
+          const action=button.dataset.share,isURL=action.endsWith('url'),download=action.startsWith('download');
+          if(isURL&&!item.candidate)throw Error('This share does not have a single verified URL');
+          const handler=download?onDownloadFile:onSaveFile;
+          if(typeof handler!=='function')throw Error('File capture is unavailable');
+          const input=isURL?{kind:'url',value:item.candidate,title:item.title}:
+            {kind:'text',value:item.text||item.url||item.title,title:item.title};
+          const result=await handler(input);
+          if(!download&&result?.handle){
+            await removeIncomingShare(item.id);
+            await render();
+          }else if(download)toast('Browser download requested. Verify the file in Downloads before discarding the share.');
+        }else if(button.dataset.share==='review'&&item.candidate){
           linkCapture.open({prefill:item.candidate,notice:'Shared URL · review and explicitly Save links. The pending share is removed only after a successful save.',onSaved:async()=>{
             await removeIncomingShare(item.id);
             toast('Shared URL saved on this device. Pending share cleared.');
