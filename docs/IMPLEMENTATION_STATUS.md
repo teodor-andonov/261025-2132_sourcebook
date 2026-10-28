@@ -1,3 +1,9 @@
+## 2026-10-29 00:22 Europe/Madrid — V0.0.55 candidate: cross-tab Catalog transaction serialization
+- **Code:** A separate origin-wide Web Lock wraps both journaled Catalog metadata commit and explicit recovery, including stale/conflict preflight, journal writes, metadata readback and cleanup. It protects cooperating same-origin tabs even if they have different handles to the same Catalog. An API-present lock denial fails closed; unsupported browsers retain previous single-handle and snapshot/journal safeguards.
+- **Automated evidence:** Node queue, stale-writer, recovery, denied-lock and fallback tests; an eighth native headless Chromium OPFS scenario with two tabs and a blocked journal write. CI, merge, Pages and branch cleanup must be verified independently after authoring.
+- **Limits:** This cannot coordinate independent browser profiles, native apps, external providers, Syncthing or another device, nor make multi-file writes atomic. Real Windows Chrome/Pixel 8 and Syncthing M0 remain open. No screenshots or Mindmap edits.
+- **Log:** [Catalog write serialization](../logs/development/261029-0022_catalog-write-serialization.md).
+
 ## 2026-10-28 23:30 Europe/Madrid — V0.0.54 candidate: same-origin physical-write serialization
 - **Implemented in source:** Shared Web Locks exclusive name serializes explicit ordinary file captures and reviewed small/streamed file imports across cooperating Sourcebook tabs on the same origin. Lock covers collision enumeration, creation and verified readback; legacy file-backed migration inherits capture guard. Unsupported browsers keep prior preflight-only behavior.
 - **Automated acceptance added:** Node lock serialization/abort/fallback regressions and a seventh headless Chromium scenario with two actual tabs contending for the same Web Lock and OPFS directory. CI status and merge/publication must be checked independently.
