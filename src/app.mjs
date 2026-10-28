@@ -4,6 +4,7 @@ import {createLinkCaptureUI} from './link-capture.mjs';
 import {createShareInboxUI} from './share-inbox.mjs';
 import {createCatalogLinksUI} from './catalog-links-ui.mjs';
 import {classifyPastedText,planFileCapture,writeCapturedFile,parseInternetShortcut,requestCapturedFileDownload} from './file-capture.mjs';
+import {prepareCaptureIntake} from './capture-intake.mjs';
 import {planOrdinaryFileImport,importOrdinaryFiles} from './file-import.mjs';
 import {planCatalogURLImport,validateCatalogURLRecord} from './catalog-urls.mjs';
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
@@ -404,16 +405,44 @@ function downloadCapture(input){
   toast('Browser download requested: '+result.name+'. Check Downloads; Sourcebook cannot verify the destination.');
   return result;
 }
-function openFileCapture(){
+function openFileCapture({intake=null}={}){
+  if(state.captureWriting)return toast('Finish the current file operation first',true);
   const current=!viewsUI.inResults()&&state.sourceId;
-  openDialog('<h2>Save a resource as a file</h2><p>Web links become .url shortcut files. Pasted text becomes .md Markdown files. Nothing is saved only in the Catalog.</p>'+
+  const sourceLabel={paste:'Pasted content',drop:'Dropped content',clipboard:'Clipboard text'}[intake?.source]||'URL or text';
+  openDialog('<h2>Review file capture</h2><p>'+sourceLabel+' is not saved yet. Review the contents and destination before creating a real .url or .md file. No Catalog-only Resource is created.</p>'+
     '<form id="capture-file-form">'+
-    '<label>Content<textarea name="content" rows="5" maxlength="1048576" required placeholder="Paste a URL or text…"></textarea></label>'+
+    '<label>Content<textarea name="content" rows="6" maxlength="1048576" required placeholder="Paste a URL or text…"></textarea></label>'+
+    '<div id="capture-intake-status" role="status" aria-live="polite">Enter a URL or text to preview its file type.</div>'+
+    '<button type="button" class="secondary" data-action="capture-read-clipboard">Read clipboard into draft</button>'+
     '<label>Filename title (optional)<input name="title" maxlength="65" placeholder="Uses domain or first line"/></label>'+
     '<label>Destination<select name="destination">'+(current?'<option value="current">Current Folder</option>':'')+
     '<option value="choose">Choose another Folder…</option></select></label>'+
     '<div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button>'+
     '<button class="secondary" type="submit" data-delivery="download">Download instead</button><button class="primary" type="submit" data-delivery="folder">Create in Folder</button></div></form>');
+  const form=$('#capture-file-form');
+  const content=form.elements.content,status=$('#capture-intake-status');
+  if(intake)content.value=intake.value;
+  const preview=()=>{
+    try{
+      const parsed=classifyPastedText(content.value);
+      status.textContent='Will create '+(parsed.kind==='url'?'an Internet Shortcut (.url)':'a Markdown file (.md)')+
+        ' · '+parsed.value.length+' characters. Nothing written yet.';
+    }catch(error){status.textContent=errorText(error)+'. Nothing written.';}
+  };
+  content.addEventListener('input',preview);
+  preview();
+}
+async function readCaptureClipboard(){
+  const form=$('#capture-file-form');
+  if(!form)return;
+  if(typeof navigator.clipboard?.readText!=='function')
+    throw Error('Clipboard read is unavailable. Paste directly into the Content field instead.');
+  const text=await navigator.clipboard.readText();
+  const intake=prepareCaptureIntake({text,source:'clipboard'});
+  if(!form.isConnected)return;
+  form.elements.content.value=intake.value;
+  form.elements.content.dispatchEvent(new Event('input',{bubbles:true}));
+  toast('Clipboard loaded for review. No file written.');
 }
 async function saveFileCaptureForm(form,delivery='folder'){
   try{
@@ -1503,6 +1532,7 @@ document.addEventListener('click',async event=>{
     case 'bulk-remove':void bulkTags('remove');break;
     case 'device-checks':deviceReadiness.open();break;
     case 'capture-file':openFileCapture();break;
+    case 'capture-read-clipboard':void readCaptureClipboard().catch(error=>toast('Clipboard: '+errorText(error),true));break;
     case 'capture-links':linkCapture.open();break;
     case 'catalog-links':void catalogLinksUI.open().catch(error=>toast('Catalog links: '+errorText(error),true));break;
     case 'show-catalog-links':showCatalogLinks();break;
@@ -1529,8 +1559,9 @@ document.addEventListener('paste',event=>{
   const value=event.clipboardData?.getData('text/plain');
   if(!value)return;
   event.preventDefault();
-  try{const input=classifyPastedText(value);
-    void writeCapture(input,{allowPicker:false}).catch(error=>toast('Paste: '+errorText(error),true));
+  try{
+    const intake=prepareCaptureIntake({text:value,source:'paste'});
+    openFileCapture({intake});
   }catch(error){toast('Paste: '+errorText(error),true);}
 });
 document.addEventListener('dragover',event=>{
@@ -1543,11 +1574,13 @@ document.addEventListener('dragover',event=>{
 document.addEventListener('drop',event=>{
   if(!pasteDropEligible(event.target))return;
   if(event.dataTransfer?.types?.includes('Files')){event.preventDefault();showFileImport([...event.dataTransfer.files]);return;}
-  const value=event.dataTransfer?.getData('text/uri-list')||event.dataTransfer?.getData('text/plain');
-  if(!value)return;
+  const text=event.dataTransfer?.getData('text/plain')||'';
+  const uriList=event.dataTransfer?.getData('text/uri-list')||'';
+  if(!text&&!uriList)return;
   event.preventDefault();
-  try{const input=classifyPastedText(value);
-    void writeCapture(input,{allowPicker:false}).catch(error=>toast('Drop: '+errorText(error),true));
+  try{
+    const intake=prepareCaptureIntake({text,uriList,source:'drop'});
+    openFileCapture({intake});
   }catch(error){toast('Drop: '+errorText(error),true);}
 });
 document.addEventListener('contextmenu',event=>{
