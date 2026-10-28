@@ -160,3 +160,30 @@ test('large restores are bounded to 250 records per verified batch',async()=>{
   await assert.rejects(planMissingResourceRestore(h,backup,{selectedPaths:plan.missingPaths}),/at most 250/);
   assert.deepEqual(h.writes,[]);
 });
+
+test('portable URL records restore without a registered source Folder and reserve IDs',async()=>{
+  const h=root();
+  const url={formatVersion:1,id:'ab5',kind:'url',url:'https://example.org/roof',title:'Roof',
+    tagIds:['tag1'],notes:'keep',updatedAt:'2026-10-28T04:00:00.000Z'};
+  files(h).set('ab5.json',j(url));
+  const backup=await createCatalogBackup(h);
+  files(h).delete('ab5.json');
+  h.files.set('sources.json','[]'); // URL recovery does not need a Folder; existing file record still does.
+  files(h).delete('ab1.json');
+  const plan=await planMissingResourceRestore(h,backup,{selectedPaths:['resources/ab5.json']});
+  assert.equal(plan.changes[0].after.nextSequence,6);
+  assert.equal(plan.changes.at(-1).after.url,url.url);
+  const result=await restoreMissingResourceRecords(h,backup,plan);
+  assert.equal(result.restored,1);
+  assert.deepEqual(JSON.parse(files(h).get('ab5.json')),url);
+});
+test('URL recovery refuses duplicate canonical links even with distinct IDs',async()=>{
+  const h=root();
+  const url={formatVersion:1,id:'ab5',kind:'url',url:'https://example.org/',title:'',
+    tagIds:[],notes:'',updatedAt:'2026-10-28T04:00:00.000Z'};
+  files(h).set('ab5.json',j(url));
+  const backup=await createCatalogBackup(h);
+  files(h).delete('ab5.json');
+  files(h).set('ab6.json',j({...url,id:'ab6'}));
+  await assert.rejects(planMissingResourceRestore(h,backup,{selectedPaths:['resources/ab5.json']}),/duplicate a resource location/);
+});
