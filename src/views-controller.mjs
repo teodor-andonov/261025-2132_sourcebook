@@ -41,8 +41,8 @@ export function createViewsController({state,readJson,authorized,render,toast,fo
   function spec(tagSelection=null){
     const base=active();
     const tags=tagSelection??selectedTags();
-    return {sourceId:base?base.sourceId:state.catalogTagView?null:state.sourceId,
-      folderPath:base?base.folderPath:state.catalogTagView?'':state.parts.join('/'),
+    return {sourceId:base?base.sourceId:(state.catalogTagView||state.catalogLinksView)?null:state.sourceId,
+      folderPath:base?base.folderPath:(state.catalogTagView||state.catalogLinksView)?'':state.parts.join('/'),
       tagId:tags.tagIds[0]??null,tagIds:[...tags.tagIds],tagMode:tags.tagMode,
       query:state.search,fileType:state.fileType,fileStatus:state.fileStatus??'all',
       presentation:{mode:state.view,size:state.size,sort:state.sort,groupBy:state.groupBy??'none',columns:state.tableColumns}};

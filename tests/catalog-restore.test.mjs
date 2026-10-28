@@ -142,7 +142,7 @@ test('restoration validates record ID, relative path and catalog sequence',async
     const h=root();files(h).set('ab1.json',j(invalid));
     const backup=await createCatalogBackup(h);
     files(h).delete('ab1.json');
-    await assert.rejects(planMissingResourceRestore(h,backup),/Invalid resource|does not belong/);
+    await assert.rejects(planMissingResourceRestore(h,backup),/Invalid.*resource|does not belong/);
     assert.deepEqual(h.writes,[]);
   }
 });

@@ -42,7 +42,7 @@ const overlapUI=createOverlapReviewUI({state,openDialog,escapeHTML,icon,toast,er
 const deviceReadiness=createDeviceReadinessUI({openDialog,escapeHTML,toast});
 const linkCapture=createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLocal});
 const shareInbox=createShareInboxUI({openDialog,escapeHTML,toast,linkCapture});
-const catalogLinksUI=createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal,readJson,authorized,refreshRecords,commitCatalogEdits,refreshPendingCatalog,refreshResults:refreshCatalogTagView,render,showLinks:showCatalogLinks});
+const catalogLinksUI=createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal,readJson,authorized,refreshRecords,commitCatalogEdits,refreshPendingCatalog,refreshResults:async()=>{if(viewsUI.inResults())await refreshCatalogTagView();else render();},render,showLinks:showCatalogLinks});
 async function refreshPendingCatalog(){
   if(!state.catalogHandle||!state.catalog){state.pendingTransaction=null;state.catalogConflicts=null;return;}
   try{state.pendingTransaction=await inspectPendingCatalogTransaction(state.catalogHandle,state.catalog.id);}
@@ -578,6 +578,7 @@ async function reconnect(){
 }
 async function navigate(id,parts,historyPosition=null){
   if(state.bulkSaving||state.viewSaving||state.resourceSaving||state.backupBusy)return toast('Finish catalog editing or backup recovery before navigating.',true);
+  if(state.catalogLinksView)state.fileType='all';
   state.catalogTagView=null;state.catalogLinksView=false;state.activeViewId=null;
   state.sourceId=id;state.parts=parts;state.search='';state.selected.clear();state.pageCount=150;
   state.tagDraftItem=null;state.tagFilter=null;state.selectionMode=false;
@@ -644,7 +645,7 @@ function openCatalogTagView(path){
   if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving||state.backupBusy)return;
   if(state.catalogTagView===path){void navigate(state.sourceId,[...state.parts]);return;}
   try{
-    state.catalogTagView=path;state.catalogLinksView=false;state.activeViewId=null;state.tagFilter=null;state.search='';state.selected.clear();
+    state.catalogTagView=path;state.catalogLinksView=false;state.activeViewId=null;state.tagFilter=null;state.fileType='all';state.search='';state.selected.clear();
     state.lastSelected=null;state.tagDraftItem=null;state.tagDraft=[];state.selectionMode=false;state.pageCount=150;
     ++state.request;forgetImages();state.loading=false;
     state.items=catalogTagResults([...state.records.values()],state.sources,state.taxonomy,path).map(item=>({...item,catalogResult:true,handle:null}));
@@ -654,7 +655,7 @@ function openCatalogTagView(path){
 function showCatalogLinks(){
   if(!state.catalog||state.resourceSaving||state.bulkSaving||state.viewSaving||state.backupBusy)return;
   state.catalogLinksView=true;state.catalogTagView=null;state.activeViewId=null;state.tagFilter=null;
-  state.search='';state.fileType='all';state.fileStatus='all';state.selected.clear();
+  state.search='';state.fileType='url';state.fileStatus='all';state.selected.clear();
   state.lastSelected=null;state.tagDraftItem=null;state.selectionMode=false;state.pageCount=150;
   ++state.request;forgetImages();state.loading=false;
   state.items=catalogQueryResults([...state.records.values()],state.sources,state.taxonomy,{fileType:'url'})
