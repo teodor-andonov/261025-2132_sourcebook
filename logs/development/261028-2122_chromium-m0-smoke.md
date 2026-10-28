@@ -5,7 +5,7 @@ M0 needs evidence from a real browser engine, not another Node-only simulated pr
 
 ## Implementation
 - Headless Chromium serves the static app under the same URL path as GitHub Pages. Tests assert manifest ID/scope, service-worker control, offline reload, multipart Share Target POST and integrity-checked temporary File retrieval/removal.
-- With the directory picker deliberately unavailable, unusable Folder/Catalog landing actions are hidden; Device checks must report Blocked; URL capture explicitly requests an Internet Shortcut Download, whose bytes are checked from the browser Download stream.
+- With the directory picker deliberately unavailable, unusable Folder/Catalog/import landing actions and the capture Create in Folder button are hidden; Device checks must report Blocked; URL capture explicitly requests an Internet Shortcut Download, whose bytes are checked from the browser Download stream.
 - PR CI runs the existing Node suite and a separate pinned Playwright/Chromium job. No screenshots, traces, videos or visual fixtures are generated.
 - Scoped service-worker cache version advances; unrelated TA PWA caches remain untouched.
 
