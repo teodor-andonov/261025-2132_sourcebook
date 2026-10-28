@@ -1,3 +1,9 @@
+## 2026-10-28 14:31 Europe/Madrid — V0.0.45 candidate: reviewed clipboard raster images
+- **Code:** Clipboard paste in a Folder (including ClipboardEvent item fallback) and explicit navigator.clipboard.read() action produce PNG/JPEG/WebP/GIF File objects with generated visible names. Both open the existing user-confirmed physical file import dialog. No source-file write, Catalog metadata or IndexedDB staging occurs on intake.
+- **Safety:** Reject unsupported SVG/HEIC, empty and oversized images, >10 files or >50 MiB total. Existing collision checks, writable Folder permission, SHA-256 readback and partial-file reporting apply to the eventual explicit copy. No automatic overwrite or Catalog-only Resource.
+- **Evidence at authoring:** Automated Node tests added for validation, bytes, read denial, paste fallback and app/SW integration. PR CI, main CI, Pages and branch cleanup must be verified independently. Actual Windows Chrome/Pixel 8 clipboard/provider and Syncthing acceptance remain **Not tested**. No screenshots or Mindmap changes.
+- **Log:** [clipboard image capture](../logs/development/261028-1431_clipboard-image-capture.md).
+
 ## 2026-10-28 13:30 Europe/Madrid — V0.0.44 candidate: reviewed clipboard/paste/drop intake
 - **Code:** Pasting or dropping text/links into the browser now opens explicit review, preview of intended `.url` vs `.md`, title/destination selection, and user-confirmed Folder save or unverified browser Download. A user-initiated clipboard read fills the draft only. URI-list comments/blank lines, single/multiple URLs, unsupported schemes and size limits are handled without automatic filesystem writes.
 - **Safety:** No Catalog-only Resource or silent ordinary-file mutation. Permission denial, unsupported Android writable picker and cancelled saves retain the review dialog; physical file drops retain existing reviewed/verified import. The File System Access API has no atomic create-exclusive guarantee.
