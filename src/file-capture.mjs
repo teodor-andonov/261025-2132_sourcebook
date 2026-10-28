@@ -51,8 +51,16 @@ export async function writeCapturedFile(directory,plan){
     (plan.kind==='url'?(!plan.name.endsWith('.url')||!parseInternetShortcut(plan.text)):
       (!plan.name.endsWith('.md')||plan.text.length>MAX_TEXT+1)))
     throw Error('Invalid file capture plan');
-  // Browser File System Access has no atomic O_EXCL. Unique names and a
-  // preflight check reduce collisions; never use createWritable on a known file.
+  // Refuse case-only collisions as well as exact matches. The provider must
+  // support enumeration; no atomic create-exclusive operation is available.
+  if(typeof directory.entries!=='function')throw Error('Cannot enumerate destination safely');
+  let count=0;
+  for await(const [name] of directory.entries()){
+    if(++count>50000)throw Error('Destination too large for safe collision check');
+    if(String(name).normalize('NFKC').toLocaleLowerCase()===plan.name.normalize('NFKC').toLocaleLowerCase())
+      throw Error('Capture filename already exists (including case-only collision)');
+  }
+  // Browser File System Access has no atomic O_EXCL. A last-moment race remains.
   try{await directory.getFileHandle(plan.name);throw Error('Capture filename already exists; retry');}
   catch(error){if(error.name!=='NotFoundError')throw error;}
   const handle=await directory.getFileHandle(plan.name,{create:true});

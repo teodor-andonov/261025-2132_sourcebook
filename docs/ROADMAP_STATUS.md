@@ -1,3 +1,5 @@
+> **V0.0.42 candidate:** Ordinary file import is an explicit picker/drop → review → destination confirmation → checksum-verified physical copy, without silent collision renaming or Catalog-only resource creation. Device verification **Not tested**; release acceptance **No**. [Development log](../logs/development/261028-1126_safe-file-import.md).
+
 **V0.0.41 candidate:** Explicit legacy URL to physical .url migration implemented in code; device verification and release acceptance remain open. [Development log](../logs/development/261028-1025_legacy-url-file-migration.md).
 
 > **V0.0.40 candidate — 28 October 2026, 09:29 Madrid:** File-backed inbox actions and explicit browser Download fallback are implemented in source. Physical `.url` files can appear in saved Views' Links filter. The M0 disposable fixture now verifies a real `.url` plus its Catalog metadata. Legacy `kind=url` records remain untouched and unmigrated. **Device verified: Not tested. Released & accepted: No.** PR CI and deployment evidence must be added only after successful Actions runs. See [development log](../logs/development/261028-0929_file-backed-capture-inbox.md).

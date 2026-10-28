@@ -4,6 +4,7 @@ import {createLinkCaptureUI} from './link-capture.mjs';
 import {createShareInboxUI} from './share-inbox.mjs';
 import {createCatalogLinksUI} from './catalog-links-ui.mjs';
 import {classifyPastedText,planFileCapture,writeCapturedFile,parseInternetShortcut,requestCapturedFileDownload} from './file-capture.mjs';
+import {planOrdinaryFileImport,importOrdinaryFiles} from './file-import.mjs';
 import {planCatalogURLImport,validateCatalogURLRecord} from './catalog-urls.mjs';
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
@@ -422,7 +423,7 @@ async function saveFileCaptureForm(form,delivery='folder'){
 function landing(){
   clearSidePreview();
   forgetImages();
-  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>Sourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions"><button class="primary" data-action="open-folder">'+icon('folder')+' Open folder</button><button class="secondary" data-action="open-catalog">'+icon('database')+' Open catalog</button><button class="secondary" data-action="create-catalog">'+icon('plus')+' New catalog</button><button class="secondary" data-action="capture-file">'+icon('file')+' Save file from URL/text</button><button class="secondary" data-action="capture-links">'+icon('link')+' Review staged links</button><button class="secondary" data-action="incoming-shares">'+icon('link')+' Incoming shares</button></div><div id="recent-area"></div><button class="secondary" data-action="device-checks" title="Check browser capabilities and record device acceptance">Device checks</button><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
+  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>Sourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions"><button class="primary" data-action="open-folder">'+icon('folder')+' Open folder</button><button class="secondary" data-action="open-catalog">'+icon('database')+' Open catalog</button><button class="secondary" data-action="create-catalog">'+icon('plus')+' New catalog</button><button class="secondary" data-action="capture-file">'+icon('file')+' Save file from URL/text</button><button class="secondary" data-action="import">'+icon('upload')+' Add ordinary files</button><button class="secondary" data-action="capture-links">'+icon('link')+' Review staged links</button><button class="secondary" data-action="incoming-shares">'+icon('link')+' Incoming shares</button></div><div id="recent-area"></div><button class="secondary" data-action="device-checks" title="Check browser capabilities and record device acceptance">Device checks</button><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
   getLocal('recent').then(value=>{
     if(value&&$('#recent-area'))$('#recent-area').innerHTML='<div class="eyebrow">RECENT CATALOG</div><button class="recent-item" data-action="recent">'+icon('database')+'<span>'+escapeHTML(value.name)+'</span>'+icon('chevron',15)+'</button>';
   }).catch(console.warn);
@@ -837,7 +838,7 @@ function render(){
   const recoveryNotice=!plain&&state.pendingTransaction?'<div class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'Catalog recovery needs manual repair':'Interrupted catalog save · '+state.pendingTransaction.applied+'/'+state.pendingTransaction.total+' changes')+'</span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'':'<button class="secondary" data-action="recover-catalog" title="Resume catalog-only save">'+icon('refresh',14)+' Resume</button>')+'</div>':'';
   const conflictNotice=!plain&&(state.catalogConflicts?.count||state.catalogConflicts?.error)?'<div id="catalog-conflict-notice" class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.catalogConflicts.error?'Conflict scan needs attention':state.catalogConflicts.count+' Catalog sync conflict copy/copies')+'</span><button class="secondary" data-action="inspect-catalog-conflicts" title="Inspect sync conflict copies">Inspect</button></div>':'';
   const selectionActions=plain||viewsUI.inResults()?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
-  const fileActions=plain||viewsUI.inResults()?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
+  const fileActions=viewsUI.inResults()?'':(plain?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button>')+'<button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
   const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="edit-view-tags" title="Edit View tags">'+icon('tag',15)+' <span>Tags</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
   const typeControl=plain?'':'<select id="file-type" class="sort-control type-control" aria-label="File type"><option value="all" '+(state.fileType==='all'?'selected':'')+'>All types</option><option value="image" '+(state.fileType==='image'?'selected':'')+'>Images</option><option value="pdf" '+(state.fileType==='pdf'?'selected':'')+'>PDFs</option><option value="video" '+(state.fileType==='video'?'selected':'')+'>Videos</option><option value="folder" '+(state.fileType==='folder'?'selected':'')+'>Folders</option><option value="url" '+(state.fileType==='url'?'selected':'')+'>Links</option><option value="other" '+(state.fileType==='other'?'selected':'')+'>Other</option></select>';
   const statusControl=state.activeViewId?'<select id="file-status" class="sort-control" aria-label="Catalog status"><option value="all" '+(state.fileStatus==='all'?'selected':'')+'>All statuses</option><option value="cataloged" '+(state.fileStatus==='cataloged'?'selected':'')+'>Cataloged</option><option value="unobjectified" '+(state.fileStatus==='unobjectified'?'selected':'')+'>Not cataloged</option><option value="missing" '+(state.fileStatus==='missing'?'selected':'')+'>Missing (scan)</option><option value="changed" '+(state.fileStatus==='changed'?'selected':'')+'>Type changed (scan)</option></select>':'';
@@ -1253,29 +1254,57 @@ async function newFolder(){
   try{if(!await authorized(sourceHandle(),'readwrite'))throw Error('Write access is required to create a folder.');const dir=await nested(sourceHandle(),state.parts);await dir.getDirectoryHandle(name,{create:true});invalidateScan();await navigate(state.sourceId,state.parts);toast('Folder created');}
   catch(e){toast(errorText(e),true);}
 }
-async function importFiles(){
-  if(!state.catalog)return;
-  if(state.scanBusy||state.resourceSaving)return toast('Finish the current operation first.',true);
+// File input works on browsers where showOpenFilePicker is unavailable (including Android).
+// Selection and drag/drop only open a review dialog: writing requires explicit confirmation.
+let pendingFileImport=null;
+function showFileImport(files){
   try{
-    if(!await authorized(sourceHandle(),'readwrite'))throw Error('Write access is required to import files.');
-    if(typeof window.showOpenFilePicker!=='function')throw Error('File import picker is unavailable in this browser.');
-    const chosen=await window.showOpenFilePicker({multiple:true});
-    const dest=await nested(sourceHandle(),state.parts);
-    let count=0;
-    for(const handle of chosen){
-      const file=await handle.getFile();
-      let name=file.name,n=2;
-      while(true){
-        try{await dest.getFileHandle(name);const dot=file.name.lastIndexOf('.');name=dot>0?file.name.slice(0,dot)+' ('+(n++)+')'+file.name.slice(dot):file.name+' ('+(n++)+')';}
-        catch(e){if(e.name==='NotFoundError')break;throw e;}
-      }
-      const output=await dest.getFileHandle(name,{create:true});
-      const writer=await output.createWritable();
-      try{await writer.write(file);await writer.close();count++;}
-      catch(e){try{await writer.abort();}catch{}throw e;}
+    const plan=planOrdinaryFileImport(files);
+    pendingFileImport=plan.items.map(item=>item.file);
+    const current=!viewsUI.inResults()&&state.sourceId;
+    openDialog('<h2>Add ordinary files</h2><p>Copies selected files to a user-granted Folder. No automatic renaming, overwriting or Catalog metadata changes. Max 10 files / 50 MiB per batch.</p>'+
+      '<form id="import-files-form"><div class="capture-count">'+plan.items.length+' files · '+(plan.totalBytes/1048576).toFixed(2)+' MiB</div>'+
+      plan.items.map(item=>'<div class="capture-row">'+escapeHTML(item.name)+' <small>'+item.size+' bytes</small></div>').join('')+
+      '<label>Destination<select name="destination">'+(current?'<option value="current">Current Folder</option>':'')+
+      '<option value="choose">Choose Folder…</option></select></label>'+
+      '<p>Import starts only after confirmation. If a provider fails, partial files may remain for inspection.</p>'+
+      '<div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button>'+
+      '<button class="primary" type="submit">Copy files</button></div></form>');
+  }catch(error){pendingFileImport=null;toast('Add files: '+errorText(error),true);}
+}
+function importFiles(){
+  const input=document.createElement('input');
+  input.type='file';input.multiple=true;input.setAttribute('aria-label','Choose ordinary files');
+  input.addEventListener('change',()=>{if(input.files?.length)showFileImport([...input.files]);},{once:true});
+  input.click();
+}
+async function submitFileImportForm(form){
+  if(state.captureWriting)return toast('Finish the current file operation first',true);
+  if(!pendingFileImport?.length)return toast('Choose files again',true);
+  if(state.scanBusy||state.bulkSaving||state.resourceSaving||state.viewSaving||state.backupBusy)
+    return toast('Finish the current operation first',true);
+  state.captureWriting=true;
+  let here=false;
+  try{
+    let folder;
+    if(form.elements.destination.value==='current'&&!viewsUI.inResults()&&state.sourceId){
+      const root=sourceHandle();
+      if(root){folder=await nested(root,state.parts);here=true;}
     }
-    invalidateScan();await navigate(state.sourceId,state.parts);toast('Imported '+count+' file(s)');
-  }catch(e){if(e.name!=='AbortError')toast(errorText(e),true);}
+    if(!folder){
+      if(typeof window.showDirectoryPicker!=='function')
+        throw Error('This browser cannot choose a writable Folder. Use the Android file manager to copy the original files; Sourcebook has not imported anything.');
+      folder=await window.showDirectoryPicker({mode:'readwrite'});
+    }
+    if(!await authorized(folder,'readwrite'))throw Error('Destination Folder write permission was not granted');
+    const result=await importOrdinaryFiles(folder,pendingFileImport);
+    pendingFileImport=null;$('#dialog')?.remove();
+    toast('Verified '+result.saved.length+' file copies; originals unchanged');
+    if(here){invalidateScan();await navigate(state.sourceId,[...state.parts]);}
+  }catch(error){
+    toast('Add files: '+errorText(error),true);
+    if(here){invalidateScan();void navigate(state.sourceId,[...state.parts]).catch(()=>{});}
+  }finally{state.captureWriting=false;}
 }
 const paneConfigs={
   'sidebar-resizer':{selector:'.sidebar',cssVar:'--sb-sidebar-width',key:'sb-sidebar-width',min:154,max:360,defaultWidth:206,direction:1},
@@ -1325,6 +1354,7 @@ document.addEventListener('keydown',event=>{
 },true);
 document.addEventListener('submit',event=>{
   if(event.target.id==='capture-file-form'){event.preventDefault();void saveFileCaptureForm(event.target,event.submitter?.dataset.delivery||'folder');}
+  if(event.target.id==='import-files-form'){event.preventDefault();void submitFileImportForm(event.target);}
   if(event.target.id==='catalog-form'){event.preventDefault();submitCatalog(event.target);}
   if(event.target.id==='table-columns-form'){
     event.preventDefault();
@@ -1453,7 +1483,7 @@ document.addEventListener('click',async event=>{
     case 'show-catalog-links':showCatalogLinks();break;
     case 'edit-catalog-link':{const item=state.items.find(x=>state.selected.has(x.id));if(item?.kind==='url')catalogLinksUI.openEdit(item.record.id);break;}
     case 'incoming-shares':void shareInbox.open().catch(error=>toast('Incoming shares: '+errorText(error),true));break;
-    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button> <button type="button" class="secondary" data-action="inspect-catalog-conflicts">Inspect conflicts</button> <button type="button" class="secondary" data-action="review-overlap-records">Review overlaps</button> <button type="button" class="secondary" data-action="catalog-links">Catalog links</button></div>':'')+'<div class="backup-tools"><strong>File-backed capture</strong><p>Save URL shortcuts (.url) or pasted text (.md) in a chosen physical Folder. Staged links are temporary.</p><button type="button" class="secondary" data-action="capture-file">Save URL/text as file</button> <button type="button" class="secondary" data-action="capture-links">Staging inbox</button> <button type="button" class="secondary" data-action="incoming-shares">Incoming shares</button></div><div class="backup-tools"><strong>Device acceptance</strong><p>Browser capabilities, disposable Folder permission tests and manual M0 record.</p><button type="button" class="secondary" data-action="device-checks">Device checks</button></div><div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
+    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button> <button type="button" class="secondary" data-action="inspect-catalog-conflicts">Inspect conflicts</button> <button type="button" class="secondary" data-action="review-overlap-records">Review overlaps</button> <button type="button" class="secondary" data-action="catalog-links">Catalog links</button></div>':'')+'<div class="backup-tools"><strong>File-backed capture</strong><p>Save URL shortcuts (.url) or pasted text (.md) in a chosen physical Folder. Staged links are temporary.</p><button type="button" class="secondary" data-action="capture-file">Save URL/text as file</button> <button type="button" class="secondary" data-action="import">Add ordinary files</button> <button type="button" class="secondary" data-action="capture-links">Staging inbox</button> <button type="button" class="secondary" data-action="incoming-shares">Incoming shares</button></div><div class="backup-tools"><strong>Device acceptance</strong><p>Browser capabilities, disposable Folder permission tests and manual M0 record.</p><button type="button" class="secondary" data-action="device-checks">Device checks</button></div><div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
     case 'reset-accent':applyAccent('#5276bd');if($('#accent-color'))$('#accent-color').value='#5276bd';break;
     case 'save-resource':saveResource();break;
     case 'preview':showPreview();break;
@@ -1479,13 +1509,15 @@ document.addEventListener('paste',event=>{
   }catch(error){toast('Paste: '+errorText(error),true);}
 });
 document.addEventListener('dragover',event=>{
-  if(!pasteDropEligible(event.target)||event.dataTransfer?.types?.includes('Files'))return;
+  if(!pasteDropEligible(event.target))return;
+  if(event.dataTransfer?.types?.includes('Files')){event.preventDefault();event.dataTransfer.dropEffect='copy';return;}
   if(event.dataTransfer?.types?.includes('text/plain')||event.dataTransfer?.types?.includes('text/uri-list')){
     event.preventDefault();event.dataTransfer.dropEffect='copy';
   }
 });
 document.addEventListener('drop',event=>{
-  if(!pasteDropEligible(event.target)||event.dataTransfer?.types?.includes('Files'))return;
+  if(!pasteDropEligible(event.target))return;
+  if(event.dataTransfer?.types?.includes('Files')){event.preventDefault();showFileImport([...event.dataTransfer.files]);return;}
   const value=event.dataTransfer?.getData('text/uri-list')||event.dataTransfer?.getData('text/plain');
   if(!value)return;
   event.preventDefault();
