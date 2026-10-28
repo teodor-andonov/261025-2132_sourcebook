@@ -246,7 +246,70 @@ async function main(){
       assert.equal(checked.corrupted.status,'invalid');
     });
 
-    process.stdout.write('Chromium smoke '+passed+'/6 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
+
+    // OPFS + native Chromium Web Locks are synthetic browser-engine evidence.
+    // This does not verify external Folder, Syncthing or Android SAF concurrency.
+    await scenario('two-tab Chromium Web Locks serialize physical capture and preserve collisions',async(context,page)=>{
+      await controlled(page);
+      const second=await context.newPage(),pageErrors=[];
+      second.on('pageerror',e=>pageErrors.push(e.message));
+      await controlled(second);
+      const folderName='sourcebook-opfs-locked-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+      const lockName='sourcebook-physical-write-v1';
+      try{
+        await page.evaluate(async name=>{
+          const root=await navigator.storage.getDirectory();
+          await root.getDirectoryHandle(name,{create:true});
+        },folderName);
+        await page.evaluate(name=>{
+          window.__heldSourcebookLock=navigator.locks.request(name,{mode:'exclusive'},
+            ()=>new Promise(resolve=>{window.__releaseSourcebookLock=resolve;}));
+        },lockName);
+        await page.waitForFunction(()=>typeof window.__releaseSourcebookLock==='function');
+        const pending=second.evaluate(async name=>{
+          const {planFileCapture,writeCapturedFile}=await import('./src/file-capture.mjs');
+          const root=await navigator.storage.getDirectory();
+          const dir=await root.getDirectoryHandle(name);
+          const plan=planFileCapture({kind:'url',value:'https://example.org/locked',title:'Locked link'},
+            {now:new Date('2026-10-28T00:00:00Z'),random:'abc123def456'});
+          await writeCapturedFile(dir,plan);
+          return plan.name;
+        },folderName);
+        await second.waitForFunction(async name=>(await navigator.locks.query()).pending.some(lock=>lock.name===name),lockName);
+        const before=await page.evaluate(async name=>{
+          const root=await navigator.storage.getDirectory(),dir=await root.getDirectoryHandle(name);
+          const names=[];for await(const [entry] of dir.entries())names.push(entry);
+          return names;
+        },folderName);
+        assert.deepEqual(before,[],'Writer must wait while another tab holds the lock');
+        await page.evaluate(()=>window.__releaseSourcebookLock());
+        const filename=await pending;
+        const result=await page.evaluate(async({folderName,filename})=>{
+          const {planFileCapture,writeCapturedFile}=await import('./src/file-capture.mjs');
+          const root=await navigator.storage.getDirectory(),dir=await root.getDirectoryHandle(folderName);
+          const existing=await (await (await dir.getFileHandle(filename)).getFile()).text();
+          const plan=planFileCapture({kind:'url',value:'https://example.org/locked',title:'Locked link'},
+            {now:new Date('2026-10-28T00:00:00Z'),random:'abc123def456'});
+          let rejected=false;
+          try{await writeCapturedFile(dir,plan);}catch(e){rejected=/already exists/.test(e.message);}
+          const unchanged=await (await (await dir.getFileHandle(filename)).getFile()).text();
+          return {rejected,existing,unchanged};
+        },{folderName,filename});
+        assert.equal(result.rejected,true);
+        assert.equal(result.existing,'[InternetShortcut]\r\nURL=https://example.org/locked\r\n');
+        assert.equal(result.unchanged,result.existing);
+        assert.deepEqual(pageErrors,[]);
+      }finally{
+        await page.evaluate(async name=>{
+          window.__releaseSourcebookLock?.();
+          const root=await navigator.storage.getDirectory();
+          try{await root.removeEntry(name,{recursive:true});}catch{}
+        },folderName);
+        await second.close();
+      }
+    });
+
+    process.stdout.write('Chromium smoke '+passed+'/7 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
   }finally{
     await browser?.close();
     await new Promise(resolveClose=>server.close(resolveClose));
