@@ -3,13 +3,13 @@
 // The fixture is intentionally retained for restart/Syncthing testing; no automatic deletion.
 import {readJson,writeJson} from './storage.mjs';
 import {commitCatalogTransaction} from './catalog-transactions.mjs';
-import {planCatalogURLImport,validateCatalogURLRecord} from './catalog-urls.mjs';
+import {planFileCapture,parseInternetShortcut,writeCapturedFile} from './file-capture.mjs';
 import {ensureTagPath,tagPath} from './tags.mjs';
 import {validateViews} from './views.mjs';
 import {catalogQueryResults} from './catalog-search.mjs';
 
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
-const FIXTURE_VERSION=1;
+const FIXTURE_VERSION=2;
 const nameFor=id=>'Sourcebook-M0-'+id+'.sb';
 async function fixtureFingerprint(id){
   // Hash only the synthetic UUID, never an ordinary file path or Catalog content.
@@ -20,6 +20,9 @@ async function fixtureFingerprint(id){
   return [...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join('');
 }
 const urlFor=id=>'https://example.org/sourcebook-m0/'+id;
+const sourceId='m0-source';
+const fixtureFilePlan=(id,timestamp)=>planFileCapture({kind:'url',value:urlFor(id),title:'sourcebook-m0'},
+  {now:new Date(timestamp),random:id.replaceAll('-','').slice(0,10)});
 const blank=()=>({status:'not-run',permission:'unknown',catalogCreated:false,transactionVerified:false,portableVerified:false,journalClear:false,cleanupRequired:false});
 const failure=error=>error?.name==='AbortError'?'cancelled':error?.name==='NotAllowedError'?'denied':'error';
 const invalid=()=>{throw Error('invalid-m0-fixture');};
@@ -54,13 +57,18 @@ async function verifyHandle(dir){
   const sources=await readJson(dir,'sources.json'),tags=await readJson(dir,'tags.json');
   const views=validateViews(await readJson(dir,'views.json'));
   const resources=await dir.getDirectoryHandle('resources');
-  const record=validateCatalogURLRecord(await readJson(resources,'mt1.json'));
-  if(!Array.isArray(sources)||sources.length||!Array.isArray(tags)||tags.length!==2||
-     views.length!==1||record.id!=='mt1'||record.url!==urlFor(id)||
-     record.title!=='M0 portable URL'||record.notes!=='Disposable cross-device verification record'||
+  const record=await readJson(resources,'mt1.json');
+  const plan=fixtureFilePlan(id,catalog.createdAt);
+  if(!Array.isArray(sources)||sources.length!==1||sources[0].id!==sourceId||
+     !Array.isArray(tags)||tags.length!==2||views.length!==1||record.id!=='mt1'||
+     record.kind!=='file'||record.sourceId!==sourceId||record.path!==plan.name||
+     record.notes!=='Disposable cross-device verification record'||
      record.tagIds.length!==1||tagPath(tags,record.tagIds[0])!=='M0 / Portable'||
-     views[0].name!=='M0 portable links'||views[0].fileType!=='url'||
+     views[0].name!=='M0 portable shortcuts'||views[0].fileType!=='url'||
      views[0].tagIds.length!==1||views[0].tagIds[0]!==record.tagIds[0])invalid();
+  const source=await dir.getDirectoryHandle('source-files');
+  const shortcut=await source.getFileHandle(plan.name);
+  if(parseInternetShortcut(await (await shortcut.getFile()).text())!==urlFor(id))invalid();
   const found=catalogQueryResults([record],sources,tags,views[0]);
   if(found.length!==1||found[0].record.id!=='mt1')invalid();
   return id;
@@ -102,21 +110,24 @@ export async function createM0PortableCatalogFixture(picker,{confirmed=false,ran
     const catalog={formatVersion:1,id,name:'M0 disposable fixture',code:'mt',nextSequence:1,
       createdAt:timestamp,m0Fixture:{version:FIXTURE_VERSION,id}};
     await writeJson(dir,'catalog.json',catalog);
-    await writeJson(dir,'sources.json',[]);
+    const sources=[{id:sourceId,name:'M0 fixture files'}];
+    await writeJson(dir,'sources.json',sources);
+    const source=await dir.getDirectoryHandle('source-files',{create:true});
+    const plan=fixtureFilePlan(id,timestamp);
+    await writeCapturedFile(source,plan);
     let n=0;
     const taxonomy=ensureTagPath([],'M0 / Portable',()=>id+'-tag-'+(++n));
-    const plan=planCatalogURLImport(catalog,[],[{url:urlFor(id),title:'M0 portable URL'}],
-      {tagIds:[taxonomy.id],timestamp});
-    const record={...plan.newRecords[0],notes:'Disposable cross-device verification record'};
-    const view={id:id+'-view',name:'M0 portable links',sourceId:null,folderPath:'',
+    const record={formatVersion:1,id:'mt1',sourceId,path:plan.name,kind:'file',
+      tagIds:[taxonomy.id],notes:'Disposable cross-device verification record',updatedAt:timestamp};
+    const view={id:id+'-view',name:'M0 portable shortcuts',sourceId:null,folderPath:'',
       tagIds:[taxonomy.id],tagMode:'all',query:'sourcebook-m0',fileType:'url',fileStatus:'all',
       presentation:{mode:'list',size:150,sort:'name',groupBy:'none'}};
-    validateViews([view]);validateCatalogURLRecord(record);
+    validateViews([view]);
     await commitCatalogTransaction({handle:dir,catalogId:id,changes:[
       {path:'tags.json',before:null,after:taxonomy.tags},
       {path:'views.json',before:null,after:[view]},
       {path:'resources/mt1.json',before:null,after:record},
-      {path:'catalog.json',before:catalog,after:{...catalog,nextSequence:plan.nextSequence}}
+      {path:'catalog.json',before:catalog,after:{...catalog,nextSequence:2}}
     ]});
     transactionVerified=true;
     await verifyHandle(dir);
