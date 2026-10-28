@@ -18,6 +18,8 @@ test('Chromium engine acceptance smoke is required in PR CI without screenshots'
   assert.match(script,/sourcebook-opfs-m0-smoke-handle/);
   assert.match(script,/corrupted\.status,'invalid'/);
   assert.match(script,/origin-private; external Folder/);
+  assert.match(script,/two-tab Chromium Web Locks serialize physical capture/);
+  assert.match(script,/navigator\.locks\.query/);
   assert.doesNotMatch(script,/\.screenshot\(|recordVideo|tracing\.start/);
   assert.match(script,/NOT physical Windows\/Pixel 8 acceptance/);
 });
