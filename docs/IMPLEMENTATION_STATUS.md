@@ -1,3 +1,10 @@
+## 2026-10-28 09:29 Europe/Madrid — V0.0.40 candidate: file-backed capture inbox and portable fixture
+
+- **Code changes:** Link staging has explicit Create `.url` (selected writable Folder) and browser Download fallback; Android share inbox has explicit Create/Download `.url` and `.md` actions. Verified Folder writes remove the corresponding pending share only after exact readback; downloads are unverified and retain the share. Existing staged links remain until explicit removal. Manual URL/text capture also exposes browser Download.
+- **Resource integrity:** Physical `.url` files are classified as Links in saved Views while retaining `kind=file`. No new fileless Catalog URL records are created; historical `kind=url` records are retained. No automatic conversion or deletion. Browser Download does not guarantee a destination, exclusive filename, or completed save; Android provider compatibility is untested.
+- **M0 fixture correction:** The disposable v2 `.sb` fixture writes an ordinary `.url` under a synthetic `source-files/` folder, journals metadata referencing that physical file, and verifies its contents read-only. Legacy v1 fixtures remain on disk but cannot be validated as v2. This does not verify real external source Folder grants or Syncthing transfer.
+- **Verification:** Node tests added for file-backed inbox planning, download fallback, physical shortcut View classification and v2 fixture integrity. PR CI, squash merge, Pages publication and cleanup must be verified separately. No physical Windows/Pixel 8 tests or screenshots performed. See [development log](../logs/development/261028-0929_file-backed-capture-inbox.md).
+
 ## 2026-10-28 — File-backed resource capture correction (V0.0.39 candidate)
 
 - **Product decision:** Every durable Sourcebook Resource is an actual file/folder. `.sb` Catalogs annotate filesystem resources; `.url` files represent links and `.md` files hold pasted/dropped text.
