@@ -86,3 +86,25 @@ test('launcher, Settings and offline shell wire up device checks',async()=>{
   assert.ok((app.match(/data-action="device-checks"/g)||[]).length>=2);
   assert.match(sw,/\.\/src\/device-readiness\.mjs/);
 });
+
+test('M0 export includes sanitized disposable probes without private synthetic names',()=>{
+  const r=normalizeM0Record({
+    writeProbe:{status:'error',permission:'granted',writeVerified:true,cleanupRequired:true,leftoverName:'.sourcebook-m0-probe-private.txt'},
+    reopenProbe:{status:'needs-regrant',permission:'prompt',enumerated:false,handle:{name:'private-folder'}}
+  });
+  const report=exportM0Report(r,inspectDeviceCapabilities({navigator:{userAgent:'Windows Chrome/154'}}));
+  assert.equal(report.disposableWriteProbe.cleanupRequired,true);
+  assert.equal(report.savedReadHandleProbe.status,'needs-regrant');
+  assert.ok(!JSON.stringify(report).includes('private'));
+  assert.equal(report.results['M0-04'].status,'Not tested');
+});
+test('Device checks UI includes explicit disposable probes without automatic acceptance',async()=>{
+  const src=await readFile(new URL('../src/device-readiness.mjs',import.meta.url),'utf8');
+  assert.match(src,/data-m0-write/);
+  assert.match(src,/data-m0-remember/);
+  assert.match(src,/data-m0-recheck/);
+  assert.match(src,/data-m0-forget/);
+  assert.match(src,/probeDisposableWriteFolder/);
+  assert.match(src,/recheckDisposableReadFolder/);
+  assert.match(src,/env\.confirm/);
+});

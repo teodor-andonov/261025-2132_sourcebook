@@ -316,3 +316,8 @@ video.side-preview-media{max-height:240px}
 .dialog .m0-row textarea,.dialog .m0-row input{display:block;width:100%;margin-top:6px}
 .m0-warning{font-size:11px}
 @media(max-width:520px){.m0-row-head{align-items:flex-start}.m0-row-head strong{max-width:62%}.m0-cap-grid{gap:4px 6px}}
+
+/* Disposable M0 checks are opt-in, not an additional app-wide panel. */
+.m0-probe-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.m0-probe-actions button{flex:0 1 auto}
+.m0-probe [data-m0-write-result],.m0-probe [data-m0-reopen-result]{overflow-wrap:anywhere}
