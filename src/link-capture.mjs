@@ -100,12 +100,13 @@ export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLoc
     catch(error){toast('Link capture: '+error.message,true);}
     finally{busy=false;}
   };
-  const open=()=>{
-    openDialog('<h2>Capture links</h2><p>Paste HTTP(S) URLs, one per line, or read the clipboard. Links are saved in this browser only, not in a .sb Catalog or Syncthing. No page content is fetched.</p>'+
+  const open=({prefill='',onSaved=null,notice=''}={})=>{
+    openDialog('<h2>Capture links</h2><p>Paste HTTP(S) URLs, one per line, or read the clipboard. Links are saved in this browser only, not in a .sb Catalog or Syncthing. No page content is fetched.</p>'+(notice?'<p>'+escapeHTML(notice)+'</p>':'')+
       '<form id="capture-link-form"><label>URLs<textarea id="capture-link-input" rows="3" maxlength="45000" placeholder="https://example.org/reference"></textarea></label><div class="dialog-actions"><button type="button" class="secondary" data-capture="clipboard">Read clipboard</button><button type="submit" class="primary">Save links</button></div></form>'+
       '<div id="captured-links-list" class="capture-list" aria-live="polite">Loading…</div>'+
       '<div class="dialog-actions"><button type="button" class="secondary" data-capture="export">Export JSON</button><button type="button" class="secondary" data-action="dismiss">Done</button></div>');
     const dialog=$('#dialog');
+    if(prefill)$('#capture-link-input').value=prefill;
     $('#capture-link-input')?.focus();
     void render();
     dialog.querySelector('#capture-link-form').addEventListener('submit',async event=>{
@@ -114,7 +115,9 @@ export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLoc
       if(!input||busy)return;
       const text=input.value;
       const result=await mutate(store=>planCapturedLinks(store,text).next);
-      if(result){input.value='';toast('Links saved locally. Duplicates are skipped.');}
+      if(result){input.value='';toast('Links saved locally. Duplicates are skipped.');
+        if(typeof onSaved==='function')try{await onSaved(result);}catch(error){toast('Link saved, but incoming share could not be cleared: '+error.message,true);}
+      }
     });
     dialog.addEventListener('click',async event=>{
       const control=event.target.closest('[data-capture]');
