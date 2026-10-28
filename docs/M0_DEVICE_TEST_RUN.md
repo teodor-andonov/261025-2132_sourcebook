@@ -30,7 +30,7 @@ Copy this file to a new timestamped test log for **each device**. Never mark tes
 - [ ] Register a source, add a nested Tag and Note, save/close/reopen, verify metadata and no accidental source file change (M0-03)
 - [ ] Test source permission denied/revoked and later regrant without losing catalog state (M0-04)
 - [ ] Test a Syncthing Catalog roundtrip to the other target device and regrant its source folder (M0-05)
-- [ ] Check saved Views, type/group and their results after reconnect (M0-05)
+- [ ] Check saved Views, type/group and their results after reconnect (M0-05)\n- [ ] Import a harmless HTTPS URL into Sample.sb, add/remove a nested Tag on multiple Catalog URLs, close/reopen and confirm URL IDs, notes and Tags persist; then verify a real Syncthing Windows↔Pixel 8 roundtrip (M0-03, M0-05). Do not use private URLs in public evidence.
 
 ## Offline, performance, capture
 
