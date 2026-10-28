@@ -2,7 +2,7 @@
 // No ordinary source-file or portable Catalog writes are performed here.
 import {normalizeCaptureURL} from './link-capture.mjs';
 import {prepareSharedFiles,validateSharedFileDescriptors,restoreSharedFiles,verifySharedFileIntegrity,requestSharedFileDownload} from './shared-files.mjs';
-import {shareIncomingFiles} from './file-share-out.mjs';
+import {createPreparedShareSession} from './prepared-share-handoff.mjs';
 
 export const SHARE_INBOX_LIMIT=12;
 export const SHARE_INBOX_TOTAL_BYTES=100*1024*1024;
@@ -153,17 +153,20 @@ export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,onSa
   let busy=false;
   const $=selector=>env.document.querySelector(selector);
   async function open(){
-    openDialog('<h2>Incoming shares</h2><p>Shared URLs, text and files are temporary on this device. Review and copy them into a real Folder. Download or Send to app only requests external delivery: neither verifies a saved file nor clears the inbox. No Catalog-only Resource is created.</p><div id="share-inbox-list" aria-live="polite">Loading…</div><div class="dialog-actions"><button class="primary" type="button" data-action="dismiss">Done</button></div>');
+    const handoff=createPreparedShareSession();
+    openDialog('<h2>Incoming shares</h2><p>Shared URLs, text and files are temporary on this device. Review and copy them into a real Folder. Download or Send to app only requests external delivery: neither verifies a saved file nor clears the inbox. No Catalog-only Resource is created.</p><div id="share-handoff-ready" role="status" aria-live="polite"></div><div id="share-inbox-list" aria-live="polite">Loading…</div><div class="dialog-actions"><button class="primary" type="button" data-action="dismiss">Done</button></div>');
     const dialog=$('#dialog');
     async function render(){
+      handoff.clear();
+      const ready=$('#share-handoff-ready');if(ready)ready.textContent='';
       const host=$('#share-inbox-list');if(!host)return;
       try{
         const items=await listIncomingShares();if(!$('#share-inbox-list'))return;
         host.innerHTML=items.length?items.map(item=>
           '<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(item.title||item.candidate||(item.files.length?'Shared files':'Shared text'))+'</strong><small>'+escapeHTML(item.files.length?item.files.length+' files · temporary device inbox':item.candidate||(item.kind==='ambiguous'?'Multiple URLs · copy or review manually':'Text only · copy or review manually'))+'</small>'+
           (item.text||item.url?'<textarea readonly rows="2" aria-label="Original shared content">'+escapeHTML(item.text||item.url)+'</textarea>':'')+
-          (item.files.length?'<div>'+item.files.map((file,index)=>'<div>'+escapeHTML(file.name)+' <small>'+file.size+' bytes</small> <button class="secondary" type="button" data-share="download-file" data-file-index="'+index+'" data-share-id="'+item.id+'">Download</button> <button class="secondary" type="button" data-share="share-file" data-file-index="'+index+'" data-share-id="'+item.id+'">Send to app</button></div>').join('')+'</div>':'')+'</div>'+
-          (item.files.length?'<button class="secondary" type="button" data-share="review-files" data-share-id="'+item.id+'">Review files</button><button class="secondary" type="button" data-share="share-files" data-share-id="'+item.id+'">Send all to app</button>':'')+
+          (item.files.length?'<div>'+item.files.map((file,index)=>'<div>'+escapeHTML(file.name)+' <small>'+file.size+' bytes</small> <button class="secondary" type="button" data-share="download-file" data-file-index="'+index+'" data-share-id="'+item.id+'">Download</button> <button class="secondary" type="button" data-share="share-file" data-file-index="'+index+'" data-share-id="'+item.id+'">Prepare to send</button></div>').join('')+'</div>':'')+'</div>'+
+          (item.files.length?'<button class="secondary" type="button" data-share="review-files" data-share-id="'+item.id+'">Review files</button><button class="secondary" type="button" data-share="share-files" data-share-id="'+item.id+'">Prepare all to send</button>':'')+
           (item.candidate?'<button class="secondary" type="button" data-share="file-url" data-share-id="'+item.id+'">Create .url</button><button class="secondary" type="button" data-share="download-url" data-share-id="'+item.id+'">Download .url</button><button class="secondary" type="button" data-share="review" data-share-id="'+item.id+'">Stage URL</button>':'')+
           (item.text||item.url||(!item.files.length&&item.title)?'<button class="secondary" type="button" data-share="file-text" data-share-id="'+item.id+'">Create .md</button><button class="secondary" type="button" data-share="download-text" data-share-id="'+item.id+'">Download .md</button>':'')+
           (item.text||item.url||item.title?'<button class="secondary" type="button" data-share="copy" data-share-id="'+item.id+'">Copy text</button>':'')+'<button class="secondary" type="button" data-share="discard" data-share-id="'+item.id+'">Discard</button></div>'
@@ -172,6 +175,26 @@ export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,onSa
     }
     dialog.addEventListener('click',async event=>{
       const button=event.target.closest('[data-share]');if(!button||busy)return;
+      // This branch must run before ANY await: Android Web Share needs the
+      // final navigator.share() call within this second trusted click.
+      if(button.dataset.share==='send-prepared'){
+        busy=true;
+        try{
+          const operation=handoff.send({env});
+          const ready=$('#share-handoff-ready');if(ready)ready.textContent='';
+          await operation;
+          toast('System share requested. Verify the receiving app saved the files; inbox staging remains.');
+        }catch(error){toast('Incoming share: '+error.message,true);}
+        finally{busy=false;}
+        return;
+      }
+      if(button.dataset.share==='cancel-prepared'){
+        handoff.clear();
+        const ready=$('#share-handoff-ready');if(ready)ready.textContent='';
+        return;
+      }
+      handoff.clear();
+      const ready=$('#share-handoff-ready');if(ready)ready.textContent='';
       busy=true;
       try{
         const items=await listIncomingShares(),item=items.find(x=>x.id===button.dataset.shareId);
@@ -190,8 +213,15 @@ export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,onSa
               throw Error('Invalid shared file selection');
             return [files[index]];
           })();
-          await shareIncomingFiles(selected,{env});
-          toast('Files handed to system share sheet. Check the destination; the temporary share remains pending.');
+          // IndexedDB read and SHA-256 verification are complete NOW. A second
+          // explicit click opens the OS sheet without an intervening await.
+          const summary=handoff.prepare({shareId:item.id,files:selected});
+          const host=$('#share-handoff-ready');
+          if(!host){handoff.clear();throw Error('Share review closed; prepare again');}
+          host.innerHTML='<p>Ready to send '+summary.count+' verified file(s), '+summary.totalBytes+' bytes. Files are temporary; the receiving app and destination are unverified. Prepared files expire after 2 minutes.</p>'+
+            '<div>'+summary.names.map(name=>'<small>'+escapeHTML(name)+'</small>').join(' · ')+'</div>'+
+            '<button class="primary" type="button" data-share="send-prepared">Send prepared file(s)…</button> '+
+            '<button class="secondary" type="button" data-share="cancel-prepared">Cancel</button>';
         }else if(button.dataset.share==='download-file'){
           const files=await getIncomingShareFiles(item.id);
           const index=Number(button.dataset.fileIndex);

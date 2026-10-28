@@ -1,3 +1,8 @@
+### V0.0.51 — Activation-safe incoming file handoff (28 Oct 2026)
+- The Android staged-file Web Share fallback must **not** await IndexedDB retrieval or SHA-256 hashing between the final trusted user click and navigator.share(). First **Prepare to send** retrieves and verifies bounded files, then a separately clicked **Send prepared file(s)** calls the OS share API synchronously. Do not claim real-device support from Node simulations.
+- Keep prepared File objects only in memory; clear on new action, cancel, rerender or handoff. Expire after two minutes; reject invalid/unsafe batches, missing preparation, unsupported sharing and repeated sends. Never fall back to URL/text-only sharing, clear the IndexedDB inbox, or treat a resolved Web Share promise as verified file persistence.
+- Preserve existing .url/.md review-first capture, real-file-only Resource model, permission/collision guards, PWA cache isolation and M0 physical-device gate. No screenshots, unrelated PWA edits or background filesystem writes.
+
 ### V0.0.50 — Explicit OS file-share handoff (28 Oct 2026)
 - A reviewed URL/text capture may be handed to the system as a **real File object** named .url/.md with exact Internet Shortcut/Markdown bytes. This is an outbound transfer request, not a verified source Folder write. Never silently downgrade to sharing a bare URL/text string if file sharing is unsupported.
 - Temporary Android incoming file attachments may be sent individually or as a bounded batch through the OS file share sheet **only after integrity verification**. Keep IndexedDB staging until a verified Folder write or explicit user Discard; share success cannot establish persistence or remove staging.

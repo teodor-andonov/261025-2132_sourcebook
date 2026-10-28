@@ -1,3 +1,9 @@
+## 2026-10-28 20:24 Europe/Madrid — V0.0.51 candidate: activation-safe staged file handoff
+- **Code:** Incoming Android file shares now use two deliberate gestures: first retrieve and integrity-check staged Blobs, then synchronously invoke navigator.share({files}) from a second click. The prepared batch is one-shot, memory-only and expires after two minutes. This fixes the previous asynchronous IndexedDB-before-share call path that could lose transient user activation.
+- **Safety:** No source/Catalog writes, no automatic inbox removal, no text-only Web Share substitution, no screenshots. Unsupported targets, cancellation and expired preparations remain explicit; external file persistence is unverified.
+- **Evidence:** New Node regression tests cover immediate invocation, expiry, cancellation, batch validation, checksum verification and UI integration. PR CI, main CI, Pages and branch cleanup are separately verified after Actions. Real Pixel 8, Windows, receiving apps, offline and Syncthing remain **Not tested**.
+- **Log:** [Activation-safe file handoff](../logs/development/261028-2024_activation-safe-share-handoff.md).
+
 ## 2026-10-28 19:27 Europe/Madrid — V0.0.50 candidate: explicit file-bearing system share fallback
 
 - **Implemented in source:** Review-first .url/.md captures can request a Web Share **File** handoff; pending Android file shares can be integrity-checked and sent as one or a bounded batch. This does not create or persist a Catalog Resource, and no pending share is cleared on OS handoff. File-bearing Web Share capability appears in Device checks as API-only evidence.
