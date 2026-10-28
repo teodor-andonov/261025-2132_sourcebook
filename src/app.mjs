@@ -2,6 +2,8 @@ import {getLocal,setLocal,removeLocal,readJson,writeJson,nested,authorized} from
 import {createDeviceReadinessUI} from './device-readiness.mjs';
 import {createLinkCaptureUI} from './link-capture.mjs';
 import {createShareInboxUI} from './share-inbox.mjs';
+import {createCatalogLinksUI} from './catalog-links-ui.mjs';
+import {planCatalogURLImport,validateCatalogURLRecord} from './catalog-urls.mjs';
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
 import {planBulkTags,assertSelectedUnchanged,commitBulkTags} from './bulk-tags.mjs';
@@ -11,7 +13,7 @@ import {planMissingResourceRestore,restoreMissingResourceRecords} from './catalo
 import {inspectCatalogConflictCopies,conflictCanonicalPath} from './catalog-conflicts.mjs';
 import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
-import {catalogTagResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
+import {catalogTagResults,catalogQueryResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
 import {groupViewItems,viewTableMetadata,TABLE_COLUMNS,DEFAULT_TABLE_COLUMNS,normalizeTableColumns} from './view-layout.mjs';
 import {describeFileSymbol,sidePreviewKind} from './file-symbols.mjs';
 import {scanRegisteredFolders,scanRegisteredSubfolder,verifyCatalogRootReconnect,assertLiveSourceEntry} from './source-scan.mjs';
@@ -26,7 +28,7 @@ import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagP
 const $=(query,root=document)=>root.querySelector(query);
 const state={
   sidePreviewSerial:0,sidePreviewUrl:null,
-  catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,activeViewId:null,views:[],viewSaving:false,sort:'name',groupBy:'none',tableColumns:[...DEFAULT_TABLE_COLUMNS],fileType:'all',fileStatus:'all',
+  catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,catalogLinksView:false,activeViewId:null,views:[],viewSaving:false,sort:'name',groupBy:'none',tableColumns:[...DEFAULT_TABLE_COLUMNS],fileType:'all',fileStatus:'all',
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,
   search:'', view:localStorage.getItem('sb-view')||'gallery',
   size:Number(localStorage.getItem('sb-size'))||164,
@@ -40,6 +42,7 @@ const overlapUI=createOverlapReviewUI({state,openDialog,escapeHTML,icon,toast,er
 const deviceReadiness=createDeviceReadinessUI({openDialog,escapeHTML,toast});
 const linkCapture=createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLocal});
 const shareInbox=createShareInboxUI({openDialog,escapeHTML,toast,linkCapture});
+const catalogLinksUI=createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal,readJson,authorized,refreshRecords,commitCatalogEdits,refreshPendingCatalog,refreshResults:refreshCatalogTagView,render,showLinks:showCatalogLinks});
 async function refreshPendingCatalog(){
   if(!state.catalogHandle||!state.catalog){state.pendingTransaction=null;state.catalogConflicts=null;return;}
   try{state.pendingTransaction=await inspectPendingCatalogTransaction(state.catalogHandle,state.catalog.id);}
@@ -76,7 +79,7 @@ async function recoverCatalogSave(){
     state.sources=await readJson(state.catalogHandle,'sources.json',[]);
     state.handles=new Map([...state.handles].filter(([id])=>state.sources.some(source=>source.id===id)));
     if(!state.sources.some(source=>source.id===state.sourceId))state.sourceId=state.sources[0]?.id||null;
-    state.parts=[];state.items=[];state.selected.clear();state.activeViewId=null;state.catalogTagView=null;state.tagFilter=null;
+    state.parts=[];state.items=[];state.selected.clear();state.activeViewId=null;state.catalogTagView=null;state.catalogLinksView=false;state.tagFilter=null;
     await refreshRecords();invalidateScan();
     recovered=true;
     toast('Interrupted catalog save completed. Source files unchanged.');
@@ -330,6 +333,7 @@ applyAccent(localStorage.getItem('sb-accent')||'#5276bd');
 function currentSource(){return state.sources.find(x=>x.id===state.sourceId);}
 function sourceHandle(){return state.handles.get(state.sourceId);}
 function itemKind(item){
+  if(item.kind==='url')return 'link';
   if(item.kind==='directory')return 'folder';
   if(/\.(jpe?g|png|webp|gif|avif|bmp|svg)$/i.test(item.name))return 'image';
   if(/\.pdf$/i.test(item.name))return 'pdf';
@@ -337,6 +341,7 @@ function itemKind(item){
   return 'file';
 }
 function fileSymbol(item){
+  if(item.kind==='url')return '<span class="sb-type-folder" aria-hidden="true">'+icon('link',23)+'</span>';
   const info=describeFileSymbol(item);
   if(info.folder)return '<span class="sb-type-folder" aria-hidden="true">'+icon('folder',23)+'</span>';
   return '<span class="sb-type-icon" style="--type-h:'+info.hue+'" title="'+escapeHTML(info.label)+'" aria-hidden="true"><span class="sb-type-glyph">'+icon(info.glyph,19)+'</span><span class="sb-type-ext">'+escapeHTML(info.label)+'</span></span>';
@@ -513,7 +518,7 @@ async function openDirectory(h){
   state.sources=await readJson(h,'sources.json',[]);
   const savedTags=await readJson(h,'tags.json',[]);
   if(!Array.isArray(savedTags))throw Error('Invalid tags.json catalog taxonomy');
-  state.taxonomy=savedTags;state.views=validateViews(await readJson(h,'views.json',[]));state.activeViewId=null;state.tagFilter=null;state.catalogTagView=null;
+  state.taxonomy=savedTags;state.views=validateViews(await readJson(h,'views.json',[]));state.activeViewId=null;state.tagFilter=null;state.catalogTagView=null;state.catalogLinksView=false;
   state.handles.clear();state.records.clear();
   for(const s of state.sources){
     try{const v=await getLocal('source:'+config.id+':'+s.id);if(v)state.handles.set(s.id,v);}
@@ -573,7 +578,7 @@ async function reconnect(){
 }
 async function navigate(id,parts,historyPosition=null){
   if(state.bulkSaving||state.viewSaving||state.resourceSaving||state.backupBusy)return toast('Finish catalog editing or backup recovery before navigating.',true);
-  state.catalogTagView=null;state.activeViewId=null;
+  state.catalogTagView=null;state.catalogLinksView=false;state.activeViewId=null;
   state.sourceId=id;state.parts=parts;state.search='';state.selected.clear();state.pageCount=150;
   state.tagDraftItem=null;state.tagFilter=null;state.selectionMode=false;
   const request=++state.request;
@@ -619,6 +624,7 @@ async function togglePin(id){
   }catch(error){await refreshPendingCatalog();toast('Pin failed: '+errorText(error),true);render();}
 }
 async function catalogResultHandle(item){
+  if(item?.kind==='url')throw Error('URL resources have no physical Folder handle');
   const root=state.handles.get(item.sourceId);
   if(!root||typeof root.queryPermission!=='function'||await root.queryPermission({mode:'read'})!=='granted')throw Error('This catalog source needs reconnecting before preview.');
   const dir=await nested(root,item.parts);
@@ -626,6 +632,7 @@ async function catalogResultHandle(item){
 }
 async function revealCatalogResult(item){
   if(!item?.catalogResult)return;
+  if(item.kind==='url')throw Error('URL resources have no physical Folder. Open the link instead.');
   if(!state.handles.has(item.sourceId))throw Error('Reconnect this source through its Catalog Folder first.');
   const sourceId=item.sourceId,parts=[...item.parts],name=item.name;
   await navigate(sourceId,parts);
@@ -637,18 +644,28 @@ function openCatalogTagView(path){
   if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving||state.backupBusy)return;
   if(state.catalogTagView===path){void navigate(state.sourceId,[...state.parts]);return;}
   try{
-    state.catalogTagView=path;state.activeViewId=null;state.tagFilter=null;state.search='';state.selected.clear();
+    state.catalogTagView=path;state.catalogLinksView=false;state.activeViewId=null;state.tagFilter=null;state.search='';state.selected.clear();
     state.lastSelected=null;state.tagDraftItem=null;state.tagDraft=[];state.selectionMode=false;state.pageCount=150;
     ++state.request;forgetImages();state.loading=false;
     state.items=catalogTagResults([...state.records.values()],state.sources,state.taxonomy,path).map(item=>({...item,catalogResult:true,handle:null}));
     render();
   }catch(error){toast(errorText(error),true);}
 }
+function showCatalogLinks(){
+  if(!state.catalog||state.resourceSaving||state.bulkSaving||state.viewSaving||state.backupBusy)return;
+  state.catalogLinksView=true;state.catalogTagView=null;state.activeViewId=null;state.tagFilter=null;
+  state.search='';state.fileType='all';state.fileStatus='all';state.selected.clear();
+  state.lastSelected=null;state.tagDraftItem=null;state.selectionMode=false;state.pageCount=150;
+  ++state.request;forgetImages();state.loading=false;
+  state.items=catalogQueryResults([...state.records.values()],state.sources,state.taxonomy,{fileType:'url'})
+    .map(item=>({...item,catalogResult:true,handle:null}));
+  render();
+}
 async function refreshCatalogTagView(){
   if(!viewsUI.inResults())return;
   try{
     await refreshRecords();
-    state.items=(state.activeViewId?[]:catalogTagResults([...state.records.values()],state.sources,state.taxonomy,state.catalogTagView).map(item=>({...item,catalogResult:true,handle:null})));if(state.activeViewId){viewsUI.open(state.activeViewId);return;}
+    state.items=(state.activeViewId?[]:(state.catalogLinksView?catalogQueryResults([...state.records.values()],state.sources,state.taxonomy,{fileType:'url'}):catalogTagResults([...state.records.values()],state.sources,state.taxonomy,state.catalogTagView)).map(item=>({...item,catalogResult:true,handle:null})));if(state.activeViewId){viewsUI.open(state.activeViewId);return;}
     state.selected.clear();render();
   }catch(error){toast(errorText(error),true);}
 }
@@ -757,14 +774,14 @@ function render(){
   const viewRows=sortViewsForSidebar(state.views).map(v=>'<div class="view-row"><button class="nav-item '+(state.activeViewId===v.id?'selected':'')+'" data-open-view="'+escapeHTML(v.id)+'" title="'+escapeHTML(v.name)+'">'+icon('bookmark',15)+'<span>'+escapeHTML(v.name)+'</span></button><button class="view-pin" data-pin-view="'+escapeHTML(v.id)+'" aria-label="'+(v.pinned?'Unpin':'Pin')+' View '+escapeHTML(v.name)+'" title="'+(v.pinned?'Unpin':'Pin')+' View" aria-pressed="'+v.pinned+'">'+icon('pin',12)+'</button><button class="view-delete" data-delete-view="'+escapeHTML(v.id)+'" aria-label="Delete View '+escapeHTML(v.name)+'" title="Delete View">'+icon('close',12)+'</button></div>').join('');
   const catalogSection=plain
     ?'<div class="section-head"><span>CATALOG</span></div><nav><button class="nav-item" data-action="open-catalog">'+icon('database',16)+'<span>Open catalog</span></button><button class="nav-item" data-action="create-catalog">'+icon('plus',16)+'<span>New catalog</span></button></nav>'
-    :'<div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="section-head"><span>VIEWS</span>'+button('Save View','plus','save-view')+'</div><nav>'+viewRows+'</nav>';
+    :'<div class="section-head"><span>LINKS</span>'+button('Add Catalog links','plus','catalog-links')+'</div><nav><button class="nav-item '+(state.catalogLinksView?'selected':'')+'" data-action="show-catalog-links">'+icon('link',15)+'<span>Links</span></button></nav><div class="section-head"><span>TAGS</span><span class="tag-count">'+state.taxonomy.length+'</span></div><nav id="tag-nav">'+(tagNavigationHTML()||'<div class="tag-empty">Add tags to a resource</div>')+'</nav><div class="section-head"><span>VIEWS</span>'+button('Save View','plus','save-view')+'</div><nav>'+viewRows+'</nav>';
   const header='<button class="catalog-chip" data-action="home">'+icon(plain?'folder':'database',16)+'<span>'+escapeHTML(plain?'Browse':state.catalog.name)+'</span>'+icon('chevron',13)+'</button>';
   const recoveryNotice=!plain&&state.pendingTransaction?'<div class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'Catalog recovery needs manual repair':'Interrupted catalog save · '+state.pendingTransaction.applied+'/'+state.pendingTransaction.total+' changes')+'</span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'':'<button class="secondary" data-action="recover-catalog" title="Resume catalog-only save">'+icon('refresh',14)+' Resume</button>')+'</div>':'';
   const conflictNotice=!plain&&(state.catalogConflicts?.count||state.catalogConflicts?.error)?'<div id="catalog-conflict-notice" class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.catalogConflicts.error?'Conflict scan needs attention':state.catalogConflicts.count+' Catalog sync conflict copy/copies')+'</span><button class="secondary" data-action="inspect-catalog-conflicts" title="Inspect sync conflict copies">Inspect</button></div>':'';
   const selectionActions=plain||viewsUI.inResults()?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
   const fileActions=plain||viewsUI.inResults()?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button><button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
   const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="edit-view-tags" title="Edit View tags">'+icon('tag',15)+' <span>Tags</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
-  const typeControl=plain?'':'<select id="file-type" class="sort-control type-control" aria-label="File type"><option value="all" '+(state.fileType==='all'?'selected':'')+'>All types</option><option value="image" '+(state.fileType==='image'?'selected':'')+'>Images</option><option value="pdf" '+(state.fileType==='pdf'?'selected':'')+'>PDFs</option><option value="video" '+(state.fileType==='video'?'selected':'')+'>Videos</option><option value="folder" '+(state.fileType==='folder'?'selected':'')+'>Folders</option><option value="other" '+(state.fileType==='other'?'selected':'')+'>Other</option></select>';
+  const typeControl=plain?'':'<select id="file-type" class="sort-control type-control" aria-label="File type"><option value="all" '+(state.fileType==='all'?'selected':'')+'>All types</option><option value="image" '+(state.fileType==='image'?'selected':'')+'>Images</option><option value="pdf" '+(state.fileType==='pdf'?'selected':'')+'>PDFs</option><option value="video" '+(state.fileType==='video'?'selected':'')+'>Videos</option><option value="folder" '+(state.fileType==='folder'?'selected':'')+'>Folders</option><option value="url" '+(state.fileType==='url'?'selected':'')+'>Links</option><option value="other" '+(state.fileType==='other'?'selected':'')+'>Other</option></select>';
   const statusControl=state.activeViewId?'<select id="file-status" class="sort-control" aria-label="Catalog status"><option value="all" '+(state.fileStatus==='all'?'selected':'')+'>All statuses</option><option value="cataloged" '+(state.fileStatus==='cataloged'?'selected':'')+'>Cataloged</option><option value="unobjectified" '+(state.fileStatus==='unobjectified'?'selected':'')+'>Not cataloged</option><option value="missing" '+(state.fileStatus==='missing'?'selected':'')+'>Missing (scan)</option><option value="changed" '+(state.fileStatus==='changed'?'selected':'')+'>Type changed (scan)</option></select>':'';
   const columnsButton=state.view==='table'?'<button class="text-button" data-action="table-columns" title="Choose table columns" aria-label="Choose table columns">'+icon('table',15)+' <span>Columns</span></button>':'';
   const selectedIndexRoot=state.sourceIndex?.roots.find(root=>root.sourceId===state.scanRootId);
@@ -790,7 +807,7 @@ function render(){
   renderItems();renderInspector();
 }
 function visibleItems(){
-  if(viewsUI.inResults())return sortCatalogResults(state.items.filter(item=>(state.fileType==='all'||catalogFileType(item)===state.fileType)&&matchesResourceSearch(item.name,recordTagPaths(item.record,state.taxonomy),state.search)),state.sort);
+  if(viewsUI.inResults())return sortCatalogResults(state.items.filter(item=>(state.fileType==='all'||catalogFileType(item)===state.fileType)&&matchesResourceSearch(item.kind==='url'?item.name+' '+item.url:item.name,recordTagPaths(item.record,state.taxonomy),state.search)),state.sort);
   const query=state.search.trim();
   const plainQuery=query&&!query.startsWith('#')?query.toLocaleLowerCase():null;
   // Resolve catalog records once per render, rather than scanning all records per item.
@@ -940,6 +957,9 @@ async function renderSidePreview(item){
   const serial=state.sidePreviewSerial;
   if(!item){host.innerHTML='<div class="side-preview-empty">'+icon('view',25)+'<span>Select a file to preview</span></div>';return;}
   if(item.missing){host.innerHTML='<div class="side-preview-empty">'+icon('alert',23)+'<span>File not found at last completed scan</span></div>';return;}
+  if(item.kind==='url'){
+    host.innerHTML='<div class="side-preview-symbol">'+fileSymbol(item)+'<span>'+escapeHTML(item.url)+'</span></div>';return;
+  }
   if(item.kind==='directory'){
     host.innerHTML='<div class="side-preview-symbol">'+fileSymbol(item)+'</div>';
     return;
@@ -976,6 +996,10 @@ function renderInspector(){
     const selected=state.selected.size===1?state.items.find(item=>state.selected.has(item.id)):null;
     if(!selected){host.innerHTML='<div class="inspector-placeholder">'+icon('info',32)+'<span>'+(state.selected.size?state.selected.size+' results selected':'Select a resource')+'</span></div>';return;}
     const tags=recordTagPaths(selected.record,state.taxonomy);
+    if(selected.kind==='url'){
+      host.innerHTML='<h4>'+escapeHTML(selected.name)+'</h4><div class="detail"><div class="label">URL</div><div class="micro-hint">'+escapeHTML(selected.url)+'</div></div><div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><div class="detail"><div class="label">NOTES</div><div class="micro-hint">'+escapeHTML(selected.record?.notes||'—')+'</div></div><a class="secondary full" target="_blank" rel="noopener noreferrer" href="'+escapeHTML(selected.url)+'">'+icon('link',15)+' Open link</a><button class="secondary full" data-action="edit-catalog-link">'+icon('tag',15)+' Edit metadata</button>';
+      return;
+    }
     host.innerHTML='<h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.overlapConflict?'<div class="micro-hint" role="status">Verified overlapping Folders report competing metadata or inconsistent source state. Both entries remain visible; review each registered Folder before editing. No records were merged.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+(selected.staleIndex?'<div class="micro-hint">Cached index snapshot · refresh this Folder to verify its contents.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div>'+(selected.overlapConflict?'<button class="secondary full" data-action="review-overlap-records">'+icon('search',15)+' Review overlapping records</button>':'')+'<button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
     return;
   }
@@ -1131,6 +1155,11 @@ function closePreview(){
 async function showPreview(item){
   if(!item){item=state.items.find(i=>state.selected.has(i.id));}
   if(!item)return;
+  if(item.kind==='url'){
+    try{validateCatalogURLRecord(item.record);window.open(item.record.url,'_blank','noopener,noreferrer');}
+    catch(error){toast('Invalid Catalog URL: '+errorText(error),true);}
+    return;
+  }
   if(item.catalogResult&&item.kind==='directory')return revealCatalogResult(item);
   if(item.kind==='directory')return navigate(state.sourceId,[...state.parts,item.name]);
   closePreview();
@@ -1357,8 +1386,11 @@ document.addEventListener('click',async event=>{
     case 'bulk-remove':void bulkTags('remove');break;
     case 'device-checks':deviceReadiness.open();break;
     case 'capture-links':linkCapture.open();break;
+    case 'catalog-links':void catalogLinksUI.open().catch(error=>toast('Catalog links: '+errorText(error),true));break;
+    case 'show-catalog-links':showCatalogLinks();break;
+    case 'edit-catalog-link':{const item=state.items.find(x=>state.selected.has(x.id));if(item?.kind==='url')catalogLinksUI.openEdit(item.record.id);break;}
     case 'incoming-shares':void shareInbox.open().catch(error=>toast('Incoming shares: '+errorText(error),true));break;
-    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button> <button type="button" class="secondary" data-action="inspect-catalog-conflicts">Inspect conflicts</button> <button type="button" class="secondary" data-action="review-overlap-records">Review overlaps</button></div>':'')+'<div class="backup-tools"><strong>Link capture</strong><p>Device-only URL staging, clipboard and manual paste. Not synced to Catalog.</p><button type="button" class="secondary" data-action="capture-links">Capture links</button> <button type="button" class="secondary" data-action="incoming-shares">Incoming shares</button></div><div class="backup-tools"><strong>Device acceptance</strong><p>Browser capabilities, disposable Folder permission tests and manual M0 record.</p><button type="button" class="secondary" data-action="device-checks">Device checks</button></div><div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
+    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button> <button type="button" class="secondary" data-action="inspect-catalog-conflicts">Inspect conflicts</button> <button type="button" class="secondary" data-action="review-overlap-records">Review overlaps</button> <button type="button" class="secondary" data-action="catalog-links">Catalog links</button></div>':'')+'<div class="backup-tools"><strong>Link capture</strong><p>Device-only URL staging, clipboard and manual paste. Not synced to Catalog.</p><button type="button" class="secondary" data-action="capture-links">Capture links</button> <button type="button" class="secondary" data-action="incoming-shares">Incoming shares</button></div><div class="backup-tools"><strong>Device acceptance</strong><p>Browser capabilities, disposable Folder permission tests and manual M0 record.</p><button type="button" class="secondary" data-action="device-checks">Device checks</button></div><div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
     case 'reset-accent':applyAccent('#5276bd');if($('#accent-color'))$('#accent-color').value='#5276bd';break;
     case 'save-resource':saveResource();break;
     case 'preview':showPreview();break;

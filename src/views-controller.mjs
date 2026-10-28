@@ -5,14 +5,14 @@ import {flattenedTagTree} from './tags.mjs';
 // Glue for explicit, catalog-only View writes. Caller owns the UI and navigation.
 export function createViewsController({state,readJson,authorized,render,toast,forgetImages,navigate,refreshRecords,commitCatalogEdits,refreshPendingCatalog}){
   const active=()=>state.views.find(v=>v.id===state.activeViewId)||null;
-  const inResults=()=>!!(state.activeViewId||state.catalogTagView);
-  const title=()=>active()?.name||(state.catalogTagView?'#'+state.catalogTagView.replaceAll(' / ','/'):null);
+  const inResults=()=>!!(state.activeViewId||state.catalogTagView||state.catalogLinksView);
+  const title=()=>active()?.name||(state.catalogLinksView?'Links':state.catalogTagView?'#'+state.catalogTagView.replaceAll(' / ','/'):null);
   const results=view=>catalogQueryWithScan([...state.records.values()],state.sources,state.taxonomy,{...view,query:''},state.scan).map(x=>({...x,catalogResult:true,handle:null}));
   function open(id){
     if(!state.catalog||state.bulkSaving||state.viewSaving||state.resourceSaving)return;
     const raw=state.views.find(v=>v.id===id);if(!raw)return toast('View not found',true);
     const view=normalizeView(raw);
-    state.activeViewId=id;state.catalogTagView=null;state.tagFilter=null;state.search=view.query;
+    state.activeViewId=id;state.catalogTagView=null;state.catalogLinksView=false;state.tagFilter=null;state.search=view.query;
     state.view=view.presentation.mode;state.size=view.presentation.size;state.sort=view.presentation.sort;state.groupBy=view.presentation.groupBy??'none';state.tableColumns=[...view.presentation.columns];state.fileType=view.fileType;state.fileStatus=view.fileStatus;
     state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;state.selectionMode=false;state.pageCount=150;
     ++state.request;forgetImages();state.loading=false;state.items=results(view);render();
