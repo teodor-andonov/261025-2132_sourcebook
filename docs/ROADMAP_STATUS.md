@@ -33,6 +33,8 @@ Track each workstream independently through three stages:
 - **V0.0.27–0.0.29:** indexed refresh, subtree refresh and verified overlapping Catalog Folders — [PR #7](https://github.com/teodor-andonov/261025-2132_sourcebook/pull/7) verified **188/188** Node tests in its PR CI.
 - **V0.0.30:** read-only overlapping Catalog record review — [PR #8](https://github.com/teodor-andonov/261025-2132_sourcebook/pull/8) verified **196/196** Node tests and JavaScript syntax checks. These are automated simulations, not device acceptance.
 
+**V0.0.34 candidate:** Android/Web Share Target POST inbox is implemented in code with explicit review and separate Save to device-local captured links. **Device verified: No. Released & accepted: No.** M0-08 remains Not tested on Pixel 8. Text-only shares remain manual-copy staging; no portable Catalog URL resources. See [development log](../logs/development/261028-0425_android-share-inbox.md).
+
 **V0.0.33 candidate:** Device-local link staging is implemented in code; it is not physical-device verified or accepted. Do not count clipboard API presence as a successful Android capture test. See [development log](../logs/development/261028-0332_device-link-capture.md).
 
 ## Immediate priority — close the M0 device feasibility gate
