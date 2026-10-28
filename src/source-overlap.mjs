@@ -110,6 +110,7 @@ function overlapParents(overlaps){
   return parents;
 }
 function physicalKeyWithParents(item,parents){
+  if(item?.kind==='url')return {key:'catalog-url:'+String(item?.record?.id||item?.id),depth:0};
   const original=String(item?.sourceId||'')+'\u0000'+String(item?.path||'');
   if(!validId(item?.sourceId)||!validPath(item?.path))return {key:original,depth:0};
   let id=item.sourceId,path=item.path,steps=0;

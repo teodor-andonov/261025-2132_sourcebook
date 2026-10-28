@@ -17,7 +17,7 @@ export function normalizeView(value){
   const tagMode=value.tagMode??'all';
   if(!['all','any'].includes(tagMode))throw Error('Invalid View tag logic');
   const fileType=value.fileType??'all';
-  if(!['all','image','pdf','video','folder','other'].includes(fileType))throw Error('Invalid View file type');
+  if(!['all','image','pdf','video','folder','other','url'].includes(fileType))throw Error('Invalid View file type');
   const pinned=value.pinned===true;
   if(value.pinned!==undefined&&typeof value.pinned!=='boolean')throw Error('Invalid View pin');
   const fileStatus=value.fileStatus??'all';
