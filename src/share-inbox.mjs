@@ -1,10 +1,12 @@
 // Device-local, explicitly reviewed Android/Web Share Target inbox.
 // No ordinary source-file or portable Catalog writes are performed here.
 import {normalizeCaptureURL} from './link-capture.mjs';
+import {prepareSharedFiles,validateSharedFileDescriptors,restoreSharedFiles,requestSharedFileDownload} from './shared-files.mjs';
 
 export const SHARE_INBOX_LIMIT=12;
 export const SHARE_INBOX_DB='sourcebook-share-inbox-v1';
 const STORE='items';
+const ATTACHMENTS='attachments';
 const MAX_TEXT=8192;
 const MAX_TITLE=120;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -15,12 +17,13 @@ function boundedText(value,max,label){
     throw Error('Invalid shared '+label);
   return value.trim();
 }
-export function prepareIncomingShare(fields,{idFactory=()=>globalThis.crypto.randomUUID(),now=()=>new Date().toISOString()}={}){
+export function prepareIncomingShare(fields,{idFactory=()=>globalThis.crypto.randomUUID(),now=()=>new Date().toISOString(),fileDescriptors=[]}={}){
   if(!fields||typeof fields!=='object')throw Error('Invalid shared content');
   const title=boundedText(fields.title,MAX_TITLE,'title');
   const text=boundedText(fields.text,MAX_TEXT,'text');
   const url=boundedText(fields.url,2048,'URL');
-  if(!title&&!text&&!url)throw Error('Nothing was shared');
+  const files=validateSharedFileDescriptors(fileDescriptors);
+  if(!title&&!text&&!url&&!files.length)throw Error('Nothing was shared');
   const matches=[];
   if(url)matches.push(url);
   else if(text)matches.push(...(text.match(/https?:\/\/[^\s<>"']+/giu)||[]).map(s=>s.replace(/[),.;!?]+$/u,'')));
@@ -30,25 +33,29 @@ export function prepareIncomingShare(fields,{idFactory=()=>globalThis.crypto.ran
     catch{ /* Unsupported or malformed URLs remain visible as text, never saved as links. */ }
   }
   const candidate=canonical.length===1?canonical[0]:null;
-  const kind=canonical.length>1?'ambiguous':candidate?'url':'text';
+  const kind=files.length?'files':canonical.length>1?'ambiguous':candidate?'url':'text';
   const id=idFactory(),receivedAt=now();
   if(typeof id!=='string'||!UUID.test(id)||typeof receivedAt!=='string'||!Number.isFinite(Date.parse(receivedAt)))
     throw Error('Could not create a valid incoming share record');
-  return {id,receivedAt,title,text,url,candidate,kind};
+  return {id,receivedAt,title,text,url,candidate,kind,files};
 }
 export function normalizeIncomingRecord(raw){
   if(!raw||typeof raw!=='object'||typeof raw.id!=='string'||!UUID.test(raw.id)||
     typeof raw.receivedAt!=='string'||!Number.isFinite(Date.parse(raw.receivedAt)))
     throw Error('Incoming share data is damaged');
-  const clean=prepareIncomingShare(raw,{idFactory:()=>raw.id,now:()=>raw.receivedAt});
-  if(clean.candidate!==raw.candidate||clean.kind!==raw.kind)
+  const clean=prepareIncomingShare(raw,{idFactory:()=>raw.id,now:()=>raw.receivedAt,fileDescriptors:raw.files||[]});
+  if(clean.candidate!==raw.candidate||clean.kind!==raw.kind||
+    (raw.files!==undefined&&JSON.stringify(clean.files)!==JSON.stringify(raw.files)))
     throw Error('Incoming share data is inconsistent');
   return clean;
 }
 function openDB(){
   return new Promise((resolve,reject)=>{
-    const req=indexedDB.open(SHARE_INBOX_DB,1);
-    req.onupgradeneeded=()=>req.result.createObjectStore(STORE,{keyPath:'id'});
+    const req=indexedDB.open(SHARE_INBOX_DB,2);
+    req.onupgradeneeded=()=>{
+      if(!req.result.objectStoreNames.contains(STORE))req.result.createObjectStore(STORE,{keyPath:'id'});
+      if(!req.result.objectStoreNames.contains(ATTACHMENTS))req.result.createObjectStore(ATTACHMENTS,{keyPath:'id'});
+    };
     req.onsuccess=()=>resolve(req.result);
     req.onerror=()=>reject(req.error||Error('Share inbox unavailable'));
   });
@@ -70,14 +77,19 @@ export async function listIncomingShares(){
     tx.onabort=()=>{db.close();reject(tx.error||Error('Share inbox read aborted'));};
   });
 }
-export async function enqueueIncomingShare(item){
-  const record=normalizeIncomingRecord(item),db=await openDB();
+export async function enqueueIncomingShare(item,{files=[]}={}){
+  const record=normalizeIncomingRecord(item);
+  const prepared=prepareSharedFiles(files);
+  if(JSON.stringify(prepared.descriptors)!==JSON.stringify(record.files))
+    throw Error('Shared file payload does not match its inbox metadata');
+  const db=await openDB();
   return new Promise((resolve,reject)=>{
     let failure=null;
-    const tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE),count=store.count();
+    const tx=db.transaction([STORE,ATTACHMENTS],'readwrite'),store=tx.objectStore(STORE),count=store.count();
     count.onsuccess=()=>{
       if(count.result>=SHARE_INBOX_LIMIT){failure=Error('Incoming share inbox is full; review or discard earlier shares');tx.abort();return;}
       store.add(record);
+      if(prepared.files.length)tx.objectStore(ATTACHMENTS).add({id:record.id,files:prepared.files});
     };
     count.onerror=()=>{failure=count.error;tx.abort();};
     tx.oncomplete=()=>{db.close();resolve(record.id);};
@@ -85,15 +97,37 @@ export async function enqueueIncomingShare(item){
     tx.onerror=()=>{failure=tx.error;};
   });
 }
+export async function getIncomingShareFiles(id){
+  if(typeof id!=='string'||!UUID.test(id))throw Error('Invalid incoming share ID');
+  const db=await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction([STORE,ATTACHMENTS],'readonly');
+    const recordReq=tx.objectStore(STORE).get(id);
+    const attachmentReq=tx.objectStore(ATTACHMENTS).get(id);
+    let result;
+    tx.oncomplete=()=>{
+      db.close();
+      try{
+        if(!recordReq.result)throw Error('Incoming share no longer exists');
+        const record=normalizeIncomingRecord(recordReq.result);
+        if(!record.files.length)throw Error('Incoming share contains no files');
+        result=restoreSharedFiles(attachmentReq.result?.files,record.files);
+        resolve(result);
+      }catch(error){reject(error);}
+    };
+    tx.onabort=()=>{db.close();reject(tx.error||Error('Shared files could not be read'));};
+    tx.onerror=()=>{ /* transaction abort handles the error */ };
+  });
+}
 export async function removeIncomingShare(id){
   if(typeof id!=='string'||!UUID.test(id))throw Error('Invalid incoming share ID');
   const db=await openDB();
   return new Promise((resolve,reject)=>{
     let failure=null;
-    const tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE),get=store.get(id);
+    const tx=db.transaction([STORE,ATTACHMENTS],'readwrite'),store=tx.objectStore(STORE),get=store.get(id);
     get.onsuccess=()=>{
       if(!get.result){failure=Error('Incoming share no longer exists');tx.abort();}
-      else store.delete(id);
+      else{store.delete(id);tx.objectStore(ATTACHMENTS).delete(id);}
     };
     get.onerror=()=>{failure=get.error;tx.abort();};
     tx.oncomplete=()=>{db.close();resolve();};
@@ -101,20 +135,23 @@ export async function removeIncomingShare(id){
     tx.onerror=()=>{failure=tx.error;};
   });
 }
-export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,onSaveFile,onDownloadFile,env=globalThis}){
+export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,onSaveFile,onDownloadFile,onImportFiles,env=globalThis}){
   let busy=false;
   const $=selector=>env.document.querySelector(selector);
   async function open(){
-    openDialog('<h2>Incoming shares</h2><p>Shared URLs and text are temporary. Create a real .url or .md in a chosen Folder; browser Download is a fallback with no verified destination. Only verified Folder saves clear a share automatically. No Catalog-only Resource is created.</p><div id="share-inbox-list" aria-live="polite">Loading…</div><div class="dialog-actions"><button class="primary" type="button" data-action="dismiss">Done</button></div>');
+    openDialog('<h2>Incoming shares</h2><p>Shared URLs, text and files are temporary on this device. Review and copy them into a real Folder; browser Download is an unverified fallback. Only verified Folder saves clear a share automatically. No Catalog-only Resource is created.</p><div id="share-inbox-list" aria-live="polite">Loading…</div><div class="dialog-actions"><button class="primary" type="button" data-action="dismiss">Done</button></div>');
     const dialog=$('#dialog');
     async function render(){
       const host=$('#share-inbox-list');if(!host)return;
       try{
         const items=await listIncomingShares();if(!$('#share-inbox-list'))return;
         host.innerHTML=items.length?items.map(item=>
-          '<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(item.title||item.candidate||'Shared text')+'</strong><small>'+escapeHTML(item.candidate||(item.kind==='ambiguous'?'Multiple URLs · copy or review manually':'Text only · copy or review manually'))+'</small><textarea readonly rows="2" aria-label="Original shared content">'+escapeHTML(item.text||item.url)+'</textarea></div>'+
+          '<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(item.title||item.candidate||(item.files.length?'Shared files':'Shared text'))+'</strong><small>'+escapeHTML(item.files.length?item.files.length+' files · temporary device inbox':item.candidate||(item.kind==='ambiguous'?'Multiple URLs · copy or review manually':'Text only · copy or review manually'))+'</small>'+
+          (item.text||item.url?'<textarea readonly rows="2" aria-label="Original shared content">'+escapeHTML(item.text||item.url)+'</textarea>':'')+
+          (item.files.length?'<div>'+item.files.map((file,index)=>'<div>'+escapeHTML(file.name)+' <small>'+file.size+' bytes</small> <button class="secondary" type="button" data-share="download-file" data-file-index="'+index+'" data-share-id="'+item.id+'">Download</button></div>').join('')+'</div>':'')+'</div>'+
+          (item.files.length?'<button class="secondary" type="button" data-share="review-files" data-share-id="'+item.id+'">Review files</button>':'')+
           (item.candidate?'<button class="secondary" type="button" data-share="file-url" data-share-id="'+item.id+'">Create .url</button><button class="secondary" type="button" data-share="download-url" data-share-id="'+item.id+'">Download .url</button><button class="secondary" type="button" data-share="review" data-share-id="'+item.id+'">Stage URL</button>':'')+
-          '<button class="secondary" type="button" data-share="file-text" data-share-id="'+item.id+'">Create .md</button><button class="secondary" type="button" data-share="download-text" data-share-id="'+item.id+'">Download .md</button>'+
+          (item.text||item.url||(!item.files.length&&item.title)?'<button class="secondary" type="button" data-share="file-text" data-share-id="'+item.id+'">Create .md</button><button class="secondary" type="button" data-share="download-text" data-share-id="'+item.id+'">Download .md</button>':'')+
           '<button class="secondary" type="button" data-share="copy" data-share-id="'+item.id+'">Copy</button><button class="secondary" type="button" data-share="discard" data-share-id="'+item.id+'">Discard</button></div>'
         ).join(''):'<p>No pending shares.</p>';
       }catch(error){host.textContent='Cannot read incoming shares: '+error.message+'. Nothing was removed.';}
@@ -125,7 +162,17 @@ export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,onSa
       try{
         const items=await listIncomingShares(),item=items.find(x=>x.id===button.dataset.shareId);
         if(!item)throw Error('Share changed; reopen the inbox');
-        if(['file-url','download-url','file-text','download-text'].includes(button.dataset.share)){
+        if(button.dataset.share==='review-files'){
+          if(typeof onImportFiles!=='function')throw Error('Reviewed file import is unavailable');
+          const files=await getIncomingShareFiles(item.id);
+          await onImportFiles(files,item.id);
+        }else if(button.dataset.share==='download-file'){
+          const files=await getIncomingShareFiles(item.id);
+          const index=Number(button.dataset.fileIndex);
+          if(!Number.isSafeInteger(index)||index<0||index>=files.length)throw Error('Invalid shared file selection');
+          requestSharedFileDownload(files[index],{env});
+          toast('Browser download requested. Inspect Downloads before discarding the temporary share.');
+        }else if(['file-url','download-url','file-text','download-text'].includes(button.dataset.share)){
           const action=button.dataset.share,isURL=action.endsWith('url'),download=action.startsWith('download');
           if(isURL&&!item.candidate)throw Error('This share does not have a single verified URL');
           const handler=download?onDownloadFile:onSaveFile;
