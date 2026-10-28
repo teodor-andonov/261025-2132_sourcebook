@@ -3,7 +3,7 @@ import {createDeviceReadinessUI} from './device-readiness.mjs';
 import {createLinkCaptureUI} from './link-capture.mjs';
 import {createShareInboxUI} from './share-inbox.mjs';
 import {createCatalogLinksUI} from './catalog-links-ui.mjs';
-import {classifyPastedText,planFileCapture,writeCapturedFile,parseInternetShortcut} from './file-capture.mjs';
+import {classifyPastedText,planFileCapture,writeCapturedFile,parseInternetShortcut,requestCapturedFileDownload} from './file-capture.mjs';
 import {planCatalogURLImport,validateCatalogURLRecord} from './catalog-urls.mjs';
 import {CODE_PATTERN,validName,parseFilename} from './identity.mjs';
 import {planResourceIdentity} from './catalog.mjs';
@@ -42,8 +42,10 @@ const state={
 const viewsUI=createViewsController({state,readJson,authorized,render,toast,forgetImages,navigate,refreshRecords,commitCatalogEdits,refreshPendingCatalog});
 const overlapUI=createOverlapReviewUI({state,openDialog,escapeHTML,icon,toast,errorText,revealCatalogResult});
 const deviceReadiness=createDeviceReadinessUI({openDialog,escapeHTML,toast});
-const linkCapture=createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLocal});
-const shareInbox=createShareInboxUI({openDialog,escapeHTML,toast,linkCapture});
+const linkCapture=createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLocal,
+  onSaveFile:input=>writeCapture(input,{choose:true}),onDownloadFile:downloadCapture});
+const shareInbox=createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,
+  onSaveFile:input=>writeCapture(input,{choose:true}),onDownloadFile:downloadCapture});
 const catalogLinksUI=createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal,readJson,authorized,refreshRecords,commitCatalogEdits,refreshPendingCatalog,refreshResults:async()=>{if(viewsUI.inResults())await refreshCatalogTagView();else render();},render,showLinks:showCatalogLinks});
 async function refreshPendingCatalog(){
   if(!state.catalogHandle||!state.catalog){state.pendingTransaction=null;state.catalogConflicts=null;return;}
@@ -391,6 +393,12 @@ async function writeCapture(input,{choose=false,allowPicker=true}={}){
     return result;
   }finally{state.captureWriting=false;}
 }
+function downloadCapture(input){
+  const plan=planFileCapture(input,{now:new Date(),random:crypto.randomUUID().replaceAll('-','').slice(0,10)});
+  const result=requestCapturedFileDownload(plan);
+  toast('Browser download requested: '+result.name+'. Check Downloads; Sourcebook cannot verify the destination.');
+  return result;
+}
 function openFileCapture(){
   const current=!viewsUI.inResults()&&state.sourceId;
   openDialog('<h2>Save a resource as a file</h2><p>Web links become .url shortcut files. Pasted text becomes .md Markdown files. Nothing is saved only in the Catalog.</p>'+
@@ -400,12 +408,14 @@ function openFileCapture(){
     '<label>Destination<select name="destination">'+(current?'<option value="current">Current Folder</option>':'')+
     '<option value="choose">Choose another Folder…</option></select></label>'+
     '<div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button>'+
-    '<button class="primary" type="submit">Create file</button></div></form>');
+    '<button class="secondary" type="submit" data-delivery="download">Download instead</button><button class="primary" type="submit" data-delivery="folder">Create in Folder</button></div></form>');
 }
-async function saveFileCaptureForm(form){
+async function saveFileCaptureForm(form,delivery='folder'){
   try{
     const input=classifyPastedText(form.elements.content.value);
-    const result=await writeCapture({...input,title:form.elements.title.value},{choose:form.elements.destination.value==='choose'});
+    const data={...input,title:form.elements.title.value};
+    const result=delivery==='download'?downloadCapture(data):
+      await writeCapture(data,{choose:form.elements.destination.value==='choose'});
     if(result)$('#dialog')?.remove();
   }catch(error){if(error?.name!=='AbortError')toast('File capture: '+errorText(error),true);}
 }
@@ -1314,7 +1324,7 @@ document.addEventListener('keydown',event=>{
   localStorage.setItem(config.key,String(val));
 },true);
 document.addEventListener('submit',event=>{
-  if(event.target.id==='capture-file-form'){event.preventDefault();void saveFileCaptureForm(event.target);}
+  if(event.target.id==='capture-file-form'){event.preventDefault();void saveFileCaptureForm(event.target,event.submitter?.dataset.delivery||'folder');}
   if(event.target.id==='catalog-form'){event.preventDefault();submitCatalog(event.target);}
   if(event.target.id==='table-columns-form'){
     event.preventDefault();

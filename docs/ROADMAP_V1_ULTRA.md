@@ -1,3 +1,5 @@
+> **V0.0.40 candidate — real-file inbox integration (28 Oct 2026, 09:29 Madrid):** Staged links can explicitly create ordinary `.url` files in a selected writable Folder, and Android incoming shares can explicitly create `.url` or `.md` files. A browser-managed Download is a separate fallback when directory picking is unsupported; it is **not** a verified write or a Catalog resource. Staging remains until explicit removal; a verified share-to-Folder save can clear its pending inbox item. Saved Views now classify physical `.url` files as Links. The disposable M0 fixture now writes and verifies a physical `.url` in `source-files/` with a file-bound metadata record; old version-1 legacy fixtures are preserved but are not accepted by the new verifier. No physical device tests or automatic migration have occurred. See [development log](../logs/development/261028-0929_file-backed-capture-inbox.md).
+
 # SOURCEBOOK — ULTRA MEGA ROADMAP TO V1
 
 > **A local-first, installable, absurdly smooth, beautifully minimal visual file explorer and reference manager.**  

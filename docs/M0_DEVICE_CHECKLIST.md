@@ -1,3 +1,5 @@
+> **Updated capture/device gate (V0.0.40 candidate, 28 Oct 2026):** Test physical `.url` and `.md` creation in a disposable writable Folder on both Windows Chrome and Pixel 8. For Android share flows test single-URL `.url`, text/ambiguous `.md`, permission denial, cancellation, and explicit browser Download fallback. Download requests are not verified Folder writes. Use the v2 file-backed `.sb` fixture, but separately verify real external Folder grants and Syncthing transport. None of these tests has been run on physical devices by this development cycle.
+
 # M0 device acceptance checklist
 
 **Status: NOT YET TESTED.** Unit tests do not substitute for real device verification.
@@ -8,10 +10,10 @@ This is the minimum test matrix before calling Sourcebook a Windows + Android PW
 
 1. Repository → **Settings → Pages**.
 2. Under **Build and deployment**, set Source to **GitHub Actions**.
-3. Re-run the latest **Verify and deploy Sourcebook** workflow (or push a commit).
+3. Publish through the existing **Publish Sourcebook** GitHub Actions workflow after a CI-passing squash merge to main (or manually dispatch it on main).
 4. Confirm both **verify** and **deploy** jobs pass, then use the HTTPS Pages URL shown by the deployment job.
 
-The previous deploy job failed in actions/configure-pages@v5. Do not claim the hosted app is live before a successful deployment.
+Use the specific successful Pages run as deployment evidence; publishing does not establish device acceptance.
 
 ## 2. Test on both devices
 

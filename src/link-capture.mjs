@@ -77,7 +77,7 @@ export async function updateCapturedLinks(getLocal,setLocal,planner){
     throw Error('Saved links changed during verification; reopen Capture');
   return next;
 }
-export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLocal,env=globalThis}){
+export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLocal,onSaveFile,onDownloadFile,env=globalThis}){
   let busy=false;
   const $=selector=>env.document.querySelector(selector);
   const render=async()=>{
@@ -88,7 +88,7 @@ export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLoc
       if(!$('#captured-links-list'))return;
       host.innerHTML=store.links.length?
         '<div class="capture-count">'+store.links.length+' staged on this device</div>'+
-        store.links.map(item=>'<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(item.title||new URL(item.url).hostname)+'</strong><small title="'+escapeHTML(item.url)+'">'+escapeHTML(item.url)+'</small></div><a class="secondary" href="'+escapeHTML(item.url)+'" target="_blank" rel="noopener noreferrer" title="Open in new tab">Open</a><button class="secondary" type="button" data-capture="rename" data-link-id="'+escapeHTML(item.id)+'" title="Edit title">Title</button><button class="secondary" type="button" data-capture="copy" data-link-id="'+escapeHTML(item.id)+'" title="Copy URL">Copy</button><button class="secondary" type="button" data-capture="remove" data-link-id="'+escapeHTML(item.id)+'" title="Remove from this device">Remove</button></div>').join(''):
+        store.links.map(item=>'<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(item.title||new URL(item.url).hostname)+'</strong><small title="'+escapeHTML(item.url)+'">'+escapeHTML(item.url)+'</small></div><button class="secondary" type="button" data-capture="file" data-link-id="'+escapeHTML(item.id)+'" title="Create a real .url file in a chosen Folder">Create .url</button><button class="secondary" type="button" data-capture="download" data-link-id="'+escapeHTML(item.id)+'" title="Request a browser download when Folder writing is unavailable">Download</button><a class="secondary" href="'+escapeHTML(item.url)+'" target="_blank" rel="noopener noreferrer" title="Open in new tab">Open</a><button class="secondary" type="button" data-capture="rename" data-link-id="'+escapeHTML(item.id)+'" title="Edit title">Title</button><button class="secondary" type="button" data-capture="copy" data-link-id="'+escapeHTML(item.id)+'" title="Copy URL">Copy</button><button class="secondary" type="button" data-capture="remove" data-link-id="'+escapeHTML(item.id)+'" title="Remove from this device">Remove</button></div>').join(''):
         '<p>No links captured on this device yet.</p>';
     }catch(error){host.textContent='Cannot read saved links: '+error.message+'. Nothing was changed.';}
   };
@@ -101,7 +101,7 @@ export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLoc
     finally{busy=false;}
   };
   const open=({prefill='',onSaved=null,notice=''}={})=>{
-    openDialog('<h2>Capture links</h2><p>Paste HTTP(S) URLs, one per line, or read the clipboard. Links are only staged in this browser, not durable Resources or files. Use Save URL/text as file for durable .url captures. No page content is fetched.</p>'+(notice?'<p>'+escapeHTML(notice)+'</p>':'')+
+    openDialog('<h2>Capture links</h2><p>Paste HTTP(S) URLs, one per line, or read the clipboard. Links are temporary device-only staging. Create .url writes a real file to a chosen Folder; Download requests a browser-managed file when Folder writing is unavailable. Staged entries remain until you remove them. No page content is fetched.</p>'+(notice?'<p>'+escapeHTML(notice)+'</p>':'')+
       '<form id="capture-link-form"><label>URLs<textarea id="capture-link-input" rows="3" maxlength="45000" placeholder="https://example.org/reference"></textarea></label><div class="dialog-actions"><button type="button" class="secondary" data-capture="clipboard">Read clipboard</button><button type="submit" class="primary">Save links</button></div></form>'+
       '<div id="captured-links-list" class="capture-list" aria-live="polite">Loading…</div>'+
       '<div class="dialog-actions"><button type="button" class="secondary" data-capture="export">Export JSON</button><button type="button" class="secondary" data-action="dismiss">Done</button></div>');
@@ -145,7 +145,13 @@ export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLoc
         }
         const item=await findLink(id);
         if(!item)return toast('Link changed. Reopen Capture.',true);
-        if(action==='rename'){
+        if(action==='file'||action==='download'){
+          const handler=action==='file'?onSaveFile:onDownloadFile;
+          if(typeof handler!=='function')throw Error('File capture is unavailable');
+          busy=true;
+          try{await handler({kind:'url',value:item.url,title:item.title});}
+          finally{busy=false;}
+        }else if(action==='rename'){
           const title=env.prompt('Link title (optional, up to 120 characters)',item.title);
           if(title!==null)await mutate(store=>planRenameCapturedLink(store,id,title));
         }else if(action==='copy'){

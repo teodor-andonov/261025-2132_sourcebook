@@ -10,7 +10,7 @@ class Directory {
   async getFileHandle(name,{create=false}={}){
     if(!this.files.has(name)){if(!create)throw missing();this.files.set(name,{value:''});}
     const file=this.files.get(name);
-    return {kind:'file',name,getFile:async()=>({text:async()=>file.value}),
+    return {kind:'file',name,getFile:async()=>({size:file.value.length,text:async()=>file.value}),
       createWritable:async()=>{let buffer;return {write:async value=>{buffer=value;},
         close:async()=>{if(this.failName===name)throw Error('interrupted');file.value=buffer;this.writes.push(name);},
         abort:async()=>{}};}};
@@ -47,7 +47,7 @@ test('cancellation and synthetic fixture name collision fail closed',async()=>{
   // Parent is no longer empty, so no new fixture is created.
   assert.equal((await create(dir)).status,'not-empty');
 });
-test('creates a journaled portable Catalog, nested stable Tags, URL and saved View',async()=>{
+test('creates a journaled Catalog whose URL is a real .url file with nested stable Tags and View',async()=>{
   const parent=new Directory(),result=await create(parent);
   assert.equal(result.status,'ok');
   assert.equal(result.transactionVerified,true);
@@ -60,7 +60,10 @@ test('creates a journaled portable Catalog, nested stable Tags, URL and saved Vi
   assert.equal(JSON.parse(fixture.files.get('catalog.json').value).nextSequence,2);
   assert.equal(JSON.parse(fixture.files.get('tags.json').value).length,2);
   assert.equal(JSON.parse(fixture.files.get('views.json').value).length,1);
-  assert.equal(JSON.parse(fixture.directories.get('resources').files.get('mt1.json').value).id,'mt1');
+  const resource=JSON.parse(fixture.directories.get('resources').files.get('mt1.json').value);
+  assert.equal(resource.id,'mt1');assert.equal(resource.kind,'file');
+  assert.equal(resource.sourceId,'m0-source');
+  assert.match(fixture.directories.get('source-files').files.get(resource.path).value,/^\[InternetShortcut\]\r\nURL=https:\/\/example.org\/sourcebook-m0\//);
   assert.equal((await verifyM0PortableCatalogFixture(async opts=>{assert.equal(opts.mode,'read');return fixture;})).status,'ok');
 });
 test('verification is read-only, including independent synced copy of metadata',async()=>{
@@ -70,14 +73,20 @@ test('verification is read-only, including independent synced copy of metadata',
   const resources=new Directory('resources');
   for(const [name,file] of original.directories.get('resources').files)resources.files.set(name,{value:file.value});
   clone.directories.set('resources',resources);
+  const source=new Directory('source-files');
+  for(const [name,file] of original.directories.get('source-files').files)source.files.set(name,{value:file.value});
+  clone.directories.set('source-files',source);
   const result=await verifyM0PortableCatalogFixture(async()=>clone);
   assert.equal(result.status,'ok');
-  assert.equal(clone.writes.length,0);assert.equal(resources.writes.length,0);
+  assert.equal(clone.writes.length,0);assert.equal(resources.writes.length,0);assert.equal(source.writes.length,0);
 });
 test('tampered Tags, URLs, Views and pending journal prevent acceptance',async()=>{
-  for(const target of ['tags.json','views.json','url','.sourcebook-pending.json']){
+  for(const target of ['tags.json','views.json','url','record','.sourcebook-pending.json']){
     const parent=new Directory(),created=await create(parent),fixture=parent.directories.get(created.fixtureName);
-    if(target==='url')fixture.directories.get('resources').files.get('mt1.json').value='{"kind":"url","id":"mt1","url":"file:///secret"}';
+    if(target==='url'){
+      const record=JSON.parse(fixture.directories.get('resources').files.get('mt1.json').value);
+      fixture.directories.get('source-files').files.get(record.path).value='[InternetShortcut]\\r\\nURL=file:///secret\\r\\n';
+    }else if(target==='record')fixture.directories.get('resources').files.get('mt1.json').value='{"kind":"url","id":"mt1","url":"file:///secret"}';
     else if(target==='.sourcebook-pending.json')fixture.files.set(target,{value:'{}'});
     else fixture.files.get(target).value='[]';
     const result=await verifyM0PortableCatalogFixture(async()=>fixture);

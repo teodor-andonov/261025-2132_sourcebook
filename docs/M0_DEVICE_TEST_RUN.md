@@ -1,3 +1,5 @@
+> **V0.0.40 file-backed acceptance addendum (28 Oct 2026):** On each real device, stage a harmless public HTTPS URL, use **Create .url** to select a disposable writable Folder, and verify the resulting ordinary shortcut file and exact URL bytes. Test incoming Android share → **Create .url** and share text → **Create .md**. If the picker is unavailable, use explicit **Download** and inspect Downloads manually; this is not equivalent to a verified Folder write. Cancel/deny permission and confirm the pending share remains. Test the **v2** portable fixture: it includes a real `source-files/*.url` inside a throwaway `.sb` and a file-bound Catalog record. Previous v1 Catalog-only URL fixtures are legacy and must not be silently converted or deleted. **M0 remains Not tested until actual Windows Chrome and Pixel 8 evidence is recorded.**
+
 # M0 — Real-device acceptance record
 
 **Sourcebook milestone:** [M0 device gate](ROADMAP_STATUS.md#immediate-priority--close-the-m0-device-feasibility-gate) · **Status:** No physical acceptance run recorded.
@@ -30,7 +32,7 @@ Copy this file to a new timestamped test log for **each device**. Never mark tes
 - [ ] Register a source, add a nested Tag and Note, save/close/reopen, verify metadata and no accidental source file change (M0-03)
 - [ ] Test source permission denied/revoked and later regrant without losing catalog state (M0-04)
 - [ ] Test a Syncthing Catalog roundtrip to the other target device and regrant its source folder (M0-05)
-- [ ] Check saved Views, type/group and their results after reconnect (M0-05)\n- [ ] Import a harmless HTTPS URL into Sample.sb, add/remove a nested Tag on multiple Catalog URLs, close/reopen and confirm URL IDs, notes and Tags persist; then verify a real Syncthing Windows↔Pixel 8 roundtrip (M0-03, M0-05). Do not use private URLs in public evidence.
+- [ ] Check saved Views, type/group and their results after reconnect (M0-05)\n- [ ] Create a real harmless `.url` shortcut in a disposable physical Folder, optionally annotate that file with a nested Catalog Tag, close/reopen, and verify the file and Tag persist; test actual Windows↔Pixel 8 Syncthing roundtrip (M0-03, M0-05). Preserve legacy Catalog-only URLs until explicit migration.
 
 ## Offline, performance, capture
 
