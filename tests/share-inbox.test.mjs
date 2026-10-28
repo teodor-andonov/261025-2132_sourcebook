@@ -40,7 +40,7 @@ test('rejects empty, oversized, control-bearing, nontext and malformed share rec
 test('share target is a POST within this PWA scope and never a query-string data transfer',async()=>{
   const manifest=JSON.parse(await readFile(new URL('../manifest.webmanifest',import.meta.url),'utf8'));
   assert.equal(manifest.id,'/261025-2132_sourcebook/');
-  assert.deepEqual(manifest.share_target,{action:'./share-target',method:'POST',enctype:'multipart/form-data',params:{title:'title',text:'text',url:'url'}});
+  assert.deepEqual(manifest.share_target,{action:'./share-target',method:'POST',enctype:'multipart/form-data',params:{title:'title',text:'text',url:'url',files:[{name:'files',accept:['*/*']}]}});
   const sw=await readFile(new URL('../sw.js',import.meta.url),'utf8');
   assert.match(sw,/request\.method==='POST'/);
   assert.match(sw,/request\.formData\(\)/);
