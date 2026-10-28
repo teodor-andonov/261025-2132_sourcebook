@@ -138,9 +138,8 @@ export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,onSa
             await render();
           }else if(download)toast('Browser download requested. Verify the file in Downloads before discarding the share.');
         }else if(button.dataset.share==='review'&&item.candidate){
-          linkCapture.open({prefill:item.candidate,notice:'Shared URL · review and explicitly Save links. The pending share is removed only after a successful save.',onSaved:async()=>{
-            await removeIncomingShare(item.id);
-            toast('Shared URL saved on this device. Pending share cleared.');
+          linkCapture.open({prefill:item.candidate,notice:'Shared URL · stage for review only. The pending share remains until a verified file write or explicit Discard.',onSaved:async()=>{
+            toast('URL staged temporarily. Create a .url file before discarding the original share.');
           }});
         }else if(button.dataset.share==='copy'){
           if(typeof env.navigator?.clipboard?.writeText!=='function')throw Error('Clipboard write is unavailable; select the text in the inbox instead');
