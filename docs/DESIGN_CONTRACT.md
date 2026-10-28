@@ -115,3 +115,9 @@ Device checks remain an optional dialog available without a Catalog. A write pro
 - Only canonical HTTP(S) URLs without embedded credentials are accepted. Validate all pasted lines before saving, deduplicate by canonical URL, bound record count and reject malformed saved data. Do not fetch URL contents or treat arbitrary pasted HTML as trusted markup.
 - The tray is **not** a Collection, a View or a portable `.sb` URL record. It is explicitly device-only until a separately reviewed Catalog URL schema exists. Do not imply Android incoming share-target or cross-device sync support.
 - Export may disclose private URLs and requires explicit confirmation. IndexedDB persistence is subject to eviction and cross-tab races; verification is not atomic locking.
+
+## Incoming Android shares (V0.0.34 candidate)
+
+- The PWA's manifest Share Target is a **POST** endpoint handled only by Sourcebook's scoped service worker. The redirect contains no shared content. Reject file uploads and unsupported/oversized forms; preserve incoming text in a bounded, device-local review inbox.
+- Never auto-save a shared URL into Capture links or a portable Catalog. An explicit Review action pre-fills Capture; **Save links** is a second action. Clear a pending item only after a verified Save or explicit Discard. Ambiguous/malformed URLs must not be silently chosen or converted into file operations.
+- Keep the unique Sourcebook manifest ID and app-prefixed cache cleanup. Device-local inbox data can be evicted; installed Chrome and offline POST interception must be tested on real Pixel 8 hardware before acceptance.

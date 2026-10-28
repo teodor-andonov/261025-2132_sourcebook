@@ -1,3 +1,10 @@
+## 2026-10-28 04:25 Europe/Madrid — Incoming Android share inbox (V0.0.34 candidate)
+
+- **Implemented in code, device unverified:** Installed-PWA POST Share Target routes text/URL to a bounded device-local IndexedDB inbox. Explicit review may stage a normalized URL into existing Capture links; only the user pressing Save commits it. Ambiguous/text-only shares remain available for manual copy. No Catalog JSON or ordinary source file is written.
+- **Safety:** No shared data in redirect URL; file payloads and unsupported forms rejected; 12-item queue limit; malformed inbox records block editing; successful link save or explicit Discard removes a pending share. Service worker remains scoped to Sourcebook with cache cleanup limited to its own prefix.
+- **Acceptance:** Real Pixel 8 share-target delivery, offline/restart behavior and Windows Chrome remain **Not tested**. M0-08 stays open. CI and Pages release evidence must be added only after verified runs; do not count the feature as device accepted.
+- **Development log:** [Android incoming shares](../logs/development/261028-0425_android-share-inbox.md).
+
 # 2026-10-28 03:32 Europe/Madrid — Device-local URL capture staging (V0.0.33 candidate)
 
 - **Implemented in source:** Capture links is accessible from the launcher, toolbar and Settings even without a directory picker or open Catalog. Manual multiline HTTP(S) paste and user-triggered clipboard reading lead to an explicit Save action. The local tray supports normalized deduplication, safe external open, copy with manual fallback, title editing, explicit removal and JSON export.

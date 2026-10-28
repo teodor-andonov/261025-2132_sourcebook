@@ -34,4 +34,6 @@ jobs:
       - name: Unit tests
         run: node --test tests/*.test.mjs
       - name: JavaScript syntax checks
-        run: node --check src/*.mjs sw.js
+        run: |
+          node --check src/*.mjs
+          node --input-type=module --check < sw.js

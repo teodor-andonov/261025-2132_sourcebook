@@ -15,8 +15,9 @@ test('Sourcebook activation does not delete Mindmap or unrelated caches',async()
   assert.ok(active);
   const caches={keys:async()=>[active,'sourcebook-shell-prior','mindmap-shell-v3.1-ta-icons-2','unrelated-cache'],
     delete:async key=>{deleted.push(key);return true;}};
-  const self={addEventListener:(event,fn)=>listeners.set(event,fn),clients:{claim:async()=>{}}};
-  (new Function('self','caches',sw))(self,caches);
+  const self={addEventListener:(event,fn)=>listeners.set(event,fn),clients:{claim:async()=>{}},registration:{scope:'https://example.org/261025-2132_sourcebook/'},location:{origin:'https://example.org'}};
+  const workerBody=sw.replace(/^import .*\n/m,'');
+  (new Function('self','caches','prepareIncomingShare','enqueueIncomingShare',workerBody))(self,caches,()=>{},async()=>{});
   let pending;listeners.get('activate')({waitUntil:promise=>{pending=promise;}});
   await pending;
   assert.deepEqual(deleted,['sourcebook-shell-prior']);
