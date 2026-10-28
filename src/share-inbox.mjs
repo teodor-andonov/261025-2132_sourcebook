@@ -152,7 +152,7 @@ export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,onSa
           (item.files.length?'<button class="secondary" type="button" data-share="review-files" data-share-id="'+item.id+'">Review files</button>':'')+
           (item.candidate?'<button class="secondary" type="button" data-share="file-url" data-share-id="'+item.id+'">Create .url</button><button class="secondary" type="button" data-share="download-url" data-share-id="'+item.id+'">Download .url</button><button class="secondary" type="button" data-share="review" data-share-id="'+item.id+'">Stage URL</button>':'')+
           (item.text||item.url||(!item.files.length&&item.title)?'<button class="secondary" type="button" data-share="file-text" data-share-id="'+item.id+'">Create .md</button><button class="secondary" type="button" data-share="download-text" data-share-id="'+item.id+'">Download .md</button>':'')+
-          '<button class="secondary" type="button" data-share="copy" data-share-id="'+item.id+'">Copy</button><button class="secondary" type="button" data-share="discard" data-share-id="'+item.id+'">Discard</button></div>'
+          (item.text||item.url||item.title?'<button class="secondary" type="button" data-share="copy" data-share-id="'+item.id+'">Copy text</button>':'')+'<button class="secondary" type="button" data-share="discard" data-share-id="'+item.id+'">Discard</button></div>'
         ).join(''):'<p>No pending shares.</p>';
       }catch(error){host.textContent='Cannot read incoming shares: '+error.message+'. Nothing was removed.';}
     }
@@ -181,7 +181,8 @@ export function createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,onSa
             {kind:'text',value:item.text||item.url||item.title,title:item.title};
           const result=await handler(input);
           if(!download&&result?.handle){
-            await removeIncomingShare(item.id);
+            if(item.files.length)toast('Text saved. File attachments remain in the temporary inbox until verified or discarded.');
+            else await removeIncomingShare(item.id);
             await render();
           }else if(download)toast('Browser download requested. Verify the file in Downloads before discarding the share.');
         }else if(button.dataset.share==='review'&&item.candidate){
