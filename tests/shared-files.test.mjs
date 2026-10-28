@@ -62,7 +62,7 @@ test('restore rejects missing, reordered or damaged attachment payloads',()=>{
 test('inbox rejects altered metadata and file identity',()=>{
   const d=[{name:'x.png',size:3,type:'image/png'}];
   const record=prepareIncomingShare({}, {...options,fileDescriptors:d});
-  assert.throws(()=>normalizeIncomingRecord({...record,files:[{...d[0],size:4}]}),/inconsistent/);
+  assert.throws(()=>normalizeIncomingRecord({...record,files:[{...d[0],type:'invalid mime'}]}),/content type/);
   assert.throws(()=>normalizeIncomingRecord({...record,kind:'url'}),/inconsistent/);
 });
 test('browser download is explicitly unverified and preserves original filename',()=>{
