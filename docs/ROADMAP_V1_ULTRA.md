@@ -8,6 +8,8 @@
 > **Fold UX carryover (V0.0.23):** Extension-first semantic file symbols with restrained per-type color (including CAD/BIM), compact sidebar and View controls, resizable desktop panes and read-only side preview. Do not merge Fold's destructive file operations or add extra metadata concepts. Device acceptance pending.
 > **Short form:** Existing files. Beautiful previews. Portable catalogs. Delightful organization.
 >
+> **SUPERSEDING DECISION (28 Oct 2026): FILE-BACKED RESOURCES ONLY.** Each durable resource is a real ordinary file or folder. URL captures become `.url` Internet Shortcut files; text pasted/dropped into a writable Folder becomes `.md`. The optional `.sb` Catalog stores metadata/references only. Device-local link inbox is staging, not a Resource. Earlier V0.0.35–0.0.38 Catalog-only `kind=url` records are *legacy* and retained for compatibility but new fileless creation is retired pending confirmed migration. Historical URL-only roadmap text below is superseded. Device acceptance remains unverified.
+>
 > **M0 feasibility update (28 Oct 2026, V0.0.32 candidate):** Device checks now offer explicitly confirmed disposable Folder write/read/remove verification and opt-in IndexedDB handle retention with a no-prompt permission/enumeration recheck after restart. Neither is automatic, neither uses ordinary source files or Catalog data, and neither constitutes Windows/Pixel 8 acceptance. A failed write can leave a named synthetic probe file requiring manual cleanup; see M0 test instructions.
 
 > **Portable URL resource implementation update (28 Oct 2026, V0.0.35 published):** Catalog URLs now use stable sequential IDs in portable resources/*.json with nested Tags, title/notes, global saved View search and explicit link-only results. Manual and selected device-staged import use the Catalog recovery journal; staging is retained and no page content is fetched. No device acceptance, URL thumbnails or Android file shares yet. See [development log](../logs/development/261028-0531_portable-catalog-links.md).
@@ -137,7 +139,7 @@ Design for a feeling: opening Sourcebook should feel like entering a beautifully
 
 **Catalog Folder** — manually registering an existing directory establishes a source root, with no copy, move, rename or automatic objectification. Objectified resources create a *derived catalog tree* of their ancestor folders down to the nearest/deepest registered root. Example: `C:/tedi/docs/images/gallery/img1.jpg` registered under `images/` appears as `images/gallery/img1.jpg`, never a full Windows drive path. Overlapping registered roots require deterministic deepest-root choice and duplicate protection. Device-specific root grants remain local.
 
-**Resource** — file, directory or URL, browseable whether or not objectified.
+**Resource** — ordinary filesystem file or directory, including saved `.url` links and `.md` notes. Historical Catalog-only URL records remain readable as legacy data pending safe migration.
 **Objectification** — catalog metadata identity assignment. Physical filename changes are explicit optional operations, never a side effect of tagging.
 **Tag** — stable-ID nested classification and manual grouping; pinning is a shortcut to the *same tag ID*, not new membership.
 **View** — one saved scope/filter/query with gallery/list/table settings such as sort, group and density. Results are dynamic.
@@ -202,7 +204,7 @@ Breadcrumbs with click-to-jump, back/forward; title/path; global search; sort/fi
 - List: small thumbnail/icon, name, type, size, date, tags.
 - Table: configurable columns and widths, typed properties, sorting, keyboard arrows, optional spreadsheet-like bulk edit.
 - Folder: icon/collage cover, name, count optionally lazy.
-- URL: domain + metadata cover rather than pretending URL is a local file.
+- URL file: domain preview for an actual `.url` shortcut saved in a Folder, optionally annotated by `.sb` Catalog metadata.
 - Search results show source/path context and missing/offline status.
 
 ### 08.4 Navigation
@@ -343,12 +345,12 @@ URLs use same resource store and catalog-assigned record IDs, but without embedd
 
 ### Input channels
 - Drag physical files, folders or images into app.
-- Paste file/image/URL from clipboard.
+- Paste plain text to create a real `.md` file; a single HTTP(S) URL becomes `.url`; file/image imports also need a physical target.
 - “Add existing folder” to scan in place.
 - “Choose files” button from device picker.
 - Installed PWA Android share target for shared text/URLs and files when reliable.
 - Optional Chrome extension for one-click webpage/image selection in later milestone.
-- Open URL directly as a catalog bookmark; optional save a local downloaded copy.
+- Save a URL as a real `.url` file in a user-granted Folder, then optionally attach Catalog Tags/Notes.
 
 ### One capture flow
 1. Input arrives; quick preview/chip appears.
@@ -692,7 +694,7 @@ This is a *modular PWA*, not multiple separately integrated products. Do not pre
 - [ ] Reference/copy/move choice with remembered default.
 - [ ] Explicit destination picker with path preview and conflict policy.
 - [ ] Clipboard paste image/text/URL.
-- [ ] URL first-class object, title/domain/favicon/cover fallback.
+- [ ] File-backed URL `.url` capture, folder-backed Catalog identity and domain/cover preview. New writer implemented as V0.0.39 candidate; safe migration of old Catalog-only URL rows, device acceptance and native Android opening remain pending.
 - [ ] Android PWA share-target handling of URL/text.
 - [ ] File-share capability test + fallback import path for Chrome regression.
 - [ ] Batch file ingest with progress and safe cancellation.

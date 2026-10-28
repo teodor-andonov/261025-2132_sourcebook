@@ -1,7 +1,7 @@
 // Small semantic file symbols adapted from Fold's useful extension-first design.
 // Color belongs only to the icon, not the surrounding Sourcebook interface.
 const hues={
-  pdf:355,doc:211,docx:211,xls:145,xlsx:145,csv:160,ppt:23,pptx:23,
+  url:210,pdf:355,doc:211,docx:211,xls:145,xlsx:145,csv:160,ppt:23,pptx:23,
   md:155,txt:205,json:278,js:44,mjs:47,jsx:36,ts:212,tsx:214,py:194,
   html:12,htm:14,css:227,scss:310,svg:330,xml:20,yaml:85,yml:85,toml:85,
   jpg:326,jpeg:326,png:315,webp:300,gif:288,bmp:280,avif:290,
@@ -30,6 +30,7 @@ export function sidePreviewKind(item,bytes){
   const ext=describeFileSymbol(item).ext;
   if(['png','jpg','jpeg','webp','gif','avif','bmp','svg'].includes(ext))return 'image';
   if(ext==='pdf')return 'pdf';
+  if(ext==='url')return 'shortcut';
   if(['mp4','mov','webm'].includes(ext))return 'video';
   if(['mp3','wav','flac','m4a','ogg'].includes(ext))return 'audio';
   if(['txt','md','json','js','jsx','mjs','ts','tsx','css','html','htm','py','xml','yaml','yml','csv','svg','sh','sql'].includes(ext))return bytes<=1024*1024?'text':'large-text';

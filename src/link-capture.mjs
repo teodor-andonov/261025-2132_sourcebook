@@ -87,7 +87,7 @@ export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLoc
       const store=normalizeCaptureStore(await getLocal(LINK_CAPTURE_KEY));
       if(!$('#captured-links-list'))return;
       host.innerHTML=store.links.length?
-        '<div class="capture-count">'+store.links.length+' saved on this device</div>'+
+        '<div class="capture-count">'+store.links.length+' staged on this device</div>'+
         store.links.map(item=>'<div class="capture-row"><div class="capture-link"><strong>'+escapeHTML(item.title||new URL(item.url).hostname)+'</strong><small title="'+escapeHTML(item.url)+'">'+escapeHTML(item.url)+'</small></div><a class="secondary" href="'+escapeHTML(item.url)+'" target="_blank" rel="noopener noreferrer" title="Open in new tab">Open</a><button class="secondary" type="button" data-capture="rename" data-link-id="'+escapeHTML(item.id)+'" title="Edit title">Title</button><button class="secondary" type="button" data-capture="copy" data-link-id="'+escapeHTML(item.id)+'" title="Copy URL">Copy</button><button class="secondary" type="button" data-capture="remove" data-link-id="'+escapeHTML(item.id)+'" title="Remove from this device">Remove</button></div>').join(''):
         '<p>No links captured on this device yet.</p>';
     }catch(error){host.textContent='Cannot read saved links: '+error.message+'. Nothing was changed.';}
@@ -101,7 +101,7 @@ export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLoc
     finally{busy=false;}
   };
   const open=({prefill='',onSaved=null,notice=''}={})=>{
-    openDialog('<h2>Capture links</h2><p>Paste HTTP(S) URLs, one per line, or read the clipboard. Links are saved in this browser only, not in a .sb Catalog or Syncthing. No page content is fetched.</p>'+(notice?'<p>'+escapeHTML(notice)+'</p>':'')+
+    openDialog('<h2>Capture links</h2><p>Paste HTTP(S) URLs, one per line, or read the clipboard. Links are only staged in this browser, not durable Resources or files. Use Save URL/text as file for durable .url captures. No page content is fetched.</p>'+(notice?'<p>'+escapeHTML(notice)+'</p>':'')+
       '<form id="capture-link-form"><label>URLs<textarea id="capture-link-input" rows="3" maxlength="45000" placeholder="https://example.org/reference"></textarea></label><div class="dialog-actions"><button type="button" class="secondary" data-capture="clipboard">Read clipboard</button><button type="submit" class="primary">Save links</button></div></form>'+
       '<div id="captured-links-list" class="capture-list" aria-live="polite">Loading…</div>'+
       '<div class="dialog-actions"><button type="button" class="secondary" data-capture="export">Export JSON</button><button type="button" class="secondary" data-action="dismiss">Done</button></div>');
@@ -115,7 +115,7 @@ export function createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLoc
       if(!input||busy)return;
       const text=input.value;
       const result=await mutate(store=>planCapturedLinks(store,text).next);
-      if(result){input.value='';toast('Links saved locally. Duplicates are skipped.');
+      if(result){input.value='';toast('Links staged locally. Create .url files for durable resources. Duplicates are skipped.');
         if(typeof onSaved==='function')try{await onSaved(result);}catch(error){toast('Link saved, but incoming share could not be cleared: '+error.message,true);}
       }
     });
