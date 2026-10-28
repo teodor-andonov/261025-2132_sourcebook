@@ -74,3 +74,26 @@ test('UI and offline shell include review module without screenshot generation',
   assert.match(sw,/\.\/src\/m0-evidence-review\.mjs/);
   assert.match(sw,/k\.startsWith\('sourcebook-shell-'\)/);
 });
+
+test('matching physical capture fixture proofs are supporting evidence only',()=>{
+  const win=make('Windows'),android=make('Android');
+  for(const report of [win,android]){
+    report.physicalCaptureVerifyProbe={status:'ok',urlVerified:true,textVerified:true,fixtureProof:'c'.repeat(64)};
+  }
+  const result=compareM0EvidenceReports(parseM0EvidenceReport(JSON.stringify(win)),
+    parseM0EvidenceReport(JSON.stringify(android)),now);
+  assert.equal(result.sameCaptureFixture,true);
+  assert.equal(result.readyForManualReview,true);
+  assert.equal(result.accepted,false);
+});
+test('mismatched or unverified physical capture fixtures are flagged without leaking data',()=>{
+  const win=make('Windows'),android=make('Android');
+  win.physicalCaptureVerifyProbe={status:'ok',urlVerified:true,textVerified:true,fixtureProof:'c'.repeat(64),privatePath:'/secret'};
+  android.physicalCaptureVerifyProbe={status:'error',urlVerified:true,textVerified:false,fixtureProof:'d'.repeat(64)};
+  const parsedWin=parseM0EvidenceReport(JSON.stringify(win));
+  assert.ok(!JSON.stringify(parsedWin).includes('privatePath'));
+  const result=compareM0EvidenceReports(parsedWin,parseM0EvidenceReport(JSON.stringify(android)),now);
+  assert.equal(result.sameCaptureFixture,false);
+  assert.match(result.warnings.join(' '),/Physical \.url\/\.md fixture/);
+  assert.equal(result.readyForManualReview,false);
+});
