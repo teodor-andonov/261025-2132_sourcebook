@@ -1,6 +1,6 @@
 ### V0.0.52 — Chromium-engine M0 smoke and no-picker honesty (28 Oct 2026)
 - PR CI exercises a real headless Chromium engine (not only Node mocks): scoped PWA manifest and service-worker control, offline shell reload, multipart Share Target with ordinary File staged in IndexedDB, and explicit `.url` Download in a no-directory-picker environment. No screenshots, traces, video, visual fixture capture or user source-file mutation.
-- When `showDirectoryPicker` is absent, landing does not offer unusable Open Folder/Open Catalog/New Catalog actions. Incoming shares, review-first URL/text capture, unverified Download/Send fallbacks and M0 Device checks remain available; the provider gate stays Blocked. A browser Download never becomes a verified Resource.
+- When `showDirectoryPicker` is absent, landing does not offer unusable Open Folder/Open Catalog/New Catalog/Add ordinary files/Clipboard image import actions, and the capture dialog hides Create in Folder when no writable Folder can be selected. Incoming shares, review-first URL/text capture, unverified Download/Send fallbacks and M0 Device checks remain available; the provider gate stays Blocked. A browser Download never becomes a verified Resource.
 - Browser smoke runs on Linux Chromium in CI, **not** physical Windows Chrome or Pixel 8 Android. M0 device verification and released/accepted remain open. GitHub Actions is the only publish path, PR CI precedes squash merge, and service-worker cache cleanup remains Sourcebook-prefix-only.
 
 ### V0.0.51 — Activation-safe incoming file handoff (28 Oct 2026)
