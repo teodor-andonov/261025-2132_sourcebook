@@ -1,3 +1,11 @@
+### File-backed capture integration (V0.0.40 candidate, 28 October 2026)
+
+- **One durable Resource = one real file/folder.** The device-local link tray and Android share inbox are temporary; their entries are not Catalog records. A staged link's **Create .url** action requests an explicit destination Folder; a shared single URL can create `.url`, and shared text (including ambiguous multi-URL text) can create `.md`. No automatic filesystem write occurs on receipt.
+- **Browser Download** is a distinct user-triggered fallback for providers without writable directory pickers. It requests a `.url` or `.md` download but cannot verify destination, collision handling or final bytes. It never objectifies the file or marks device acceptance passed. The user must inspect Downloads and explicitly move/register files if needed.
+- A verified write/readback to a granted Folder can clear the originating pending Android share; cancelled/failed saves retain it. Device-local staged links remain until explicit removal. No pending inbox entry is silently converted to a Catalog-only Resource.
+- Physical `.url` files participate in the saved View **Links** type filter as ordinary `kind=file` records. Legacy `kind=url` JSON remains readable/editable but is not new-resource creation; no automatic metadata rebinding, ID reassignment or deletion.
+- The M0 portable test fixture uses a real disposable `source-files/*.url` inside its throwaway `.sb` folder for repeatable readback, plus a file-bound Catalog record. This is a synthetic fixture, **not** a recommendation to store production source files inside Catalog folders or proof that external Folder handles survive Syncthing. Previous v1 fixture JSON is left untouched; the v2 verifier rejects it rather than silently rewriting it.
+
 ## Superseding resource model: filesystem-backed capture (28 October 2026)
 
 **Every durable Sourcebook Resource is an actual ordinary filesystem file or folder.** The portable `.sb` Catalog stores optional metadata (identities, Tags, Notes, Views and derivative previews) referencing existing filesystem entries; Catalog JSON alone is not a second resource-content store. The device-local Capture links tray is **temporary staging**, not a saved Resource.
