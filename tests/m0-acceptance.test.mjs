@@ -53,6 +53,7 @@ test('creates a journaled portable Catalog, nested stable Tags, URL and saved Vi
   assert.equal(result.transactionVerified,true);
   assert.equal(result.portableVerified,true);
   assert.equal(result.journalClear,true);
+  assert.match(result.fixtureProof,/^[a-f0-9]{64}$/);
   const fixture=parent.directories.get(result.fixtureName);
   assert.ok(fixture);
   assert.equal(fixture.files.has('.sourcebook-pending.json'),false);

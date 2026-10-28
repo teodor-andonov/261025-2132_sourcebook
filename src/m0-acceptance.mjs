@@ -11,6 +11,14 @@ import {catalogQueryResults} from './catalog-search.mjs';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const FIXTURE_VERSION=1;
 const nameFor=id=>'Sourcebook-M0-'+id+'.sb';
+async function fixtureFingerprint(id){
+  // Hash only the synthetic UUID, never an ordinary file path or Catalog content.
+  // A matching hash is evidence of matching fixture identity, NOT proof of sync.
+  if(!globalThis.crypto?.subtle)return '';
+  const bytes=new TextEncoder().encode('sourcebook-m0-fixture-v1:'+id);
+  const hash=await globalThis.crypto.subtle.digest('SHA-256',bytes);
+  return [...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join('');
+}
 const urlFor=id=>'https://example.org/sourcebook-m0/'+id;
 const blank=()=>({status:'not-run',permission:'unknown',catalogCreated:false,transactionVerified:false,portableVerified:false,journalClear:false,cleanupRequired:false});
 const failure=error=>error?.name==='AbortError'?'cancelled':error?.name==='NotAllowedError'?'denied':'error';
@@ -27,7 +35,8 @@ export function normalizePortableProbe(value){
     permission:['unknown','unavailable','granted','prompt','denied'].includes(p.permission)?p.permission:'unknown',
     catalogCreated:p.catalogCreated===true,transactionVerified:p.transactionVerified===true,
     portableVerified:p.portableVerified===true,journalClear:p.journalClear===true,
-    cleanupRequired:p.cleanupRequired===true
+    cleanupRequired:p.cleanupRequired===true,
+    fixtureProof:typeof p.fixtureProof==='string'&&/^[a-f0-9]{64}$/.test(p.fixtureProof)?p.fixtureProof:''
   };
 }
 export function normalizeOfflineProbe(value){
@@ -54,7 +63,7 @@ async function verifyHandle(dir){
      views[0].tagIds.length!==1||views[0].tagIds[0]!==record.tagIds[0])invalid();
   const found=catalogQueryResults([record],sources,tags,views[0]);
   if(found.length!==1||found[0].record.id!=='mt1')invalid();
-  return true;
+  return id;
 }
 export async function verifyM0PortableCatalogFixture(picker){
   if(typeof picker!=='function')return {...blank(),status:'unsupported'};
@@ -65,8 +74,8 @@ export async function verifyM0PortableCatalogFixture(picker){
   const permission=await grant(dir,'read');
   if(permission!=='granted')return {...blank(),status:permission==='denied'?'denied':'unsupported',permission};
   try{
-    await verifyHandle(dir);
-    return {...blank(),status:'ok',permission,portableVerified:true,journalClear:true};
+    const id=await verifyHandle(dir);
+    return {...blank(),status:'ok',permission,portableVerified:true,journalClear:true,fixtureProof:await fixtureFingerprint(id)};
   }catch(error){return {...blank(),status:error?.message==='invalid-m0-fixture'?'invalid':'error',permission};}
 }
 export async function createM0PortableCatalogFixture(picker,{confirmed=false,randomUUID=globalThis.crypto?.randomUUID?.bind(globalThis.crypto),now=()=>new Date().toISOString()}={}){
@@ -112,7 +121,7 @@ export async function createM0PortableCatalogFixture(picker,{confirmed=false,ran
     transactionVerified=true;
     await verifyHandle(dir);
     return {...blank(),status:'ok',permission,catalogCreated:true,transactionVerified:true,
-      portableVerified:true,journalClear:true,fixtureName};
+      portableVerified:true,journalClear:true,fixtureProof:await fixtureFingerprint(id),fixtureName};
   }catch{
     // Never recursively delete a partially written Catalog. A pending journal
     // or an externally modified fixture must be preserved for manual inspection.

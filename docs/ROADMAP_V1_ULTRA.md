@@ -38,6 +38,8 @@
 
 > **M0 portable acceptance aids (28 Oct 2026, V0.0.37 candidate):** Device checks can explicitly create a disposable, UUID-named .sb Catalog with journaled nested Tags, URL and saved View, then verify it read-only after restart or Syncthing transfer. Cache inspection is not an offline run. Fixture remains on disk; M0 physical acceptance still open. See [development log](../logs/development/261028-0724_m0-portable-acceptance.md).
 
+> **M0 evidence review update (28 Oct 2026, V0.0.38 candidate):** Device checks can compare two manually exported Windows/Android M0 reports, checking scenario outcomes, same published commit and a hashed UUID fingerprint of the same disposable .sb fixture. This does not prove Syncthing transport or device acceptance. Physical tests remain open; see [development log](../logs/development/261028-0831_m0-cross-device-evidence.md).
+
 ## 00 — Executive product promise
 
 **Sourcebook makes ordinary folders feel like a beautifully curated, searchable, visual library — without taking the files hostage.**

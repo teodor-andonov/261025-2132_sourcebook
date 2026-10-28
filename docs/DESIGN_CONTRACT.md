@@ -142,3 +142,9 @@ Device checks remain an optional dialog available without a Catalog. A write pro
 - Device checks may create a **new** uniquely named `.sb` fixture only in an explicitly selected **empty disposable parent** after consent. It uses the ordinary recoverable Catalog transaction journal for Tags, a URL resource, saved View and sequence allocator. It does not write registered source Folders, reuse existing Catalogs, or silently delete test data.
 - The fixture remains available for restart/Syncthing verification. A read-only verifier checks identity and metadata coherence without requesting write permission; missing or changed metadata must fail closed. Partial fixtures and pending journals require manual inspection.
 - Offline Cache Storage inspection is diagnostic only. Cached shell/module plus active controller cannot mark M0-06 passed. Exported reports exclude synthetic fixture names and private paths. M0 statuses remain manually entered and physical-device acceptance remains open.
+
+## M0 cross-device evidence review
+
+- Imported device-report JSON is read-only and memory-only; never write it to a Catalog, persist it as a resource or upload it automatically.
+- Synthetic disposable fixture proof is SHA-256 of a random fixture UUID, not a source filename or path. Matching hashes support *identity consistency* only; they cannot prove Syncthing transfer, live permissions or that a person tested the devices.
+- Review Windows and Android reports separately, require manual scenario outcomes and external M0-05 evidence, and never auto-accept M0 even if both reports say Pass. Physical-device testing remains a hard gate.

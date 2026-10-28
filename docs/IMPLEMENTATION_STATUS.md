@@ -1,3 +1,11 @@
+## 2026-10-28 08:31 Europe/Madrid — Cross-device M0 evidence comparison (V0.0.38 candidate)
+
+- **Implemented in code:** A read-only, memory-only comparison of two explicitly selected M0 JSON exports (one Windows, one Android), with schema/size validation, per-scenario status matrix, release-commit and standalone checks, timestamp warnings, and missing external M0-05 evidence warnings. Imported reports are not persisted or uploaded.
+- **Synthetic fixture identity:** The existing disposable .sb create/verify probes now return a SHA-256 fingerprint of their random test fixture UUID (no path or filename). A matching fingerprint across two successfully verified reports is only *supporting evidence*, not proof of Syncthing transport, live permission persistence or device acceptance.
+- **Acceptance safety:** Comparison can report 'ready for manual review' but always returns accepted=false. Missing, blocked, stale, mismatched and unverified reports cannot be treated as passing. Manual M0-01…08 and physical Windows Chrome/Pixel 8 testing remain outstanding.
+- **Verification at authoring:** Automated regression tests added; actual PR CI, merge and Pages publication must be checked separately. No physical devices, screenshots, visual fixtures or Mindmap changes.
+- **Development log:** [M0 cross-device evidence](../logs/development/261028-0831_m0-cross-device-evidence.md).
+
 ## 2026-10-28 07:24 Europe/Madrid — M0 portable Catalog and offline diagnostic (V0.0.37 candidate)
 
 - **Code:** Explicitly confirmed empty-disposable-parent `.sb` fixture creator exercises real Catalog journal transactions for stable nested Tags, portable URL resource, saved View and sequence allocator. Read-only verifier checks coherent metadata and clean journal after restart or Syncthing transfer. No ordinary source-file changes and no automatic fixture deletion.
