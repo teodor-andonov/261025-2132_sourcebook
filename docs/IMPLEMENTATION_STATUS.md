@@ -1,5 +1,5 @@
 ## 2026-10-28 21:22 Europe/Madrid — V0.0.52 candidate: Chromium-engine M0 smoke
-- **Implementation:** Added a real-browser (headless Chromium) PR CI gate for installed service-worker control, offline shell, manifest identity, multipart file-share staging and `.url` Download fallback without a directory picker. Landing hides unsupported Folder/Catalog picker actions while leaving capture/inbox/device diagnostics available. No Catalog-only Resources or ordinary source file writes.
+- **Implementation:** Added a real-browser (headless Chromium) PR CI gate for installed service-worker control, offline shell, manifest identity, multipart file-share staging and `.url` Download fallback without a directory picker. Landing hides unsupported Folder/Catalog/import actions, and capture review hides Create in Folder when no picker exists, while leaving Download/Send, inbox and device diagnostics available. No Catalog-only Resources or ordinary source file writes.
 - **Evidence boundary:** CI browser-engine evidence is stronger than Node mocks but remains synthetic Linux Chromium, not real Windows Chrome, Pixel 8, Syncthing or Android share-sheet acceptance. CI and Pages outcomes must be linked after runs. No screenshots/traces/videos are produced.
 - **Log:** [Chromium M0 smoke](../logs/development/261028-2122_chromium-m0-smoke.md).
 
