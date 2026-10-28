@@ -4,6 +4,7 @@ import {normalizeCaptureURL} from './link-capture.mjs';
 import {prepareSharedFiles,validateSharedFileDescriptors,restoreSharedFiles,requestSharedFileDownload} from './shared-files.mjs';
 
 export const SHARE_INBOX_LIMIT=12;
+export const SHARE_INBOX_TOTAL_BYTES=100*1024*1024;
 export const SHARE_INBOX_DB='sourcebook-share-inbox-v1';
 const STORE='items';
 const ATTACHMENTS='attachments';
@@ -77,6 +78,17 @@ export async function listIncomingShares(){
     tx.onabort=()=>{db.close();reject(tx.error||Error('Share inbox read aborted'));};
   });
 }
+export function assertShareInboxCapacity(existing,newRecord){
+  if(!Array.isArray(existing)||existing.length>=SHARE_INBOX_LIMIT)
+    throw Error('Incoming share inbox is full; review or discard earlier shares');
+  const total=[...existing,newRecord].reduce((sum,item)=>{
+    const descriptors=validateSharedFileDescriptors(item.files||[]);
+    return sum+descriptors.reduce((n,file)=>n+file.size,0);
+  },0);
+  if(total>SHARE_INBOX_TOTAL_BYTES)
+    throw Error('Incoming share inbox exceeds the 100 MiB temporary storage limit');
+  return total;
+}
 export async function enqueueIncomingShare(item,{files=[]}={}){
   const record=normalizeIncomingRecord(item);
   const prepared=prepareSharedFiles(files);
@@ -85,13 +97,15 @@ export async function enqueueIncomingShare(item,{files=[]}={}){
   const db=await openDB();
   return new Promise((resolve,reject)=>{
     let failure=null;
-    const tx=db.transaction([STORE,ATTACHMENTS],'readwrite'),store=tx.objectStore(STORE),count=store.count();
-    count.onsuccess=()=>{
-      if(count.result>=SHARE_INBOX_LIMIT){failure=Error('Incoming share inbox is full; review or discard earlier shares');tx.abort();return;}
-      store.add(record);
-      if(prepared.files.length)tx.objectStore(ATTACHMENTS).add({id:record.id,files:prepared.files});
+    const tx=db.transaction([STORE,ATTACHMENTS],'readwrite'),store=tx.objectStore(STORE),existing=store.getAll();
+    existing.onsuccess=()=>{
+      try{
+        assertShareInboxCapacity(existing.result,record);
+        store.add(record);
+        if(prepared.files.length)tx.objectStore(ATTACHMENTS).add({id:record.id,files:prepared.files});
+      }catch(error){failure=error;tx.abort();}
     };
-    count.onerror=()=>{failure=count.error;tx.abort();};
+    existing.onerror=()=>{failure=existing.error;tx.abort();};
     tx.oncomplete=()=>{db.close();resolve(record.id);};
     tx.onabort=()=>{db.close();reject(failure||tx.error||Error('Incoming share could not be saved'));};
     tx.onerror=()=>{failure=tx.error;};
