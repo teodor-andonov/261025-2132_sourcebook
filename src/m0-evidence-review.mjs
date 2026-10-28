@@ -39,11 +39,15 @@ export function parseM0EvidenceReport(json){
   }
   const p=input.portableCatalogVerifyProbe||{};
   const fixtureProof=typeof p.fixtureProof==='string'&&PROOF.test(p.fixtureProof)?p.fixtureProof:'';
+  const capture=input.physicalCaptureVerifyProbe||{};
+  const captureProof=typeof capture.fixtureProof==='string'&&PROOF.test(capture.fixtureProof)?capture.fixtureProof:'';
   return Object.freeze({
     platform:env.platform,chromeVersion:env.chromeVersion,standalone:env.standalone,
     exportedAt:input.exportedAt,releaseCommit:COMMIT.test(input.releaseCommit||'')?input.releaseCommit.toLowerCase():'',
     results,portableVerified:p.status==='ok'&&p.portableVerified===true&&p.journalClear===true,
-    fixtureProof
+    fixtureProof,
+    captureVerified:capture.status==='ok'&&capture.urlVerified===true&&capture.textVerified===true,
+    captureProof
   });
 }
 export function compareM0EvidenceReports(windows,android,now=new Date().toISOString()){
@@ -63,11 +67,15 @@ export function compareM0EvidenceReports(windows,android,now=new Date().toISOStr
   const sameFixture=!!windows.portableVerified&&!!android.portableVerified&&
     !!windows.fixtureProof&&windows.fixtureProof===android.fixtureProof;
   if(!sameFixture)warnings.push('No matching verified disposable .sb fixture proof across devices. Reverify the SAME synced fixture on both devices and export again.');
+  const sameCaptureFixture=!!windows.captureVerified&&!!android.captureVerified&&
+    !!windows.captureProof&&windows.captureProof===android.captureProof;
+  if((windows.captureVerified||android.captureVerified)&&!sameCaptureFixture)
+    warnings.push('Physical .url/.md fixture evidence is incomplete or mismatched. Verify the SAME disposable Folder on both devices.');
   const blockers=rows.filter(r=>r.windows!=='Pass'||r.android!=='Pass');
   if(blockers.length)warnings.push(blockers.length+' M0 scenarios are not marked Pass on both devices.');
   if(!rows.find(r=>r.id==='M0-05')?.windowsEvidence||!rows.find(r=>r.id==='M0-05')?.androidEvidence)
     warnings.push('M0-05 needs explicit external evidence links on both devices; matching fixture fingerprints alone do not prove Syncthing transfer.');
-  return {rows,warnings,sameCommit,sameFixture,
+  return {rows,warnings,sameCommit,sameFixture,sameCaptureFixture,
     readyForManualReview:warnings.length===0,
     accepted:false, // Never infer device acceptance from self-reported JSON.
     windowsExportedAt:windows.exportedAt,androidExportedAt:android.exportedAt};
