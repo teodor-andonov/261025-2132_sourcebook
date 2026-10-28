@@ -1,3 +1,8 @@
+## 2026-10-28 — User-reported positive Android smoke test (feedback, not formal M0 acceptance)
+- **Feedback:** User tested Sourcebook on Android and reported that it is **working well**. This is real-user qualitative feedback, not a model-run test or synthetic CI fixture.
+- **Scope not specified:** Exact commit, device/browser build, storage provider and tested workflows are unknown. Do not infer verified physical Folder writes, .url/.md capture, installed-PWA state, Web Share, offline operation, Syncthing portability or reliability benchmarks.
+- **Roadmap status:** Positive Android smoke feedback is now recorded in [ROADMAP_STATUS.md](ROADMAP_STATUS.md) and [M0_DEVICE_TEST_RUN.md](M0_DEVICE_TEST_RUN.md). Keep named M0 test rows and released/accepted gates **unverified** until reproducible per-scenario evidence is available.
+
 ## 2026-10-28 21:22 Europe/Madrid — V0.0.52 candidate: Chromium-engine M0 smoke
 - **Implementation:** Added a real-browser (headless Chromium) PR CI gate for installed service-worker control, offline shell, manifest identity, multipart file-share staging and `.url` Download fallback without a directory picker. Landing hides unsupported Folder/Catalog/import actions, and capture review hides Create in Folder when no picker exists, while leaving Download/Send, inbox and device diagnostics available. No Catalog-only Resources or ordinary source file writes.
 - **Evidence boundary:** CI browser-engine evidence is stronger than Node mocks but remains synthetic Linux Chromium, not real Windows Chrome, Pixel 8, Syncthing or Android share-sheet acceptance. CI and Pages outcomes must be linked after runs. No screenshots/traces/videos are produced.
