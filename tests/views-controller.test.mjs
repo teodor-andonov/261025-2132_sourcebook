@@ -188,3 +188,19 @@ test('status filter requery is preview-only until saved View Update',async()=>{
   assert.equal(f.disk['views.json'][0].fileStatus,'unobjectified');
   assert.deepEqual(f.writes,['views.json']);
 });
+
+test('saving from Catalog Links uses global scope and URL type, not the last physical Folder',async()=>{
+  const f=fixture();f.state.views=[];f.disk['views.json']=[];
+  f.state.catalogLinksView=true;f.state.fileType='url';
+  f.state.records.set('ab3',{formatVersion:1,id:'ab3',kind:'url',url:'https://example.org/',
+    title:'Example',notes:'',tagIds:[],updatedAt:'2026-10-28T04:00:00.000Z'});
+  assert.equal(f.ui.inResults(),true);
+  assert.equal(f.ui.title(),'Links');
+  assert.equal(await f.ui.save('Web references'),true);
+  assert.equal(f.disk['views.json'][0].sourceId,null);
+  assert.equal(f.disk['views.json'][0].folderPath,'');
+  assert.equal(f.disk['views.json'][0].fileType,'url');
+  f.ui.open(f.disk['views.json'][0].id);
+  assert.equal(f.state.catalogLinksView,false);
+  assert.deepEqual(f.state.items.map(x=>x.name),['Example']);
+});

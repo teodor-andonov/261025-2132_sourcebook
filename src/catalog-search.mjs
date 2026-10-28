@@ -1,8 +1,10 @@
 import {recordTagPaths,includesTagPath,normalizeTagPath,matchesResourceSearch,tagPath} from './tags.mjs';
 import {collapseVerifiedOverlaps} from './source-overlap.mjs';
+import {validateCatalogURLRecord,catalogURLName} from './catalog-urls.mjs';
 
 // Read-only catalog-wide projection: records only, no file handles or writes.
 export function catalogFileType(item){
+  if(item?.kind==='url')return 'url';
   if(item?.kind==='directory')return 'folder';
   if(item?.kind!=='file')return 'other';
   const name=String(item.name||'').toLocaleLowerCase();
@@ -14,7 +16,7 @@ export function catalogFileType(item){
 export function sortCatalogResults(items,mode='name'){
   if(!['name','name-desc','type','location'].includes(mode))throw Error('Invalid sort mode');
   const cmp=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'});
-  const ext=x=>x.kind==='directory'?'':x.name.includes('.')?x.name.split('.').at(-1).toLowerCase():'';
+  const ext=x=>x.kind==='url'?'url':x.kind==='directory'?'':x.name.includes('.')?x.name.split('.').at(-1).toLowerCase():'';
   return [...items].sort((a,b)=>{
     const loc=x=>String(x.location||x.sourceName||'')+' / '+(Array.isArray(x.parts)?x.parts.join('/'):'');
     const primary=mode==='type'?cmp(ext(a),ext(b)):mode==='location'?cmp(loc(a),loc(b)):mode==='name-desc'?cmp(b.name,a.name):cmp(a.name,b.name);
@@ -37,7 +39,7 @@ export function catalogQueryResults(records,sources,taxonomy,filter={}){
   const roots=new Map(sources.filter(s=>s&&typeof s.id==='string').map(s=>[s.id,s]));
   const sourceId=filter.sourceId??null,scope=validScope(filter.folderPath??'');
   const fileType=filter.fileType??'all';
-  if(!['all','image','pdf','video','folder','other'].includes(fileType))throw Error('Invalid file type filter');
+  if(!['all','image','pdf','video','folder','other','url'].includes(fileType))throw Error('Invalid file type filter');
   if(scope.length&&!sourceId)throw Error('Folder scope needs a source');
   if(sourceId&&!roots.has(sourceId))return [];
   const tagIds=filter.tagIds??(filter.tagId?[filter.tagId]:[]);
@@ -45,33 +47,42 @@ export function catalogQueryResults(records,sources,taxonomy,filter={}){
   const tagMode=filter.tagMode??'all';
   if(!['all','any'].includes(tagMode))throw Error('Invalid tag logic');
   const tags=tagIds.map(id=>tagPath(taxonomy,id));
-  // Missing IDs are never dropped and never convert a restrictive View
-  // into an unrestricted search. OR retains matching surviving branches.
   if(tagIds.length&&!tags.some(Boolean))return [];
   if(tagMode==='all'&&tags.some(path=>!path))return [];
   const fallbackTag=normalizeTagPath(filter.tagPath||'');
   const seen=new Set(),results=[];
   for(const record of records){
-    const root=roots.get(record?.sourceId);
-    if(!root||(sourceId&&record.sourceId!==sourceId)||typeof record.path!=='string'||!['file','directory'].includes(record.kind))continue;
-    const segments=record.path.split('/');
-    if(!segments.length||segments.some(s=>!s||s==='.'||s==='..'||/[\\\u0000-\u001f]/.test(s)))continue;
-    if(scope.length&&scope.some((p,i)=>segments[i]!==p))continue;
+    const isURL=record?.kind==='url',root=roots.get(record?.sourceId);
+    if(isURL){
+      if(sourceId||scope.length)continue; // URL resources have no physical Folder binding.
+      try{validateCatalogURLRecord(record);}catch{continue;}
+    }else{
+      if(!root||(sourceId&&record.sourceId!==sourceId)||typeof record.path!=='string'||
+        !['file','directory'].includes(record.kind))continue;
+      const segments=record.path.split('/');
+      if(!segments.length||segments.some(s=>!s||s==='.'||s==='..'||/[\\\u0000-\u001f]/.test(s)))continue;
+      if(scope.length&&scope.some((p,i)=>segments[i]!==p))continue;
+    }
     const paths=recordTagPaths(record,taxonomy);
     if(tagIds.length){
       const matches=tags.map(tag=>!!tag&&includesTagPath(paths,tag));
       if(tagMode==='all'?!matches.every(Boolean):!matches.some(Boolean))continue;
     }else if(fallbackTag&&!includesTagPath(paths,fallbackTag))continue;
-    const name=segments.at(-1);
+    const name=isURL?catalogURLName(record):record.path.split('/').at(-1);
     if(fileType!=='all'&&catalogFileType({name,kind:record.kind})!==fileType)continue;
-    if(!matchesResourceSearch(name,paths,filter.query||''))continue;
-    const key=record.sourceId+'\u0000'+record.path;
+    if(!matchesResourceSearch(isURL?name+' '+record.url:name,paths,filter.query||''))continue;
+    const key=isURL?'url:'+record.id:record.sourceId+'\u0000'+record.path;
     if(seen.has(key))continue;
     seen.add(key);
-    const parts=segments.slice(0,-1);
-    results.push({id:'catalog:'+record.sourceId+':'+record.path,sourceId:record.sourceId,
-      sourceName:String(root.name||'Folder'),parts,name,kind:record.kind,path:record.path,record,
-      location:String(root.name||'Folder')+(parts.length?' / '+parts.join(' / '):'')});
+    if(isURL){
+      results.push({id:'catalog:url:'+record.id,sourceId:null,sourceName:'Links',parts:[],
+        name,kind:'url',path:record.url,url:record.url,record,location:'Links'});
+    }else{
+      const parts=record.path.split('/').slice(0,-1);
+      results.push({id:'catalog:'+record.sourceId+':'+record.path,sourceId:record.sourceId,
+        sourceName:String(root.name||'Folder'),parts,name,kind:record.kind,path:record.path,record,
+        location:String(root.name||'Folder')+(parts.length?' / '+parts.join(' / '):'')});
+    }
   }
   return sortCatalogResults(results,filter.sort||'name');
 }

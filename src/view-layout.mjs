@@ -24,7 +24,7 @@ export function groupViewItems(items,groupBy='none'){
     if(groupBy==='source'){key='source:'+(item?.sourceId||'local');label=sourceName;}
     else if(groupBy==='folder'){key='folder:'+(item?.sourceId||'local')+'/'+(item?.parts||[]).join('/');label=sourceName+(folder?' / '+folder:'');}
     else{
-      const kind=item?.kind==='directory'?'Folders':(/\.[^.]+$/.test(item?.name||'')?'.'+item.name.split('.').at(-1).toLocaleLowerCase():'Other files');
+      const kind=item?.kind==='url'?'Links':item?.kind==='directory'?'Folders':(/\.[^.]+$/.test(item?.name||'')?'.'+item.name.split('.').at(-1).toLocaleLowerCase():'Other files');
       key='type:'+kind;label=kind;
     }
     if(!groups.has(key))groups.set(key,{key,label,items:[]});
@@ -37,7 +37,7 @@ export function groupViewItems(items,groupBy='none'){
 export function viewTableMetadata(item,paths=[]){
   const type=catalogFileType(item);
   const ext=type==='other'&&String(item?.name||'').includes('.')?'.'+item.name.split('.').at(-1).toLowerCase():'';
-  const label={folder:'Folder',image:'Image',pdf:'PDF',video:'Video'}[type]||ext||'File';
+  const label={folder:'Folder',image:'Image',pdf:'PDF',video:'Video',url:'Link'}[type]||ext||'File';
   const location=item?.location||'—';
   const tags=[...paths].map(x=>String(x).split(' / ').at(-1)).filter(Boolean);
   const health=item?.changedKind?'Type changed':item?.missing?'Missing':item?.staleIndex?'Cached · refresh':item?.unobjectified?'Not cataloged':'';

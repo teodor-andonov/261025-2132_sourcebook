@@ -3,13 +3,14 @@
 // Every selected restoration uses the existing verified recovery journal.
 import {createCatalogBackup,validateCatalogBackup} from './catalog-backup.mjs';
 import {commitCatalogTransaction} from './catalog-transactions.mjs';
+import {validateCatalogURLRecord} from './catalog-urls.mjs';
 
 const RESOURCE=/^resources\/([a-z0-9_-]{1,100})\.json$/;
 const MAX_BATCH=250;
 const parse=(data,path)=>{
   try{return JSON.parse(data);}catch{throw Error('Malformed catalog JSON: '+path);}
 };
-const key=(record)=>record.sourceId+'\0'+record.path;
+const key=(record)=>record.kind==='url'?'url\0'+record.url:record.sourceId+'\0'+record.path;
 const validPath=path=>typeof path==='string'&&path.length>0&&path.length<=4096&&
   !path.startsWith('/')&&!path.endsWith('/')&&!path.includes('\\')&&
   path.split('/').every(part=>part&&part!=='.'&&part!=='..'&&!/[\u0000-\u001f]/.test(part));
@@ -24,10 +25,12 @@ const uniqueIds=(value,label)=>{
 };
 function checkRecord(record,path,code,sourceIds,tagIds,strict){
   const id=RESOURCE.exec(path)?.[1];
+  const isURL=record?.kind==='url';
   if(!record||typeof record!=='object'||Array.isArray(record)||record.id!==id||
-    typeof record.sourceId!=='string'||!record.sourceId||!validPath(record.path))
+    (!isURL&&(typeof record.sourceId!=='string'||!record.sourceId||!validPath(record.path))))
     throw Error('Invalid resource identity or path: '+path);
-  if(strict&& !['file','directory'].includes(record.kind))
+  if(isURL)validateCatalogURLRecord(record);
+  if(strict&&!['file','directory','url'].includes(record.kind))
     throw Error('Invalid resource kind: '+path);
   const ids=record.tagIds??[];
   if(!Array.isArray(ids)||ids.length>64||new Set(ids).size!==ids.length||
@@ -35,7 +38,7 @@ function checkRecord(record,path,code,sourceIds,tagIds,strict){
     throw Error('Resource references missing or invalid Tags: '+path);
   if(record.tags!==undefined&&(!Array.isArray(record.tags)||record.tags.some(tag=>typeof tag!=='string')))
     throw Error('Invalid legacy resource tags: '+path);
-  if(!sourceIds.has(record.sourceId))throw Error('Resource references a missing Catalog Folder: '+path);
+  if(!isURL&&!sourceIds.has(record.sourceId))throw Error('Resource references a missing Catalog Folder: '+path);
   const match=new RegExp('^'+code+'([1-9][0-9]*)$').exec(record.id);
   if(!match||!Number.isSafeInteger(Number(match[1])))
     throw Error('Resource ID does not belong to this Catalog: '+path);
@@ -88,7 +91,7 @@ export async function planMissingResourceRestore(handle,backup,{selectedPaths}={
     const record=parse(prior.get(path).data,path);
     const number=checkRecord(record,path,catalog.code,sourceIds,tagIds,true);
     const location=key(record);
-    if(locations.has(location))throw Error('Restoration would duplicate a resource location: '+record.path);
+    if(locations.has(location))throw Error('Restoration would duplicate a resource location: '+(record.path||record.url));
     locations.add(location);highest=Math.max(highest,number);
     restored.push({path,before:null,after:record});
   }
