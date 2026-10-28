@@ -422,6 +422,7 @@ async function shareCapture(input){
 function openFileCapture({intake=null}={}){
   if(state.captureWriting)return toast('Finish the current file operation first',true);
   const current=!viewsUI.inResults()&&state.sourceId;
+  const folderAvailable=!!current||typeof window.showDirectoryPicker==='function';
   const sourceLabel={paste:'Pasted content',drop:'Dropped content',clipboard:'Clipboard text'}[intake?.source]||'URL or text';
   openDialog('<h2>Review file capture</h2><p>'+sourceLabel+' is not saved yet. Review the contents and destination before creating a real .url or .md file. No Catalog-only Resource is created.</p>'+
     '<form id="capture-file-form">'+
@@ -429,10 +430,10 @@ function openFileCapture({intake=null}={}){
     '<div id="capture-intake-status" role="status" aria-live="polite">Enter a URL or text to preview its file type.</div>'+
     '<button type="button" class="secondary" data-action="capture-read-clipboard">Read clipboard into draft</button>'+
     '<label>Filename title (optional)<input name="title" maxlength="65" placeholder="Uses domain or first line"/></label>'+
-    '<label>Destination<select name="destination">'+(current?'<option value="current">Current Folder</option>':'')+
-    '<option value="choose">Choose another Folder…</option></select></label>'+
+    (folderAvailable?'<label>Destination<select name="destination">'+(current?'<option value="current">Current Folder</option>':'')+
+    '<option value="choose">Choose another Folder…</option></select></label>':'<p class="micro-hint" role="status">Folder creation is unavailable here. Download or Send requests external delivery only; verify the file in the receiving app.</p>')+
     '<div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button>'+
-    '<button class="secondary" type="submit" data-delivery="download">Download instead</button><button class="secondary" type="submit" data-delivery="share">Send file to app…</button><button class="primary" type="submit" data-delivery="folder">Create in Folder</button></div></form>');
+    '<button class="secondary" type="submit" data-delivery="download">Download instead</button><button class="secondary" type="submit" data-delivery="share">Send file to app…</button>'+(folderAvailable?'<button class="primary" type="submit" data-delivery="folder">Create in Folder</button>':'')+'</div></form>');
   const form=$('#capture-file-form');
   const content=form.elements.content,status=$('#capture-intake-status');
   if(intake)content.value=intake.value;
@@ -471,9 +472,12 @@ async function saveFileCaptureForm(form,delivery='folder'){
 function landing(){
   clearSidePreview();
   forgetImages();
-  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>Sourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions"><button class="primary" data-action="open-folder">'+icon('folder')+' Open folder</button><button class="secondary" data-action="open-catalog">'+icon('database')+' Open catalog</button><button class="secondary" data-action="create-catalog">'+icon('plus')+' New catalog</button><button class="secondary" data-action="capture-file">'+icon('file')+' Save file from URL/text</button><button class="secondary" data-action="import">'+icon('upload')+' Add ordinary files</button><button class="secondary" data-action="capture-clipboard-image">'+icon('image')+' Clipboard image</button><button class="secondary" data-action="capture-links">'+icon('link')+' Review staged links</button><button class="secondary" data-action="incoming-shares">'+icon('link')+' Incoming shares</button></div><div id="recent-area"></div><button class="secondary" data-action="device-checks" title="Check browser capabilities and record device acceptance">Device checks</button><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
+  const canPick=typeof window.showDirectoryPicker==='function';
+  const folderActions=canPick?'<button class="primary" data-action="open-folder">'+icon('folder')+' Open folder</button><button class="secondary" data-action="open-catalog">'+icon('database')+' Open catalog</button><button class="secondary" data-action="create-catalog">'+icon('plus')+' New catalog</button>':'<p class="micro-hint" role="status">Folder access is unavailable in this browser. You can still review incoming shares, capture URLs/text, Download or send ordinary files to another app. None of these alternatives verifies a Folder write.</p>';
+  const importActions=canPick?'<button class="secondary" data-action="import">'+icon('upload')+' Add ordinary files</button><button class="secondary" data-action="capture-clipboard-image">'+icon('image')+' Clipboard image</button>':'';
+  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>Sourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions">'+folderActions+'<button class="secondary" data-action="capture-file">'+icon('file')+' Save file from URL/text</button>'+importActions+'<button class="secondary" data-action="capture-links">'+icon('link')+' Review staged links</button><button class="secondary" data-action="incoming-shares">'+icon('link')+' Incoming shares</button></div><div id="recent-area"></div><button class="secondary" data-action="device-checks" title="Check browser capabilities and record device acceptance">Device checks</button><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
   getLocal('recent').then(value=>{
-    if(value&&$('#recent-area'))$('#recent-area').innerHTML='<div class="eyebrow">RECENT CATALOG</div><button class="recent-item" data-action="recent">'+icon('database')+'<span>'+escapeHTML(value.name)+'</span>'+icon('chevron',15)+'</button>';
+    if(canPick&&value&&$('#recent-area'))$('#recent-area').innerHTML='<div class="eyebrow">RECENT CATALOG</div><button class="recent-item" data-action="recent">'+icon('database')+'<span>'+escapeHTML(value.name)+'</span>'+icon('chevron',15)+'</button>';
   }).catch(console.warn);
 }
 async function recentCatalog(){
@@ -1694,7 +1698,7 @@ document.addEventListener('keydown',event=>{
   if(event.key==='Backspace'&&state.parts.length){event.preventDefault();navigate(state.sourceId,state.parts.slice(0,-1));}
 });
 async function boot(){
-  if(typeof window.showDirectoryPicker!=='function'){landing();toast('This browser does not provide directory access. Folder browsing is unavailable on this device.',true);return;}
+  if(typeof window.showDirectoryPicker!=='function'){landing();toast('Folder browsing unavailable here; review shares or capture files through explicit Download/Send fallbacks.',true);return;}
   try{
     if(await getLocal('last-mode')==='folder'){
       const session=loadFolderTabs(await getLocal('folder-tabs-v1'));
