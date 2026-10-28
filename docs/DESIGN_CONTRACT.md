@@ -1,3 +1,9 @@
+### V0.0.50 — Explicit OS file-share handoff (28 Oct 2026)
+- A reviewed URL/text capture may be handed to the system as a **real File object** named .url/.md with exact Internet Shortcut/Markdown bytes. This is an outbound transfer request, not a verified source Folder write. Never silently downgrade to sharing a bare URL/text string if file sharing is unsupported.
+- Temporary Android incoming file attachments may be sent individually or as a bounded batch through the OS file share sheet **only after integrity verification**. Keep IndexedDB staging until a verified Folder write or explicit user Discard; share success cannot establish persistence or remove staging.
+- Use navigator.canShare({files}) before navigator.share({files}); errors/cancellation leave content intact. Browser Download remains an explicit alternative. Neither external handoff path satisfies the M0 physical filesystem-provider gate or creates Catalog metadata.
+- The capability indicator is a synthetic API-only check, not proof of an installed Save-to-Files target, final filename, Syncthing delivery, or Android acceptance. Real-device tests are required.
+
 ### V0.0.49 — M0 filesystem-provider triage (28 Oct 2026)
 - Report a conservative provider gate: absent picker or unsupported operations → Blocked; denied/failed/unclean synthetic operations → Failed; incomplete evidence → Unverified; only verified disposable write/read/remove and reopened physical `.url`/`.md` checks → probe-ready. This is **never** device acceptance, restart or Syncthing proof.
 - Exports contain coarse status only. Recompute the gate from original sanitized report fields during cross-device comparison, ignoring a claimed `providerGate`; older reports without capability data cannot clear the gate. Browser Download is not a verified Folder write. No Catalog-only Resources, ordinary source-file changes, screenshots or Mindmap modifications.

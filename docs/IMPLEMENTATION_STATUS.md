@@ -1,3 +1,9 @@
+## 2026-10-28 19:27 Europe/Madrid — V0.0.50 candidate: explicit file-bearing system share fallback
+
+- **Implemented in source:** Review-first .url/.md captures can request a Web Share **File** handoff; pending Android file shares can be integrity-checked and sent as one or a bounded batch. This does not create or persist a Catalog Resource, and no pending share is cleared on OS handoff. File-bearing Web Share capability appears in Device checks as API-only evidence.
+- **Safety:** Browser support must explicitly accept files; no fallback to text-only Web Share, no silent source writes, no overwrite, no automatic inbox discard. Cancelled/failed handoffs remain retryable. Successful Web Share resolution is *unverified external delivery*, not a durable file, selected Folder write, or Syncthing acceptance.
+- **Acceptance:** Windows Chrome, Pixel 8, external share targets, permissions, offline and Syncthing remain **Not tested**. PR CI and publication evidence must be added after verification; no screenshots were captured.
+
 ## 2026-10-28 18:28 Europe/Madrid — V0.0.49 candidate: provider evidence gate
 - **Code:** Device checks now shows a conservative filesystem-provider triage state and actionable next step, recomputed after disposable probes. Cross-device report comparison rejects contradictory all-Pass reports with unavailable directory pickers or unverified physical file operations, ignoring imported claims.
 - **Safety/evidence:** Existing explicit consent and disposable-only probes remain unchanged; no private paths in provider status. Older reports parse but cannot clear the gate. No automatic M0 acceptance.
