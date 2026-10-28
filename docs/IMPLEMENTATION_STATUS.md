@@ -1,3 +1,9 @@
+## 2026-10-28 11:26 Europe/Madrid — V0.0.42 candidate: explicit ordinary-file import
+- **Code:** Browser-first file input (including Android selection fallback) and drag/drop review for ordinary files; explicit destination and confirmation, 10-file/50 MiB limits, collision refusal, SHA-256 readback per copy. Existing Catalog Add files' silent filename suffixing and unverified writes are retired. No Catalog metadata writes.
+- **Safety:** Unsafe filenames, duplicate names, case-insensitive existing collisions, unreadable destination and unsupported crypto fail closed. Partial failures stop the batch and retain files for manual inspection; no atomic create-exclusive API or cross-device lock.
+- **Acceptance:** Windows/Pixel 8 directory write compatibility, Android file picker/provider and Syncthing transfer remain **Not tested**. PR CI, main CI and Pages require separate verification. No screenshots or Mindmap changes.
+- **Log:** [safe file import](../logs/development/261028-1126_safe-file-import.md).
+
 ## 2026-10-28 10:25 Europe/Madrid — V0.0.41 candidate: explicit legacy URL migration
 - **Code:** One-at-a-time, user-confirmed file-backed .url migration from legacy Catalog links to a connected registered Folder. Preserves Catalog stable ID, Tags, Notes, title; keeps old URL/title only as an audit snapshot. Source file is verified before a recoverable metadata rebind; stale state, pending journals, sync conflicts and collisions block the operation.
 - **Risk:** Partial/orphan .url may remain on failed source/Catalog write; no atomic create-exclusive or cross-device lock. Real Windows/Pixel 8 acceptance remains Not tested.
