@@ -5,9 +5,9 @@ Sourcebook's existing Android POST share target accepted only URL/text, leaving 
 
 ## Implementation
 - Extend the manifest with a `files` multipart field and keep the Sourcebook-specific scope and manifest ID.
-- Validate 1–5 ordinary files (up to 25 MiB each / 50 MiB total) using the existing import filename policy, including case-insensitive collision checks. Preserve original names. Fail closed on empty, malformed or oversized files and suspicious MIME descriptors.
+- Validate 1–5 ordinary files (up to 25 MiB each / 50 MiB per share, 100 MiB inbox-wide) using the existing import filename policy, including case-insensitive collision checks. Preserve original names. Fail closed on empty, malformed or oversized files and suspicious MIME descriptors.
 - Upgrade the device-local incoming-share IndexedDB from version 1 to version 2, preserving old text records and adding a separate attachments object store. Enqueue metadata and Blobs in one transaction; Discard deletes both. Readback validates attachment size and type against metadata.
-- Incoming shares now shows filenames and sizes, explicit **Review files**, and per-file **Download** fallback. Review invokes the same ordinary-file import confirmation, permission checks, bounded copy, collision refusal and readback verification as Add files. Clear staging **only after the entire batch is verified**; failures, cancellations and downloads retain staging.
+- Incoming shares now shows filenames and sizes, explicit **Review files**, and per-file **Download** fallback. Review invokes the same ordinary-file import confirmation, permission checks, bounded copy, collision refusal and readback verification as Add files. Clear staging **only after the entire batch is verified** for file-only shares; mixed shares containing unsaved URL/text remain staged for explicit review or Discard. Failures, cancellations and downloads retain staging.
 - The service worker rejects unsupported multipart fields and checks request Content-Length where available before parsing; browser FormData parsing and IndexedDB quota remain provider-controlled.
 - Add pure validation, metadata compatibility, restoration, fallback and app/SW wiring tests. Update the roadmap, contract, implementation status and manual device acceptance instructions.
 
