@@ -1,3 +1,10 @@
+## 2026-10-28 06:30 Europe/Madrid — Catalog URL bulk Tags (V0.0.36 candidate)
+
+- **Implemented in code on development branch:** Catalog links now supports title/URL/Tag-path filtering, individual/visible selection (up to 250 URLs) and explicit bulk Add/Remove of 1–16 nested Tag paths. Stable Catalog URL IDs, URLs, titles and notes are preserved; no ordinary source files are changed.
+- **Safety:** Pure planner validates selection and stable Tag IDs, reuses existing taxonomy, refuses over-limit edits and skips no-ops. Bulk metadata and any new Tags use the existing snapshot-checked recoverable Catalog transaction journal. No cross-device lock, atomic filesystem commit or automatic Syncthing conflict reconciliation.
+- **Verification:** New automated planner/journal tests and service-worker integration assertions; **PR CI and publishing are pending at authoring**. M0 physical Windows Chrome/Pixel 8 acceptance remains **Not tested**, including portable URL/Tag Syncthing roundtrip. No screenshots or Mindmap changes.
+- **Development log:** [Portable URL bulk Tags](../logs/development/261028-0630_catalog-url-bulk-tags.md).
+
 ## 2026-10-28 05:31 Europe/Madrid — Portable Catalog URL resources (V0.0.35 candidate)
 
 - **Implemented in source on development branch:** First-class kind=url metadata in existing resources/<catalog-code><sequence>.json, with canonical HTTP(S) URLs, title, notes and stable nested Tag IDs. Manual batch import and selected device-staged import are explicit, journaled Catalog-only writes. Staged links are retained; no page content is fetched, no ordinary source file is renamed or modified.
