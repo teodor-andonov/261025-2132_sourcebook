@@ -321,3 +321,14 @@ video.side-preview-media{max-height:240px}
 .m0-probe-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .m0-probe-actions button{flex:0 1 auto}
 .m0-probe [data-m0-write-result],.m0-probe [data-m0-reopen-result]{overflow-wrap:anywhere}
+
+/* Device-only link capture: compact rows, mobile-safe actions, no additional panels. */
+.capture-list{margin-top:12px;max-height:38vh;overflow:auto;border-top:1px solid var(--border)}
+.capture-count{font-size:11px;color:var(--muted);padding:8px 0}
+.capture-row{display:flex;align-items:center;gap:5px;padding:8px 0;border-bottom:1px solid var(--border)}
+.capture-link{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.capture-link strong,.capture-link small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.capture-link small{font-size:11px}
+.capture-row a.secondary{color:var(--text);text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+#capture-link-input{width:100%;resize:vertical;min-height:65px}
+@media(max-width:760px){.capture-row{flex-wrap:wrap}.capture-link{flex-basis:100%}.capture-row .secondary{flex:1}}
