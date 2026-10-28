@@ -61,3 +61,7 @@ If the user cannot perform M0 now, agent development should prepare harmless tes
 5. **V0.7+ rich media, 10k–50k gallery measurements and user-visible polish** based on actual usability feedback.
 
 **Release tracking:** after PR CI passes, squash merge into main, let the main-only Pages workflow deploy, delete the merged `dev/*` branch with verified head match, and update this status file only as evidence changes. Do not mistake deployment or synthetic browser screenshots for Windows/Android acceptance.
+
+## M0 code-side readiness harness (V0.0.31 candidate)
+
+Sourcebook exposes **Device checks** from the launcher (including browsers where the Folder picker is missing) and Settings. The panel reports API *presence* and standalone display state without requesting permissions; an explicitly clicked, read-only Folder probe samples at most ten entries and optionally reads file metadata without accessing file bytes or writing anything. The eight M0 cases remain **Not tested** until a person records actual Windows/Pixel 8 outcomes and evidence. Entries stay device-local until explicitly exported as sanitized JSON. This is not a substitute for a real-device test, Syncthing roundtrip, or offline acceptance. Automated tests cover the probe's read-only boundary and conservative status handling.

@@ -9,6 +9,8 @@ Sourcebook lets you point a portable **Catalog** at existing folders, browse eve
 **Platforms:** Windows + Android; same product and feature set, responsive layout only.  
 **Status:** V0.0.30 Catalog overlap review candidate (2026-10-28); automated tests run in GitHub Actions, and an earlier hosted release succeeded. Real-device verification remains outstanding. **Delivery:** Chrome-first installable PWA (Windows + Android), with direct user-granted folder access; no required native shell or local backend.
 
+**M0 readiness (V0.0.31 candidate):** Device checks on the launcher and in Settings report browser API availability, allow a user-initiated read-only Folder probe, and keep a manual eight-case device acceptance record with explicit JSON export. API detection is not physical acceptance; Windows/Pixel 8 tests remain outstanding.
+
 **Development and publishing:** Use `dev/YYMMDD-HHmm-topic` feature branches and pull requests, squash merge only after successful CI, then let [Publish Sourcebook](.github/workflows/pages.yml) deploy automatically from `main` (or run it manually via Actions). [Full release convention](docs/RELEASE_PROCESS.md). Screenshots remain manual-only.
 
 ## Start here

@@ -1,3 +1,11 @@
+## 2026-10-28 01:26 Europe/Madrid — M0 device-readiness and read-only feasibility harness (V0.0.31 candidate)
+
+- **Implemented in code:** A compact Device checks dialog available from the launcher even if Chrome lacks directory picking, and from Settings. Shows secure context, standalone mode, directory/file picker, IndexedDB, service-worker control, clipboard, Web Share and persistent-storage API presence. Does not equate feature detection with functional permission or device acceptance.
+- **Explicit read-only probe:** User-triggered folder picker requests `mode: 'read'`, checks existing read permission without requesting write, enumerates at most ten entries, reads one file's metadata if present, and checks self-identity if available. No source names, bytes, file writes, telemetry or automatic permission prompts.
+- **Manual M0 record:** Eight separately marked Pass / Fail / Blocked / Not tested cases, bounded notes and optional HTTPS evidence link; local-only persistence, explicit JSON export, reset confirmation and sanitized browser summary. No automatic acceptance claims.
+- **Verification:** Node unit and app/SW wiring tests added; PR CI and deployment outcome pending at development time. No physical Windows/Pixel 8 testing, screenshots, visual fixtures, source-file mutation or direct release triggered.
+- **Risk:** A read-only picker probe cannot prove Catalog write support, provider durability, offline operation, Android share-target support or cross-device Syncthing. Real-device M0 remains open. Browser storage may be evicted; export test evidence explicitly.
+
 ## 2026-10-28 — Roadmap acceptance scoreboard and dev-branch cleanup policy
 
 - Added [ROADMAP_STATUS.md](ROADMAP_STATUS.md): a concise, evidence-backed 3-stage matrix separating **code implementation**, **actual Windows/Pixel 8 acceptance** and **successful deployment/acceptance**. Broader unchecked ULTRA V1 milestone checkboxes remain requirements, not an accurate implementation tally.
