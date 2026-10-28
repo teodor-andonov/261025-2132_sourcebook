@@ -1,7 +1,7 @@
 import {getLocal,setLocal,removeLocal,readJson,writeJson,nested,authorized} from './storage.mjs';
 import {createDeviceReadinessUI} from './device-readiness.mjs';
 import {createLinkCaptureUI} from './link-capture.mjs';
-import {createShareInboxUI} from './share-inbox.mjs';
+import {createShareInboxUI,removeIncomingShare,listIncomingShares} from './share-inbox.mjs';
 import {createCatalogLinksUI} from './catalog-links-ui.mjs';
 import {classifyPastedText,planFileCapture,writeCapturedFile,parseInternetShortcut,requestCapturedFileDownload} from './file-capture.mjs';
 import {prepareCaptureIntake} from './capture-intake.mjs';
@@ -48,7 +48,13 @@ const deviceReadiness=createDeviceReadinessUI({openDialog,escapeHTML,toast});
 const linkCapture=createLinkCaptureUI({openDialog,escapeHTML,toast,getLocal,setLocal,
   onSaveFile:input=>writeCapture(input,{choose:true}),onDownloadFile:downloadCapture});
 const shareInbox=createShareInboxUI({openDialog,escapeHTML,toast,linkCapture,
-  onSaveFile:input=>writeCapture(input,{choose:true}),onDownloadFile:downloadCapture});
+  onSaveFile:input=>writeCapture(input,{choose:true}),onDownloadFile:downloadCapture,
+  onImportFiles:async(files,id)=>showFileImport(files,{origin:'share',onVerified:async()=>{
+    const item=(await listIncomingShares()).find(entry=>entry.id===id);
+    if(item?.text||item?.url){toast('Files verified. Shared text/URL remains staged for review or Discard.');return;}
+    await removeIncomingShare(id);
+    toast('Verified shared files; temporary inbox cleared');
+  }})});
 const catalogLinksUI=createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal,readJson,authorized,refreshRecords,commitCatalogEdits,refreshPendingCatalog,refreshResults:async()=>{if(viewsUI.inResults())await refreshCatalogTagView();else render();},render,showLinks:showCatalogLinks});
 async function refreshPendingCatalog(){
   if(!state.catalogHandle||!state.catalog){state.pendingTransaction=null;state.catalogConflicts=null;return;}
@@ -1290,15 +1296,16 @@ async function newFolder(){
 }
 // File input works on browsers where showOpenFilePicker is unavailable (including Android).
 // Selection and drag/drop only open a review dialog: writing requires explicit confirmation.
-let pendingFileImport=null,fileImportController=null;
-function showFileImport(files,{origin='files'}={}){
+let pendingFileImport=null,pendingFileImportCleanup=null,fileImportController=null;
+function showFileImport(files,{origin='files',onVerified=null}={}){
   if(state.captureWriting)return toast('Finish the current file operation first',true);
   try{
     const plan=planOrdinaryFileImport(files);
     pendingFileImport=plan.items.map(item=>item.file);
+    pendingFileImportCleanup=onVerified;
     const current=!viewsUI.inResults()&&state.sourceId;
-    const clipboard=origin==='clipboard';
-    openDialog('<h2>'+(clipboard?'Review clipboard images':'Add ordinary files')+'</h2><p>'+(clipboard?'These image names were generated for the clipboard; review them before saving. ':'')+'Copies selected files to a user-granted Folder. No automatic renaming, overwriting or Catalog metadata changes. Max 10 files / 512 MiB each / 1 GiB per batch. Files over 25 MiB use bounded 1 MiB chunks with byte-for-byte readback.</p>'+
+    const clipboard=origin==='clipboard',shared=origin==='share';
+    openDialog('<h2>'+(clipboard?'Review clipboard images':shared?'Review shared files':'Add ordinary files')+'</h2><p>'+(clipboard?'These image names were generated for the clipboard; review them before saving. ':shared?'These files are temporary in this device’s incoming inbox until a verified Folder copy. ':'')+'Copies selected files to a user-granted Folder. No automatic renaming, overwriting or Catalog metadata changes. Max 10 files / 512 MiB each / 1 GiB per batch. Files over 25 MiB use bounded 1 MiB chunks with byte-for-byte readback.</p>'+
       '<form id="import-files-form"><div class="capture-count">'+plan.items.length+' files · '+(plan.totalBytes/1048576).toFixed(2)+' MiB</div>'+
       plan.items.map(item=>'<div class="capture-row">'+escapeHTML(item.name)+' <small>'+item.size+' bytes</small></div>').join('')+
       '<label>Destination<select name="destination">'+(current?'<option value="current">Current Folder</option>':'')+
@@ -1309,9 +1316,9 @@ function showFileImport(files,{origin='files'}={}){
       '<button class="primary" type="submit">Copy files</button></div></form>');
     $('#cancel-import')?.addEventListener('click',()=>{
       if(fileImportController){fileImportController.abort();const button=$('#cancel-import');if(button){button.disabled=true;button.textContent='Cancelling…';}}
-      else{pendingFileImport=null;$('#dialog')?.remove();}
+      else{pendingFileImport=null;pendingFileImportCleanup=null;$('#dialog')?.remove();}
     });
-  }catch(error){pendingFileImport=null;toast('Add files: '+errorText(error),true);}
+  }catch(error){pendingFileImport=null;pendingFileImportCleanup=null;toast('Add files: '+errorText(error),true);}
 }
 async function captureClipboardImages(){
   if(state.captureWriting)return toast('Finish the current file operation first',true);
@@ -1356,8 +1363,12 @@ async function submitFileImportForm(form){
       lastProgress=now;
       if(progress?.isConnected)progress.textContent='File '+event.fileIndex+'/'+event.fileCount+' · '+event.phase+' · '+(event.bytes/1048576).toFixed(1)+' / '+(event.size/1048576).toFixed(1)+' MiB · '+event.name;
     }});
-    pendingFileImport=null;$('#dialog')?.remove();
+    const cleanup=pendingFileImportCleanup;
+    pendingFileImport=null;pendingFileImportCleanup=null;$('#dialog')?.remove();
     toast('Verified '+result.saved.length+' file copies; originals unchanged');
+    if(cleanup){
+      try{await cleanup();}catch(error){toast('File copies verified, but the temporary inbox was not cleared: '+errorText(error),true);}
+    }
     if(here){invalidateScan();await navigate(state.sourceId,[...state.parts]);}
   }catch(error){
     if(progress?.isConnected)progress.textContent='Stopped: '+errorText(error);
