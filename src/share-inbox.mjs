@@ -1,7 +1,7 @@
 // Device-local, explicitly reviewed Android/Web Share Target inbox.
 // No ordinary source-file or portable Catalog writes are performed here.
 import {normalizeCaptureURL} from './link-capture.mjs';
-import {prepareSharedFiles,validateSharedFileDescriptors,restoreSharedFiles,requestSharedFileDownload} from './shared-files.mjs';
+import {prepareSharedFiles,validateSharedFileDescriptors,restoreSharedFiles,verifySharedFileIntegrity,requestSharedFileDownload} from './shared-files.mjs';
 
 export const SHARE_INBOX_LIMIT=12;
 export const SHARE_INBOX_TOTAL_BYTES=100*1024*1024;
@@ -92,7 +92,7 @@ export function assertShareInboxCapacity(existing,newRecord){
 export async function enqueueIncomingShare(item,{files=[]}={}){
   const record=normalizeIncomingRecord(item);
   const prepared=prepareSharedFiles(files);
-  if(JSON.stringify(prepared.descriptors)!==JSON.stringify(record.files))
+  if(JSON.stringify(prepared.descriptors)!==JSON.stringify(record.files.map(({sha256,...plain})=>plain)))
     throw Error('Shared file payload does not match its inbox metadata');
   const db=await openDB();
   return new Promise((resolve,reject)=>{
@@ -118,15 +118,14 @@ export async function getIncomingShareFiles(id){
     const tx=db.transaction([STORE,ATTACHMENTS],'readonly');
     const recordReq=tx.objectStore(STORE).get(id);
     const attachmentReq=tx.objectStore(ATTACHMENTS).get(id);
-    let result;
-    tx.oncomplete=()=>{
+    tx.oncomplete=async()=>{
       db.close();
       try{
         if(!recordReq.result)throw Error('Incoming share no longer exists');
         const record=normalizeIncomingRecord(recordReq.result);
         if(!record.files.length)throw Error('Incoming share contains no files');
-        result=restoreSharedFiles(attachmentReq.result?.files,record.files);
-        resolve(result);
+        const files=await verifySharedFileIntegrity(attachmentReq.result?.files,record.files);
+        resolve(files);
       }catch(error){reject(error);}
     };
     tx.onabort=()=>{db.close();reject(tx.error||Error('Shared files could not be read'));};

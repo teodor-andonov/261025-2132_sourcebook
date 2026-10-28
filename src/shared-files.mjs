@@ -28,7 +28,10 @@ export function validateSharedFileDescriptors(descriptors){
     names.add(key);
     total+=d.size;
     if(total>MAX_SHARED_TOTAL_BYTES)throw Error('Shared files exceed the 50 MiB temporary inbox limit');
-    return {name,size:d.size,type:checkType(d.type)};
+    const type=checkType(d.type);
+    if(d.sha256!==undefined&&(typeof d.sha256!=='string'||!/^[a-f0-9]{64}$/u.test(d.sha256)))
+      throw Error('Invalid shared file checksum');
+    return d.sha256===undefined?{name,size:d.size,type}:{name,size:d.size,type,sha256:d.sha256};
   });
 }
 export function prepareSharedFiles(files){
@@ -40,6 +43,37 @@ export function prepareSharedFiles(files){
       throw Error('Shared file is not a readable browser File');
   }
   return {files:selected,descriptors};
+}
+// SHA-256 is computed before IndexedDB staging, then checked again before review/download.
+// Legacy v2 inbox entries without a digest remain readable, but are not integrity-attested.
+const digestHex=bytes=>Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');
+export async function fingerprintSharedFiles(files,{cryptoApi=globalThis.crypto}={}){
+  const prepared=prepareSharedFiles(files);
+  if(!prepared.files.length)return prepared;
+  if(typeof cryptoApi?.subtle?.digest!=='function')throw Error('SHA-256 unavailable; share not staged');
+  const descriptors=[];
+  for(let i=0;i<prepared.files.length;i++){
+    const bytes=await prepared.files[i].arrayBuffer();
+    if(bytes.byteLength!==prepared.descriptors[i].size)throw Error('Shared file changed during intake');
+    descriptors.push({...prepared.descriptors[i],sha256:digestHex(await cryptoApi.subtle.digest('SHA-256',bytes))});
+  }
+  return {files:prepared.files,descriptors};
+}
+export async function verifySharedFileIntegrity(blobs,descriptors,{cryptoApi=globalThis.crypto,fileFactory}={}){
+  const meta=validateSharedFileDescriptors(descriptors);
+  if(!Array.isArray(blobs)||blobs.length!==meta.length)throw Error('Shared file payload is missing or damaged');
+  for(let i=0;i<meta.length;i++){
+    const item=meta[i],blob=blobs[i];
+    if(!blob||blob.size!==item.size||blob.type!==item.type||typeof blob.arrayBuffer!=='function')
+      throw Error('Shared file payload differs from its metadata');
+    if(item.sha256){
+      if(typeof cryptoApi?.subtle?.digest!=='function')throw Error('SHA-256 unavailable; cannot verify staged file');
+      const bytes=await blob.arrayBuffer();
+      if(bytes.byteLength!==item.size||digestHex(await cryptoApi.subtle.digest('SHA-256',bytes))!==item.sha256)
+        throw Error('Staged file checksum mismatch; keep the share for inspection');
+    }
+  }
+  return restoreSharedFiles(blobs,meta,fileFactory?{fileFactory}:{});
 }
 export function restoreSharedFiles(blobs,descriptors,{fileFactory=(parts,name,opts)=>new File(parts,name,opts)}={}){
   const meta=validateSharedFileDescriptors(descriptors);

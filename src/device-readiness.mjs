@@ -1,6 +1,7 @@
 // Device readiness is local and opt-in. API presence never counts as M0 acceptance.
 import {getLocal,setLocal,removeLocal} from './storage.mjs';
 import {parseM0EvidenceReport,compareM0EvidenceReports,M0_REPORT_LIMIT} from './m0-evidence-review.mjs';
+import {normalizeShareStorageProbe,inspectShareStorage,requestShareStoragePersistence} from './share-storage.mjs';
 import {normalizeWriteProbe,normalizeReopenProbe,probeDisposableWriteFolder,rememberDisposableReadFolder,recheckDisposableReadFolder,forgetDisposableReadFolder} from './m0-feasibility.mjs';
 import {normalizePortableProbe,normalizeOfflineProbe,createM0PortableCatalogFixture,verifyM0PortableCatalogFixture,inspectM0OfflineShell} from './m0-acceptance.mjs';
 export const M0_CASES=[
@@ -40,6 +41,7 @@ export function normalizeM0Record(input,now=new Date().toISOString()){
     releaseCommit:/^[a-f0-9]{7,40}$/i.test(value.releaseCommit||'')?value.releaseCommit:'',
     results,
     writeProbe:normalizeWriteProbe(value.writeProbe),
+    shareStorageProbe:normalizeShareStorageProbe(value.shareStorageProbe),
     portableCreateProbe:normalizePortableProbe(value.portableCreateProbe),
     portableVerifyProbe:normalizePortableProbe(value.portableVerifyProbe),
     offlineProbe:normalizeOfflineProbe(value.offlineProbe),
@@ -113,6 +115,7 @@ export function exportM0Report(record,capabilities,now=new Date().toISOString())
     capabilities:capabilities.features,releaseCommit:value.releaseCommit,
     results:value.results,readOnlyFolderProbe:value.probe,
     disposableWriteProbe:value.writeProbe,savedReadHandleProbe:value.reopenProbe,
+    shareInboxStorageProbe:value.shareStorageProbe,
     portableCatalogCreateProbe:value.portableCreateProbe,portableCatalogVerifyProbe:value.portableVerifyProbe,
     offlineCacheProbe:value.offlineProbe,
     caveat:'API presence and the read-only probe are not physical-device acceptance. All Pass/Fail/Blocked outcomes are manually entered.'
@@ -141,6 +144,11 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
     return 'Cache '+p.status+' · controller '+(p.controllerActive?'active':'inactive')+
       ' · shell '+(p.shellCached?'present':'not verified')+' · module '+(p.appModuleCached?'present':'not verified')+
       '. This does not prove offline navigation.';
+  };
+  const storageSummary=()=>{
+    const p=record.shareStorageProbe;
+    return 'Storage '+p.status+' · persisted '+p.persisted+' · estimated free '+p.available+
+      ' · origin pressure '+p.pressure+'. Estimates cover all apps on this origin; not a guarantee against eviction or Android Folder write support.';
   };
   const writeSummary=()=>{
     const p=record.writeProbe;
@@ -180,6 +188,9 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
       '<div class="m0-probe"><strong>Portable .sb roundtrip fixture</strong><p>Choose an EMPTY disposable parent. Sourcebook creates a new UUID-named .sb fixture with a REAL source-files/*.url shortcut, a file-bound Catalog record, nested stable-ID Tags and a saved View, using its recovery journal. This synthetic in-Catalog source folder is for testing only; real external Folder grants still need separate device tests. It leaves the fixture in place for restart or Syncthing testing. Never select real project data; no automatic deletion.</p>'+
       '<div class="m0-probe-actions"><button class="secondary" type="button" data-m0-portable-create '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Create disposable .sb</button><button class="secondary" type="button" data-m0-portable-verify '+(typeof env.showDirectoryPicker==='function'?'':'disabled')+'>Verify .sb (read-only)</button></div>'+
       '<p role="status" data-m0-portable-result>'+escapeHTML(portableSummary())+'</p></div>'+
+      '<div class="m0-probe"><strong>Temporary Android share storage</strong><p>Inspect origin-wide quota pressure and whether Chrome reports persistent storage. Request persistence only by clicking; permission may be refused, and neither status proves that staged shares survive eviction or that a physical Folder is writable.</p>'+
+      '<div class="m0-probe-actions"><button class="secondary" type="button" data-m0-storage>Inspect storage</button><button class="secondary" type="button" data-m0-persist>Request persistence</button></div>'+
+      '<p role="status" data-m0-storage-result>'+escapeHTML(storageSummary())+'</p></div>'+
       '<div class="m0-probe"><strong>Offline shell diagnostic</strong><p>Inspect this app\'s Cache Storage and service-worker controller without going offline or changing caches. A cached shell does not establish offline acceptance.</p>'+
       '<button class="secondary" type="button" data-m0-offline>Inspect cached shell</button><p role="status" data-m0-offline-result>'+escapeHTML(offlineSummary())+'</p></div>'+
       '<label class="m0-commit">Published commit (optional, verify in Actions)<input data-m0-commit maxlength="40" value="'+escapeHTML(record.releaseCommit)+'" placeholder="7–40 hex characters"></label>'+
@@ -297,6 +308,14 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
       }catch{toast('Portable fixture verification failed.',true);}
       finally{button.disabled=false;}
     });
+    for(const [selector,action] of [['[data-m0-storage]',inspectShareStorage],['[data-m0-persist]',requestShareStoragePersistence]]){
+      root.querySelector(selector)?.addEventListener('click',async event=>{
+        const button=event.currentTarget;button.disabled=true;
+        try{record.shareStorageProbe=normalizeShareStorageProbe(await action(env));save();
+          root.querySelector('[data-m0-storage-result]').textContent=storageSummary();}
+        finally{button.disabled=false;}
+      });
+    }
     root.querySelector('[data-m0-offline]')?.addEventListener('click',async event=>{
       const button=event.currentTarget;button.disabled=true;
       try{record.offlineProbe=normalizeOfflineProbe(await inspectM0OfflineShell(env));save();

@@ -1,7 +1,7 @@
 import {prepareIncomingShare,enqueueIncomingShare} from './src/share-inbox.mjs';
-import {prepareSharedFiles,MAX_SHARED_TOTAL_BYTES} from './src/shared-files.mjs';
-const CACHE='sourcebook-shell-0.0.46-android-file-shares';
-const FILES=['./','./index.html','./src/styles.css','./src/app.mjs','./src/device-readiness.mjs','./src/link-capture.mjs','./src/catalog-urls.mjs','./src/catalog-url-bulk.mjs','./src/catalog-links-ui.mjs','./src/file-capture.mjs','./src/capture-intake.mjs','./src/clipboard-images.mjs','./src/file-import.mjs','./src/file-stream-import.mjs','./src/legacy-url-migration.mjs','./src/share-inbox.mjs','./src/m0-feasibility.mjs','./src/m0-acceptance.mjs','./src/m0-evidence-review.mjs','./src/storage.mjs','./src/identity.mjs','./src/catalog.mjs','./src/catalog-transactions.mjs','./src/catalog-backup.mjs','./src/catalog-restore.mjs','./src/catalog-conflicts.mjs','./src/catalog-folders.mjs','./src/catalog-search.mjs','./src/source-scan.mjs','./src/source-index.mjs','./src/source-overlap.mjs','./src/overlap-review.mjs','./src/overlap-review-ui.mjs','./src/view-layout.mjs','./src/file-symbols.mjs','./src/views.mjs','./src/views-controller.mjs','./src/bulk-tags.mjs','./src/navigation.mjs','./src/workspace.mjs','./src/tags.mjs','./assets/icon.svg','./assets/icon-192.png','./assets/icon-512.png','./assets/icon-maskable-192.png','./assets/icon-maskable-512.png','./manifest.webmanifest'];
+import {prepareSharedFiles,fingerprintSharedFiles,MAX_SHARED_TOTAL_BYTES} from './src/shared-files.mjs';
+const CACHE='sourcebook-shell-0.0.47-share-integrity';
+const FILES=['./','./index.html','./src/styles.css','./src/app.mjs','./src/device-readiness.mjs','./src/link-capture.mjs','./src/catalog-urls.mjs','./src/catalog-url-bulk.mjs','./src/catalog-links-ui.mjs','./src/file-capture.mjs','./src/capture-intake.mjs','./src/clipboard-images.mjs','./src/file-import.mjs','./src/file-stream-import.mjs','./src/legacy-url-migration.mjs','./src/share-inbox.mjs','./src/share-storage.mjs','./src/m0-feasibility.mjs','./src/m0-acceptance.mjs','./src/m0-evidence-review.mjs','./src/storage.mjs','./src/identity.mjs','./src/catalog.mjs','./src/catalog-transactions.mjs','./src/catalog-backup.mjs','./src/catalog-restore.mjs','./src/catalog-conflicts.mjs','./src/catalog-folders.mjs','./src/catalog-search.mjs','./src/source-scan.mjs','./src/source-index.mjs','./src/source-overlap.mjs','./src/overlap-review.mjs','./src/overlap-review-ui.mjs','./src/view-layout.mjs','./src/file-symbols.mjs','./src/views.mjs','./src/views-controller.mjs','./src/bulk-tags.mjs','./src/navigation.mjs','./src/workspace.mjs','./src/tags.mjs','./assets/icon.svg','./assets/icon-192.png','./assets/icon-512.png','./assets/icon-maskable-192.png','./assets/icon-maskable-512.png','./manifest.webmanifest'];
 const SHARE_PATH=new URL('./share-target',self.registration.scope).pathname;
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('sourcebook-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
@@ -18,7 +18,8 @@ async function receiveShare(request){
         throw Error('Only a single title, text and URL field may be shared');
     }
     const shared=prepareSharedFiles(form.getAll('files'));
-    const item=prepareIncomingShare({title:form.get('title'),text:form.get('text'),url:form.get('url')},{fileDescriptors:shared.descriptors});
+    const hashed=await fingerprintSharedFiles(shared.files);
+    const item=prepareIncomingShare({title:form.get('title'),text:form.get('text'),url:form.get('url')},{fileDescriptors:hashed.descriptors});
     await enqueueIncomingShare(item,{files:shared.files});
     // Only a constant marker is in the navigation URL. Private share content stays in IndexedDB.
     return Response.redirect(new URL('./?shared=1',self.registration.scope).href,303);
