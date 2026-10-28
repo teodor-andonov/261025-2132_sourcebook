@@ -399,7 +399,7 @@ async function setPlainFolder(handle,remember=true){
     state.sources=[];state.handles.clear();state.records.clear();state.taxonomy=[];state.tagFilter=null;
     for(const existing of tabs)state.handles.set(existing.id,existing.handle);
   }
-  state.catalog=null;state.catalogHandle=null;state.catalogTagView=null;state.activeViewId=null;state.views=[];state.pendingTransaction=null;
+  state.catalog=null;state.catalogHandle=null;state.catalogTagView=null;state.catalogLinksView=false;state.fileType='all';state.activeViewId=null;state.views=[];state.pendingTransaction=null;
   state.sources=[...tabs,tab];state.handles.set(tab.id,handle);
   state.sourceId=tab.id;state.parts=[];state.selected.clear();state.search='';state.sidebar=false;
   if(remember)void rememberFolderTabs();
@@ -518,7 +518,7 @@ async function openDirectory(h){
   state.sources=await readJson(h,'sources.json',[]);
   const savedTags=await readJson(h,'tags.json',[]);
   if(!Array.isArray(savedTags))throw Error('Invalid tags.json catalog taxonomy');
-  state.taxonomy=savedTags;state.views=validateViews(await readJson(h,'views.json',[]));state.activeViewId=null;state.tagFilter=null;state.catalogTagView=null;state.catalogLinksView=false;
+  state.taxonomy=savedTags;state.views=validateViews(await readJson(h,'views.json',[]));state.activeViewId=null;state.tagFilter=null;state.catalogTagView=null;state.catalogLinksView=false;state.fileType='all';
   state.handles.clear();state.records.clear();
   for(const s of state.sources){
     try{const v=await getLocal('source:'+config.id+':'+s.id);if(v)state.handles.set(s.id,v);}
