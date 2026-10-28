@@ -9,7 +9,9 @@ const make=(platform='Windows',status='Pass')=>{
   record.releaseCommit='2e3106b2ed9ea6697c445e0036b585e87cc7f00a';
   for(const id of M0_IDS)record.results[id]={status,note:'Actual device test',evidence:'https://github.com/example/evidence'};
   record.portableVerifyProbe={status:'ok',portableVerified:true,journalClear:true,fixtureProof:'a'.repeat(64)};
-  return exportM0Report(record,{platform,chromeVersion:'130.0.0.0',standalone:true,features:[]},now);
+  record.writeProbe={status:'ok',writeVerified:true,cleanupVerified:true,cleanupRequired:false};
+  record.captureVerifyProbe={status:'ok',urlVerified:true,textVerified:true,fixtureProof:'c'.repeat(64)};
+  return exportM0Report(record,{platform,chromeVersion:'130.0.0.0',standalone:true,features:[{label:'Directory picker',available:true}]},now);
 };
 const parsed=(platform,status)=>parseM0EvidenceReport(JSON.stringify(make(platform,status)));
 test('normal exported reports parse without including user-entered notes or paths',()=>{

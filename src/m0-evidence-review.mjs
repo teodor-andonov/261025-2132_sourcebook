@@ -1,4 +1,5 @@
 // Read-only, device-local review of two manually exported M0 reports.
+import {evaluateM0ProviderGate} from './m0-provider-gate.mjs';
 // Neither imported JSON nor a matching synthetic fixture fingerprint establishes acceptance.
 export const M0_REPORT_SCHEMA='sourcebook-m0-device-report-v1';
 export const M0_REPORT_LIMIT=128*1024;
@@ -41,7 +42,10 @@ export function parseM0EvidenceReport(json){
   const fixtureProof=typeof p.fixtureProof==='string'&&PROOF.test(p.fixtureProof)?p.fixtureProof:'';
   const capture=input.physicalCaptureVerifyProbe||{};
   const captureProof=typeof capture.fixtureProof==='string'&&PROOF.test(capture.fixtureProof)?capture.fixtureProof:'';
+  // Recompute from original fields: a claimed providerGate in imported JSON is not trusted.
+  const providerGate=evaluateM0ProviderGate({features:input.capabilities,writeProbe:input.disposableWriteProbe,captureVerifyProbe:input.physicalCaptureVerifyProbe});
   return Object.freeze({
+    providerGate,
     platform:env.platform,chromeVersion:env.chromeVersion,standalone:env.standalone,
     exportedAt:input.exportedAt,releaseCommit:COMMIT.test(input.releaseCommit||'')?input.releaseCommit.toLowerCase():'',
     results,portableVerified:p.status==='ok'&&p.portableVerified===true&&p.journalClear===true,
@@ -56,6 +60,8 @@ export function compareM0EvidenceReports(windows,android,now=new Date().toISOStr
   const rows=M0_IDS.map(id=>({id,windows:windows.results[id].status,android:android.results[id].status,
     windowsEvidence:!!windows.results[id].evidence,androidEvidence:!!android.results[id].evidence}));
   const warnings=[];
+  for(const report of [windows,android])if(report.providerGate?.state!=='probe-ready')warnings.push(report.platform+' filesystem provider gate is '+(report.providerGate?.state||'unverified')+'. '+(report.providerGate?.nextAction||'Re-export device evidence.'));
+
   const sameCommit=!!windows.releaseCommit&&!!android.releaseCommit&&
     (windows.releaseCommit===android.releaseCommit||
       (windows.releaseCommit.startsWith(android.releaseCommit)||android.releaseCommit.startsWith(windows.releaseCommit)));
@@ -69,7 +75,7 @@ export function compareM0EvidenceReports(windows,android,now=new Date().toISOStr
   if(!sameFixture)warnings.push('No matching verified disposable .sb fixture proof across devices. Reverify the SAME synced fixture on both devices and export again.');
   const sameCaptureFixture=!!windows.captureVerified&&!!android.captureVerified&&
     !!windows.captureProof&&windows.captureProof===android.captureProof;
-  if((windows.captureVerified||android.captureVerified)&&!sameCaptureFixture)
+  if(!sameCaptureFixture)
     warnings.push('Physical .url/.md fixture evidence is incomplete or mismatched. Verify the SAME disposable Folder on both devices.');
   const blockers=rows.filter(r=>r.windows!=='Pass'||r.android!=='Pass');
   if(blockers.length)warnings.push(blockers.length+' M0 scenarios are not marked Pass on both devices.');
