@@ -4,6 +4,7 @@ import {LINK_CAPTURE_KEY,normalizeCaptureStore,normalizeCaptureURL} from './link
 import {catalogURLName,planCatalogURLImport,planCatalogURLEdit,validateCatalogURLRecord} from './catalog-urls.mjs';
 import {MAX_BULK_URLS,parseBulkURLTagPaths,planBulkCatalogURLTags} from './catalog-url-bulk.mjs';
 import {ensureTagPath,recordTagPaths,assertTagSnapshotUnchanged} from './tags.mjs';
+import {planLegacyURLMigration,migrateLegacyURLToFile} from './legacy-url-migration.mjs';
 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const snapshot=records=>JSON.stringify([...records].sort((a,b)=>String(a.id).localeCompare(String(b.id))));
@@ -108,7 +109,7 @@ export function createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal
   }
   async function open(){
     if(!state.catalog)return toast('Open a Catalog to store portable links.',true);
-    openDialog('<h2>Legacy Catalog links</h2><p>These older URL records have no corresponding filesystem file. No new catalog-only links can be added. Use Save URL/text as file to create .url files in an actual Folder. Existing records are retained until an explicit migration is available.</p>'+
+    openDialog('<h2>Legacy Catalog links</h2><p>These older URL records have no corresponding filesystem file. No new catalog-only links can be added. Use Save URL/text as file to create .url files in an actual Folder. Select an older link and explicitly migrate it to a real .url file in a registered Folder.</p>'+
       '<div class="dialog-actions"><button type="button" class="secondary" data-catalog-links="show">Show links in results</button></div>'+
       '<form id="catalog-links-form"><label>Add URLs (one per line, up to 20)<textarea name="urls" rows="3" maxlength="45000" placeholder="https://example.org/reference"></textarea></label>'+
       '<label>Tags (optional, comma-separated paths)<input name="tags" maxlength="1000" placeholder="Architecture / References, Research"/></label>'+
@@ -149,7 +150,8 @@ export function createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal
             '<div class="capture-link"><strong>'+escapeHTML(catalogURLName(record))+
             '</strong><small title="'+escapeHTML(record.url)+'">'+escapeHTML(record.url)+'</small></div>'+
             '<a class="secondary" href="'+escapeHTML(record.url)+'" target="_blank" rel="noopener noreferrer">Open</a>'+
-            '<button type="button" class="secondary" data-catalog-links="edit" data-url-id="'+escapeHTML(record.id)+'">Edit</button></div>';
+            '<button type="button" class="secondary" data-catalog-links="edit" data-url-id="'+escapeHTML(record.id)+'">Edit</button>'+ 
+            '<button type="button" class="secondary" data-catalog-links="migrate" data-url-id="'+escapeHTML(record.id)+'">Create .url + rebind</button></div>';
         }catch{return '<p class="micro-hint">Invalid Catalog URL metadata. Repair from a backup before editing.</p>';}
       }).join(''):'<p>No matching Catalog links.</p>';
       const count=dialog.querySelector('#catalog-url-selection');
@@ -218,6 +220,7 @@ export function createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal
           return;
         }
         if(action==='edit'){openEdit(button.dataset.urlId);return;}
+        if(action==='migrate'){openMigration(button.dataset.urlId);return;}
         if(action==='staged'){
           const ids=[...dialog.querySelectorAll('input[data-staged-url]:checked')].map(x=>x.dataset.stagedUrl);
           if(!ids.length||ids.length>20)throw Error('Select 1–20 staged links');
@@ -228,6 +231,47 @@ export function createCatalogLinksUI({state,openDialog,escapeHTML,toast,getLocal
           if(await importLinks(selected,tags))await populate();
         }
       }catch(error){toast('Catalog links: '+error.message,true);}
+    });
+  }
+  function openMigration(id){
+    const record=state.records.get(id);
+    try{validateCatalogURLRecord(record);}catch(error){return toast(error.message,true);}
+    const destinations=state.sources.filter(s=>state.handles.get(s.id)?.kind==='directory');
+    if(!destinations.length)return toast('Reconnect a registered Catalog Folder before migrating.',true);
+    const preview=planLegacyURLMigration({record,catalog:state.catalog,source:destinations[0],
+      records:[...state.records.values()]});
+    const expectedRecords=snapshot(state.records.values());
+    openDialog('<h2>Migrate legacy link to a real file</h2>'+
+      '<p>Create a .url in a registered Folder, verify its bytes, then rebind the same Catalog ID, Tags and Notes. No existing files are renamed or overwritten.</p>'+
+      '<p class="micro-hint">'+escapeHTML(record.url)+'<br/>Filename: '+escapeHTML(preview.name)+'</p>'+
+      '<form id="legacy-url-migration-form"><label>Destination registered Folder<select name="sourceId">'+
+      destinations.map(s=>'<option value="'+escapeHTML(s.id)+'">'+escapeHTML(s.name)+'</option>').join('')+
+      '</select></label><label class="setting-row"><input type="checkbox" name="confirmMigration" required/> I confirm creating a new .url file and rebinding this legacy record.</label>'+
+      '<p class="micro-hint">Both Folder and Catalog require write permission. A failed migration may leave a new or partial shortcut; inspect before retrying. Android Folder writing may be unsupported.</p>'+
+      '<div class="dialog-actions"><button type="button" class="secondary" data-action="dismiss">Cancel</button>'+
+      '<button type="submit" class="primary">Create file and migrate</button></div></form>');
+    $('#legacy-url-migration-form').addEventListener('submit',async event=>{
+      event.preventDefault();
+      if(busy||state.resourceSaving||state.bulkSaving||state.viewSaving||state.backupBusy)
+        return toast('Finish the current Catalog operation first.',true);
+      const form=event.target;
+      if(!form.elements.confirmMigration.checked)return toast('Confirm the migration first.',true);
+      busy=true;state.resourceSaving=true;
+      try{
+        if(snapshot(state.records.values())!==expectedRecords)throw Error('Catalog changed since preview');
+        await refreshRecords();
+        if(snapshot(state.records.values())!==expectedRecords)throw Error('Catalog metadata changed on disk');
+        const result=await migrateLegacyURLToFile({
+          catalogHandle:state.catalogHandle,sourceHandle:state.handles.get(form.elements.sourceId.value),
+          expectedCatalog:state.catalog,expectedSources:state.sources,records:[...state.records.values()],
+          recordId:id,sourceId:form.elements.sourceId.value,authorized,
+          commit:({changes})=>commitCatalogEdits(changes)});
+        await refreshRecords();
+        env.document.querySelector('#dialog')?.remove();
+        toast('Migrated '+result.id+' to '+result.name+'; stable Tags and Notes retained.');
+        await refreshResults();
+      }catch(error){await refreshPendingCatalog();toast('Legacy migration: '+error.message,true);}
+      finally{state.resourceSaving=false;busy=false;}
     });
   }
   function openEdit(id){

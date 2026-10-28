@@ -1,3 +1,8 @@
+## 2026-10-28 10:25 Europe/Madrid — V0.0.41 candidate: explicit legacy URL migration
+- **Code:** One-at-a-time, user-confirmed file-backed .url migration from legacy Catalog links to a connected registered Folder. Preserves Catalog stable ID, Tags, Notes, title; keeps old URL/title only as an audit snapshot. Source file is verified before a recoverable metadata rebind; stale state, pending journals, sync conflicts and collisions block the operation.
+- **Risk:** Partial/orphan .url may remain on failed source/Catalog write; no atomic create-exclusive or cross-device lock. Real Windows/Pixel 8 acceptance remains Not tested.
+- **Evidence at authoring:** Automated tests added; PR CI, merge, Pages and branch cleanup require independent verification. No screenshots or Mindmap changes. [Development log](../logs/development/261028-1025_legacy-url-file-migration.md).
+
 ## 2026-10-28 09:29 Europe/Madrid — V0.0.40 candidate: file-backed capture inbox and portable fixture
 
 - **Code changes:** Link staging has explicit Create `.url` (selected writable Folder) and browser Download fallback; Android share inbox has explicit Create/Download `.url` and `.md` actions. Verified Folder writes remove the corresponding pending share only after exact readback; downloads are unverified and retain the share. Existing staged links remain until explicit removal. Manual URL/text capture also exposes browser Download.

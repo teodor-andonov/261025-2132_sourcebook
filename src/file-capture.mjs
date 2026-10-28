@@ -46,8 +46,10 @@ export function parseInternetShortcut(text){
 export async function writeCapturedFile(directory,plan){
   if(!directory||directory.kind!=='directory'||typeof directory.getFileHandle!=='function')
     throw Error('Choose a writable destination folder');
-  if(!plan||!/^[\p{L}\p{N} ()_,.\-]+\.(url|md)$/iu.test(plan.name)||
-    !['url','text'].includes(plan.kind)||typeof plan.text!=='string')
+  if(!plan||!/^[\p{L}\p{N} ()_,.\-]+(?:\[[a-z]{1,4}[1-9][0-9]*\])?\.(url|md)$/iu.test(plan.name)||
+    !['url','text'].includes(plan.kind)||typeof plan.text!=='string'||plan.name.length>90||
+    (plan.kind==='url'?(!plan.name.endsWith('.url')||!parseInternetShortcut(plan.text)):
+      (!plan.name.endsWith('.md')||plan.text.length>MAX_TEXT+1)))
     throw Error('Invalid file capture plan');
   // Browser File System Access has no atomic O_EXCL. Unique names and a
   // preflight check reduce collisions; never use createWritable on a known file.

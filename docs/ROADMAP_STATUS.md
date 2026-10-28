@@ -1,3 +1,5 @@
+**V0.0.41 candidate:** Explicit legacy URL to physical .url migration implemented in code; device verification and release acceptance remain open. [Development log](../logs/development/261028-1025_legacy-url-file-migration.md).
+
 > **V0.0.40 candidate — 28 October 2026, 09:29 Madrid:** File-backed inbox actions and explicit browser Download fallback are implemented in source. Physical `.url` files can appear in saved Views' Links filter. The M0 disposable fixture now verifies a real `.url` plus its Catalog metadata. Legacy `kind=url` records remain untouched and unmigrated. **Device verified: Not tested. Released & accepted: No.** PR CI and deployment evidence must be added only after successful Actions runs. See [development log](../logs/development/261028-0929_file-backed-capture-inbox.md).
 
 > **Resource model correction (2026-10-28):** durable captures are ordinary filesystem files: links as `.url` and text as `.md`. Existing V0.0.35–0.0.38 Catalog-only URL rows are legacy and not a valid V1 resource model. Sourcebook retains them until explicit migration. [Design contract](DESIGN_CONTRACT.md). Physical Windows/Android acceptance remains untested.
