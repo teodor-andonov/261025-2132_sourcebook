@@ -1,9 +1,9 @@
 import {prepareIncomingShare,enqueueIncomingShare} from './src/share-inbox.mjs';
 import {prepareSharedFiles,fingerprintSharedFiles,MAX_SHARED_TOTAL_BYTES} from './src/shared-files.mjs';
-const CACHE='sourcebook-shell-0.0.64-m0-evidence-quality-ta-names-2';
-const FILES=['./','./index.html','./src/styles.css','./src/app.mjs','./src/device-readiness.mjs','./src/link-capture.mjs','./src/catalog-urls.mjs','./src/catalog-url-bulk.mjs','./src/catalog-links-ui.mjs','./src/file-capture.mjs','./src/file-preview.mjs','./src/physical-write-lock.mjs','./src/file-share-out.mjs','./src/prepared-share-handoff.mjs','./src/capture-intake.mjs','./src/clipboard-images.mjs','./src/file-import.mjs','./src/file-stream-import.mjs','./src/legacy-url-migration.mjs','./src/share-inbox.mjs','./src/shared-files.mjs','./src/share-storage.mjs','./src/m0-feasibility.mjs','./src/m0-acceptance.mjs','./src/m0-capture-acceptance.mjs','./src/m0-evidence-review.mjs','./src/m0-provider-gate.mjs','./src/storage.mjs','./src/identity.mjs','./src/catalog.mjs','./src/catalog-transactions.mjs','./src/catalog-write-lock.mjs','./src/catalog-backup.mjs','./src/catalog-restore.mjs','./src/catalog-conflicts.mjs','./src/catalog-folders.mjs','./src/catalog-search.mjs','./src/source-scan.mjs','./src/source-index.mjs','./src/source-overlap.mjs','./src/overlap-review.mjs','./src/overlap-review-ui.mjs','./src/view-layout.mjs','./src/file-symbols.mjs','./src/views.mjs','./src/views-controller.mjs','./src/bulk-tags.mjs','./src/navigation.mjs','./src/selection.mjs','./src/workspace.mjs','./src/folder-enumeration.mjs','./src/folder-filters.mjs','./src/resource-paging.mjs','./src/file-information.mjs','./src/tags.mjs','./assets/icon.svg','./assets/icon.svg?v=ta-20261027','./assets/icon-192.png','./assets/icon-512.png','./assets/icon-maskable-192.png','./assets/icon-maskable-512.png','./manifest.webmanifest'];
+const CACHE='sourcebook-shell-0.0.64-m0-evidence-quality-ta-names-2-ta-update-v4';
+const FILES=['./pwa-update.js','./','./index.html','./src/styles.css','./src/app.mjs','./src/device-readiness.mjs','./src/link-capture.mjs','./src/catalog-urls.mjs','./src/catalog-url-bulk.mjs','./src/catalog-links-ui.mjs','./src/file-capture.mjs','./src/file-preview.mjs','./src/physical-write-lock.mjs','./src/file-share-out.mjs','./src/prepared-share-handoff.mjs','./src/capture-intake.mjs','./src/clipboard-images.mjs','./src/file-import.mjs','./src/file-stream-import.mjs','./src/legacy-url-migration.mjs','./src/share-inbox.mjs','./src/shared-files.mjs','./src/share-storage.mjs','./src/m0-feasibility.mjs','./src/m0-acceptance.mjs','./src/m0-capture-acceptance.mjs','./src/m0-evidence-review.mjs','./src/m0-provider-gate.mjs','./src/storage.mjs','./src/identity.mjs','./src/catalog.mjs','./src/catalog-transactions.mjs','./src/catalog-write-lock.mjs','./src/catalog-backup.mjs','./src/catalog-restore.mjs','./src/catalog-conflicts.mjs','./src/catalog-folders.mjs','./src/catalog-search.mjs','./src/source-scan.mjs','./src/source-index.mjs','./src/source-overlap.mjs','./src/overlap-review.mjs','./src/overlap-review-ui.mjs','./src/view-layout.mjs','./src/file-symbols.mjs','./src/views.mjs','./src/views-controller.mjs','./src/bulk-tags.mjs','./src/navigation.mjs','./src/selection.mjs','./src/workspace.mjs','./src/folder-enumeration.mjs','./src/folder-filters.mjs','./src/resource-paging.mjs','./src/file-information.mjs','./src/tags.mjs','./assets/icon.svg','./assets/icon.svg?v=ta-20261027','./assets/icon-192.png','./assets/icon-512.png','./assets/icon-maskable-192.png','./assets/icon-maskable-512.png','./manifest.webmanifest'];
 const SHARE_PATH=new URL('./share-target',self.registration.scope).pathname;
-self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting())));
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('sourcebook-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 async function receiveShare(request){
   try{
@@ -36,8 +36,44 @@ self.addEventListener('fetch',e=>{
   }
   if(e.request.method!=='GET')return;
   if(e.request.mode==='navigate'){
-    e.respondWith(fetch(e.request).catch(async()=>await caches.match('./index.html')||Response.error()));
+    e.respondWith(caches.open(CACHE).then(async cache=>await cache.match('./index.html')||fetch(e.request)));
     return;
   }
-  e.respondWith(caches.match(e.request).then(hit=>hit||fetch(e.request)));
+  e.respondWith(caches.open(CACHE).then(cache=>cache.match(e.request)).then(hit=>hit||fetch(e.request)));
 });
+
+/* TA PWA update worker v1. Append to sw.js (classic or module). */
+(() => {
+  let updating = false;
+  self.addEventListener('message', event => {
+    if (event.data?.type !== 'TA_UPDATE_APPLY') return;
+    const reply = accepted => event.ports[0]?.postMessage({accepted});
+    if (updating || !event.source?.url?.startsWith(self.registration.scope)) { reply(false); return; }
+    updating = true;
+    event.waitUntil((async () => {
+      let windows = [];
+      try {
+        windows = (await self.clients.matchAll({type:'window',includeUncontrolled:true}))
+          .filter(client => client.url.startsWith(self.registration.scope));
+        if (!windows.length) { reply(false); return; }
+        const ready = await Promise.all(windows.map(client => new Promise(resolve => {
+          const channel = new MessageChannel();
+          const timeout = setTimeout(() => { channel.port1.close(); resolve(false); },2000);
+          channel.port1.onmessage = message => {
+            clearTimeout(timeout); channel.port1.close(); resolve(message.data?.ready === true);
+          };
+          client.postMessage({type:'TA_UPDATE_PREPARE'},[channel.port2]);
+        })));
+        if (!ready.every(Boolean)) {
+          windows.forEach(client => client.postMessage({type:'TA_UPDATE_CANCEL'}));
+          reply(false); return;
+        }
+        reply(true);
+        await self.skipWaiting();
+      } catch {
+        windows.forEach(client => client.postMessage({type:'TA_UPDATE_CANCEL'}));
+        reply(false);
+      } finally { updating = false; }
+    })());
+  });
+})();

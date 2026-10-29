@@ -108,3 +108,7 @@ Begin at [V0.0: PWA feasibility](docs/ROADMAP_V1_ULTRA.md#27--v00-pwa--filesyste
 Keep decisions in logs/decisions/, implementation notes in logs/development/ and deferred ideas in logs/ideas/. Mark changes in plan when a decision is validated by real tests. Preserve ordinary user files; prefer reversible operations.
 
 *Current repository state: working source-code prototype, not yet verified as an installed daily-driver PWA. Source files are not renamed when saving metadata.*
+
+## PWA maintenance
+
+See [PWA.md](PWA.md) for this app’s identity, icons, update guard and release checks. Shared browser requirements live in the [TA PWA guide](https://github.com/teodor-andonov/261027_ta-guides/blob/main/guides/pwa/README.md); repository publishing policy is documented [separately](https://github.com/teodor-andonov/261027_ta-guides/blob/main/guides/publishing/README.md).
