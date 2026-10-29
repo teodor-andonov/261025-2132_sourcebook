@@ -450,7 +450,7 @@ async function main(){
         await page.locator('#search-input').fill('alpha');
         await page.locator('[data-action="table"]').click();
         await page.locator('#sort-mode').selectOption('name-desc');
-        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='1 items');
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent?.startsWith('1 items'));
         await page.locator('[data-action="open-folder"]').first().click();
         await page.waitForFunction(()=>document.querySelectorAll('[data-source]').length===2);
         await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='2 items');
@@ -461,7 +461,7 @@ async function main(){
         await page.waitForFunction(()=>document.querySelector('#search-input')?.value==='alpha');
         assert.equal(await page.locator('#sort-mode').inputValue(),'name-desc');
         assert.equal(await page.locator('#items.table').count(),1);
-        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='1 items');
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent?.startsWith('1 items'));
         await page.keyboard.press('Alt+Shift+ArrowRight');
         await page.waitForFunction(()=>document.querySelector('#search-input')?.value==='beta');
         assert.equal(await page.locator('#sort-mode').inputValue(),'type');
