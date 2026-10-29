@@ -488,7 +488,34 @@ async function main(){
       }
     });
 
-    process.stdout.write('Chromium smoke '+passed+'/10 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
+    await scenario('native Chromium OPFS progressive Folder reads, partial limits and cancellation',async(_context,page)=>{
+      await controlled(page);
+      const result=await page.evaluate(async()=>{
+        const {enumerateFolderEntries}=await import('./src/folder-enumeration.mjs');
+        const root=await navigator.storage.getDirectory();
+        const name='sourcebook-opfs-progressive-'+crypto.randomUUID();
+        const dir=await root.getDirectoryHandle(name,{create:true});
+        try{
+          for(let i=0;i<620;i++)await dir.getFileHandle('file-'+String(i).padStart(4,'0')+'.md',{create:true});
+          const snapshots=[];
+          const read=await enumerateFolderEntries(dir,{sourceId:'smoke',maxEntries:500,batchSize:100,
+            progressIntervalMs:0,onProgress:items=>snapshots.push(items.length)});
+          let current=true;
+          const cancelled=await enumerateFolderEntries(dir,{sourceId:'smoke',maxEntries:500,batchSize:100,
+            progressIntervalMs:0,isCurrent:()=>current,yieldControl:async()=>{current=false;}});
+          return {count:read.items.length,limited:read.truncated,first:read.items[0].id,
+            snapshots,cancelled:cancelled.cancelled,staleItems:cancelled.items.length};
+        }finally{await root.removeEntry(name,{recursive:true});}
+      });
+      assert.equal(result.count,500);
+      assert.equal(result.limited,true);
+      assert.match(result.first,/smoke:file-/);
+      assert.deepEqual(result.snapshots,[100,200,300,400,500]);
+      assert.equal(result.cancelled,true);
+      assert.equal(result.staleItems,0);
+    });
+
+    process.stdout.write('Chromium smoke '+passed+'/11 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
   }finally{
     await browser?.close();
     await new Promise(resolveClose=>server.close(resolveClose));
