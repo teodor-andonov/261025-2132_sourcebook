@@ -576,7 +576,69 @@ async function main(){
       }
     });
 
-    process.stdout.write('Chromium smoke '+passed+'/12 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
+    await scenario('Folder selection supports keyboard ranges, touch mode and filtered safety',async(context,page)=>{
+      // Real OPFS files with a synthetic picker adapter; NOT Android SAF or Windows.
+      await context.addInitScript(()=>{
+        window.showDirectoryPicker=async()=>{throw new DOMException('No fixture','AbortError');};
+        const proto=window.FileSystemHandle?.prototype;
+        if(proto&&typeof proto.queryPermission!=='function'){
+          Object.defineProperty(proto,'queryPermission',{value:async()=> 'granted',configurable:true});
+          Object.defineProperty(proto,'requestPermission',{value:async()=> 'granted',configurable:true});
+        }
+      });
+      await controlled(page);
+      const fixture=await page.evaluate(async()=>{
+        const root=await navigator.storage.getDirectory(),name='sourcebook-opfs-selection-'+crypto.randomUUID();
+        const dir=await root.getDirectoryHandle(name,{create:true});
+        for(const file of ['alpha.md','beta.md','gamma.url','delta.md'])await dir.getFileHandle(file,{create:true});
+        window.showDirectoryPicker=async()=>dir;
+        return name;
+      });
+      try{
+        await page.locator('[data-action="open-folder"]').first().click();
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='4 items');
+        await page.locator('#sort-mode').selectOption('name');
+        const rows=page.locator('#items .resource[data-item]');
+        await rows.nth(0).click();
+        await rows.nth(2).click({modifiers:['Shift']});
+        assert.equal(await page.locator('#items .resource.selected').count(),3);
+        await rows.nth(1).click({modifiers:['Shift']});
+        assert.equal(await page.locator('#items .resource.selected').count(),2,'Shift anchor stays on first clicked item');
+        await page.locator('[data-action="toggle-selection"]').click();
+        assert.equal(await page.locator('[data-action="toggle-selection"]').getAttribute('aria-pressed'),'true');
+        await rows.nth(3).click();
+        assert.equal(await page.locator('#items .resource.selected').count(),3,'touch-friendly mode toggles');
+        await page.locator('[data-action="select-shown"]').click();
+        assert.equal(await page.locator('#items .resource.selected').count(),4);
+        await page.locator('#file-type').selectOption('url');
+        assert.equal(await page.locator('#items .resource.selected').count(),0,'filter clears invisible selection');
+        await page.locator('#file-type').selectOption('all');
+        await page.locator('#items .resource').first().focus();
+        await page.keyboard.press('Control+a');
+        assert.equal(await page.locator('#items .resource.selected').count(),4);
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('#items .resource.selected').count(),0);
+        await page.locator('#search-input').fill('gamma');
+        await page.locator('#search-input').press('Control+a');
+        assert.equal(await page.locator('#search-input').inputValue(),'gamma','native text input selection remains intact');
+        assert.equal(await page.locator('#items .resource.selected').count(),0);
+        const entries=await page.evaluate(async name=>{
+          const root=await navigator.storage.getDirectory(),dir=await root.getDirectoryHandle(name);
+          const found=[];for await(const [filename] of dir.entries())found.push(filename);
+          return found.sort();
+        },fixture);
+        assert.deepEqual(entries,['alpha.md','beta.md','delta.md','gamma.url']);
+      }finally{
+        await page.evaluate(async name=>{
+          const {removeLocal}=await import('./src/storage.mjs');
+          await removeLocal('folder-tabs-v1');await removeLocal('last-mode');
+          const root=await navigator.storage.getDirectory();
+          await root.removeEntry(name,{recursive:true});
+        },fixture);
+      }
+    });
+
+    process.stdout.write('Chromium smoke '+passed+'/13 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
   }finally{
     await browser?.close();
     await new Promise(resolveClose=>server.close(resolveClose));
