@@ -48,7 +48,7 @@
 
 # Sourcebook — live roadmap status and acceptance
 
-**Updated:** 2026-10-28 · **Source:** `docs/ROADMAP_V1_ULTRA.md` · **Code reference:** V0.0.31 / merged PR #10; V0.0.32 M0 feasibility merged; V0.0.34 Android incoming-share staging published; V0.0.35 portable Catalog URL resources published; V0.0.36 bulk URL Tag edits in development (CI, release and device verification separate).
+**Updated:** 2026-10-29 · **Source:** `docs/ROADMAP_V1_ULTRA.md` · **Code reference:** V0.0.31 / merged PR #10; V0.0.32 M0 feasibility merged; V0.0.34 Android incoming-share staging published; V0.0.35 portable Catalog URL resources published; V0.0.36 bulk URL Tag edits in development (CI, release and device verification separate).
 
 ## How progress is tracked
 
@@ -63,7 +63,7 @@ Track each workstream independently through three stages:
 | Workstream / original release milestone | Implemented in code | Verified on both devices | Released & accepted | Main gaps / evidence |
 | --- | --- | --- | --- | --- |
 | **M0 / V0.0:** PWA, local file and permission feasibility | Partial | **Not tested** | **No** | Installed PWA and Syncthing-backed Folder/Catalog access need a real Windows+Pixel 8 test. Actions and manifest exist, but this gate is open. |
-| **V0.1:** Browsing, Tabs, gallery/list/table, side preview and visual polish | Substantial | **Not tested** | **No** | Folder Tabs and inspector implemented; PDF page thumbnails, mobile keyboard/touch and large-folder performance still incomplete. |
+| **V0.1:** Browsing, Tabs, gallery/list/table, side preview and visual polish | Substantial | **Not tested** | **No** | Folder Tabs, inspector, read-only per-Tab type/dotfile discovery and bounded progressive enumeration implemented; PDF page thumbnails, mobile keyboard/touch and physical large-folder performance still incomplete. |
 | **V0.2:** Portable `.sb` Catalog and filename identity | Partial | **Not tested** | **No** | Catalog JSON, root grants, bracketed identifiers and crash recovery exist; cross-catalog token lifecycle, rename/move rediscovery, migrations and portability tests incomplete. |
 | **V0.3:** Nested Tags and manual grouping | Substantial | **Not tested** | **No** | Stable nested Tags, pinned shortcuts, bulk Add/Remove, catalog-wide discovery work in code. Tag reparent/merge and genuine multi-device Sync acceptance remain. |
 | **V0.4:** Saved Views and search | Substantial | **Not tested** | **No** | AND/OR tags, type/status filtering, source/folder scope, grouping, table columns and explicit indexed scan work. Richer predicates, live change detection and 10k+ responsiveness remain. |

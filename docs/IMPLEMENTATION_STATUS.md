@@ -1,3 +1,9 @@
+## 2026-10-29 04:24 Europe/Madrid — V0.0.59 candidate: read-only Folder discovery
+- **Implemented in code:** Per-Tab physical file-type filter, explicit dotfile visibility, literal filename search and per-Tab persistence across reload. Extension categories include .url, text/code, audio and archives. Browser Folder filtering never writes to ordinary files or Catalog metadata; existing Catalog View/Tag filters remain unchanged.
+- **Safety:** Visible match counts are relative to read entries only; limited/failed provider scans stay marked incomplete. New preferences default to All types/dotfiles visible for legacy sessions. No recursive search, hidden Windows attribute detection or filesystem write.
+- **Evidence boundary:** New Node tests and headless Chromium OPFS integration scenario; PR CI/merge/Pages must be verified independently. Windows Chrome, Pixel 8 and Syncthing M0 remain open. No screenshots or Mindmap changes.
+- [Development log](../logs/development/261029-0424_folder-discovery-filters.md).
+
 ## 2026-10-29 03:25 Europe/Madrid — V0.0.58 candidate: progressive bounded Folder browsing
 - **Implemented in code:** Read-only single-Folder enumeration yields every 256 provider entries, throttles partial UI updates, cancels stale Tab/navigation requests, and marks provider failures as incomplete. A 20,000-included-entry ceiling reports an explicit partial result; search and sort are limited to the entries actually read. Registered Catalog Folder browsing inherits the same path without altering Catalog JSON or ordinary source files.
 - **Verification boundary:** Added seven Node regressions and an eleventh native Chromium OPFS scenario covering partial snapshots, cap and cancellation. Actual CI/merge/publish must be checked independently. OPFS is not external Folder or Pixel 8/Syncthing proof; M0 remains open. No screenshots or Mindmap changes.

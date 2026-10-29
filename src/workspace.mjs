@@ -1,7 +1,9 @@
 // Physical folder tabs are device-local browser state; never catalog records.
 // All helpers are pure and never mutate a FileSystemHandle or ordinary files.
 export const PLAIN_ROOT_ID='plain-root';
-export const FOLDER_TAB_DEFAULTS=Object.freeze({search:'',sort:'name',view:'gallery',size:164});
+import {FOLDER_FILE_TYPES} from './folder-filters.mjs';
+export const FOLDER_TAB_DEFAULTS=Object.freeze({search:'',sort:'name',view:'gallery',size:164,fileType:'all',showHidden:true});
+const FOLDER_TYPES=new Set(FOLDER_FILE_TYPES.map(([id])=>id));
 const FOLDER_SORTS=new Set(['name','name-desc','type']);
 const FOLDER_VIEWS=new Set(['gallery','list','table']);
 // Device-local tab presentation state only; no source-file writes or selections.
@@ -11,7 +13,9 @@ export function folderTabPreferences(value){
     search:typeof v.search==='string'&&v.search.length<=256&&!/[\x00-\x1f\x7f]/.test(v.search)?v.search:'',
     sort:FOLDER_SORTS.has(v.sort)?v.sort:FOLDER_TAB_DEFAULTS.sort,
     view:FOLDER_VIEWS.has(v.view)?v.view:FOLDER_TAB_DEFAULTS.view,
-    size:Number.isFinite(v.size)&&v.size>=110&&v.size<=280?Math.round(v.size):FOLDER_TAB_DEFAULTS.size
+    size:Number.isFinite(v.size)&&v.size>=110&&v.size<=280?Math.round(v.size):FOLDER_TAB_DEFAULTS.size,
+    fileType:FOLDER_TYPES.has(v.fileType)?v.fileType:FOLDER_TAB_DEFAULTS.fileType,
+    showHidden:typeof v.showHidden==='boolean'?v.showHidden:FOLDER_TAB_DEFAULTS.showHidden
   };
 }
 export function updateFolderTabPreferences(tabs,id,changes){

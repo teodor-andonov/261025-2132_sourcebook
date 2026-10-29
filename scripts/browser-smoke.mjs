@@ -450,7 +450,7 @@ async function main(){
         await page.locator('#search-input').fill('alpha');
         await page.locator('[data-action="table"]').click();
         await page.locator('#sort-mode').selectOption('name-desc');
-        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='1 items');
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent?.startsWith('1 items'));
         await page.locator('[data-action="open-folder"]').first().click();
         await page.waitForFunction(()=>document.querySelectorAll('[data-source]').length===2);
         await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='2 items');
@@ -461,7 +461,7 @@ async function main(){
         await page.waitForFunction(()=>document.querySelector('#search-input')?.value==='alpha');
         assert.equal(await page.locator('#sort-mode').inputValue(),'name-desc');
         assert.equal(await page.locator('#items.table').count(),1);
-        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='1 items');
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent?.startsWith('1 items'));
         await page.keyboard.press('Alt+Shift+ArrowRight');
         await page.waitForFunction(()=>document.querySelector('#search-input')?.value==='beta');
         assert.equal(await page.locator('#sort-mode').inputValue(),'type');
@@ -515,7 +515,68 @@ async function main(){
       assert.equal(result.staleItems,0);
     });
 
-    process.stdout.write('Chromium smoke '+passed+'/11 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
+
+    await scenario('Folder type, literal search and dotfile filters remain per-tab after reload',async(context,page)=>{
+      // Synthetic picker/permission shim with real OPFS handles, not Android SAF.
+      await context.addInitScript(()=>{
+        window.showDirectoryPicker=async()=>{throw new DOMException('No synthetic folder','AbortError');};
+        const proto=window.FileSystemHandle?.prototype;
+        if(proto&&typeof proto.queryPermission!=='function'){
+          Object.defineProperty(proto,'queryPermission',{value:async()=> 'granted',configurable:true});
+          Object.defineProperty(proto,'requestPermission',{value:async()=> 'granted',configurable:true});
+        }
+      });
+      await controlled(page);
+      const parentName=await page.evaluate(async()=>{
+        const root=await navigator.storage.getDirectory();
+        const name='sourcebook-opfs-discovery-'+crypto.randomUUID();
+        const parent=await root.getDirectoryHandle(name,{create:true});
+        const a=await parent.getDirectoryHandle('Mixed',{create:true});
+        const b=await parent.getDirectoryHandle('Second',{create:true});
+        for(const [dir,names] of [[a,['notes.md','.private.md','link.url','drawing.ifc']],[b,['other.url','image.png']]]){
+          for(const filename of names)await dir.getFileHandle(filename,{create:true});
+        }
+        const queue=[a,b];window.showDirectoryPicker=async()=>queue.shift();
+        return name;
+      });
+      try{
+        await page.locator('[data-action="open-folder"]').first().click();
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='4 items');
+        await page.locator('#file-type').selectOption('text');
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='2 items of 4 read');
+        await page.locator('[data-action="toggle-dotfiles"]').click();
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='1 items of 4 read');
+        await page.locator('#search-input').fill('notes');
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='1 items of 4 read');
+        await page.locator('[data-action="open-folder"]').first().click();
+        await page.waitForFunction(()=>document.querySelectorAll('[data-source]').length===2);
+        await page.locator('#file-type').selectOption('url');
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='1 items of 2 read');
+        await page.locator('[data-action="tab-prev"]').click();
+        await page.waitForFunction(()=>document.querySelector('#file-type')?.value==='text'&&document.querySelector('#search-input')?.value==='notes');
+        assert.equal(await page.locator('[data-action="toggle-dotfiles"]').getAttribute('aria-pressed'),'false');
+        await page.waitForFunction(async()=>{
+          const {getLocal}=await import('./src/storage.mjs');
+          const session=await getLocal('folder-tabs-v1');
+          return session?.tabs?.length===2&&session.tabs[0].preferences?.fileType==='text'&&
+            session.tabs[0].preferences?.showHidden===false&&session.tabs[1].preferences?.fileType==='url';
+        });
+        await page.reload({waitUntil:'load'});
+        await page.waitForFunction(()=>document.querySelector('#file-type')?.value==='text'&&document.querySelector('#search-input')?.value==='notes');
+        assert.equal(await page.locator('[data-action="toggle-dotfiles"]').getAttribute('aria-pressed'),'false');
+        await page.locator('[data-action="tab-next"]').click();
+        await page.waitForFunction(()=>document.querySelector('#file-type')?.value==='url');
+      }finally{
+        await page.evaluate(async name=>{
+          const {removeLocal}=await import('./src/storage.mjs');
+          await removeLocal('folder-tabs-v1');await removeLocal('last-mode');
+          const root=await navigator.storage.getDirectory();
+          await root.removeEntry(name,{recursive:true});
+        },parentName);
+      }
+    });
+
+    process.stdout.write('Chromium smoke '+passed+'/12 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
   }finally{
     await browser?.close();
     await new Promise(resolveClose=>server.close(resolveClose));
