@@ -10,6 +10,9 @@ const make=(platform='Windows',status='Pass')=>{
   for(const id of M0_IDS)record.results[id]={status,note:'Actual device test',evidence:'https://github.com/example/evidence'};
   record.portableVerifyProbe={status:'ok',portableVerified:true,journalClear:true,fixtureProof:'a'.repeat(64)};
   record.writeProbe={status:'ok',writeVerified:true,cleanupVerified:true,cleanupRequired:false};
+  record.probe={status:'ok',permission:'granted',entriesSampled:2,fileReadable:true,identityCheck:'same'};
+  record.reopenProbe={status:'ok',permission:'granted',enumerated:true};
+  record.offlineProbe={status:'cached',controllerActive:true,shellCached:true,appModuleCached:true};
   record.captureVerifyProbe={status:'ok',urlVerified:true,textVerified:true,fixtureProof:'c'.repeat(64)};
   return exportM0Report(record,{platform,chromeVersion:'130.0.0.0',standalone:true,features:[{label:'Directory picker',available:true}]},now);
 };
@@ -98,4 +101,41 @@ test('mismatched or unverified physical capture fixtures are flagged without lea
   assert.equal(result.sameCaptureFixture,false);
   assert.match(result.warnings.join(' '),/Physical \.url\/\.md fixture/);
   assert.equal(result.readyForManualReview,false);
+});
+
+test('all-Pass reports without Folder, handle and cache diagnostics are not review-ready',()=>{
+  const win=make('Windows'),android=make('Android');
+  delete win.readOnlyFolderProbe;
+  android.savedReadHandleProbe={status:'saved',permission:'granted',enumerated:false};
+  android.offlineCacheProbe={status:'cached',controllerActive:false,shellCached:true,appModuleCached:true};
+  const result=compareM0EvidenceReports(parseM0EvidenceReport(JSON.stringify(win)),
+    parseM0EvidenceReport(JSON.stringify(android)),now);
+  assert.equal(result.readyForManualReview,false);
+  assert.deepEqual(result.probeRows.map(row=>row.id),['M0-02','M0-04','M0-06']);
+  assert.equal(result.probeRows[0].windows,false);
+  assert.equal(result.probeRows[1].android,false);
+  assert.equal(result.probeRows[2].android,false);
+  assert.match(result.warnings.join(' '),/Windows M0-02/);
+  assert.match(result.warnings.join(' '),/Android M0-04/);
+  assert.match(result.warnings.join(' '),/Android M0-06/);
+});
+test('every claimed Pass needs external evidence, including large Folder and Android capture',()=>{
+  const win=make('Windows'),android=make('Android');
+  win.results['M0-07'].evidence='';
+  android.results['M0-08'].evidence='';
+  const result=compareM0EvidenceReports(parseM0EvidenceReport(JSON.stringify(win)),
+    parseM0EvidenceReport(JSON.stringify(android)),now);
+  assert.equal(result.readyForManualReview,false);
+  assert.match(result.warnings.join(' '),/Windows M0-07/);
+  assert.match(result.warnings.join(' '),/Android M0-08/);
+});
+test('imported diagnostics retain booleans, never private paths or arbitrary properties',()=>{
+  const win=make('Windows');
+  win.readOnlyFolderProbe.privatePath='C:/secret/client';
+  win.savedReadHandleProbe.filename='secret.pdf';
+  win.offlineCacheProbe.privateValue='sensitive';
+  const report=parseM0EvidenceReport(JSON.stringify(win));
+  assert.deepEqual(report.probes,{folderRead:true,handleRecheck:true,cacheReady:true});
+  assert.ok(!JSON.stringify(report).includes('secret'));
+  assert.ok(!JSON.stringify(report).includes('sensitive'));
 });
