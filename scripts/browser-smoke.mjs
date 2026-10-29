@@ -729,6 +729,7 @@ async function main(){
         assert.match(await page.locator('.resource-pager').innerText(),/151–300 of 325 · Page 2\/3/);
         await page.locator('#items .resource').first().click({modifiers:['Shift']});
         assert.match(await page.locator('#status').innerText(),/151 selected/);
+        await page.locator('[data-action="toggle-selection"]').click();
         await page.locator('[data-action="select-shown"]').click();
         assert.match(await page.locator('#status').innerText(),/150 selected/);
         await page.locator('#items .resource').first().focus();
