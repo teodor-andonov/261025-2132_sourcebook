@@ -383,8 +383,8 @@ async function main(){
           const handle=await dir.getFileHandle(name,{create:true});
           const stream=await handle.createWritable();await stream.write(text);await stream.close();
         };
-        await write('Example.url','[InternetShortcut]\\r\\nURL=https://example.org/physical-resource\\r\\n');
-        await write('Unsafe.url','[InternetShortcut]\\r\\nURL=javascript:alert(1)\\r\\n');
+        await write('Example.url','[InternetShortcut]\r\nURL=https://example.org/physical-resource\r\n');
+        await write('Unsafe.url','[InternetShortcut]\r\nURL=javascript:alert(1)\r\n');
         await write('Notes.md','x'.repeat(210000));
         // Test-only OPFS adapter. NOT a user-selected external Folder.
         window.showDirectoryPicker=async()=>({kind:'directory',name:folderName,
