@@ -23,6 +23,7 @@ test('Chromium engine acceptance smoke is required in PR CI without screenshots'
   assert.match(script,/two-tab Chromium Catalog journal lock rejects stale competing edits/);
   assert.match(script,/sourcebook-catalog-write-v1/);
   assert.match(script,/physical \.url preview and bounded Markdown preview use real Chromium files/);
+  assert.match(script,/Folder selection supports keyboard ranges, touch mode and filtered safety/);
   assert.doesNotMatch(script,/\.screenshot\(|recordVideo|tracing\.start/);
   assert.match(script,/NOT physical Windows\/Pixel 8 acceptance/);
 });
