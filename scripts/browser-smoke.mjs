@@ -372,7 +372,51 @@ async function main(){
       }
     });
 
-    process.stdout.write('Chromium smoke '+passed+'/8 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
+
+    await scenario('physical .url preview and bounded Markdown preview use real Chromium files',async(_context,page)=>{
+      await controlled(page);
+      const fixture=await page.evaluate(async()=>{
+        const root=await navigator.storage.getDirectory();
+        const folderName='sourcebook-opfs-preview-'+crypto.randomUUID();
+        const dir=await root.getDirectoryHandle(folderName,{create:true});
+        const write=async(name,text)=>{
+          const handle=await dir.getFileHandle(name,{create:true});
+          const stream=await handle.createWritable();await stream.write(text);await stream.close();
+        };
+        await write('Example.url','[InternetShortcut]\r\nURL=https://example.org/physical-resource\r\n');
+        await write('Unsafe.url','[InternetShortcut]\r\nURL=javascript:alert(1)\r\n');
+        await write('Notes.md','x'.repeat(210000));
+        // Test-only OPFS adapter. NOT a user-selected external Folder.
+        window.showDirectoryPicker=async()=>({kind:'directory',name:folderName,
+          entries:()=>dir.entries(),getDirectoryHandle:(...args)=>dir.getDirectoryHandle(...args),
+          queryPermission:async()=> 'granted'});
+        return {folderName};
+      });
+      try{
+        await page.locator('[data-action="open-folder"]').first().click();
+        await page.locator('[data-item]').filter({hasText:'Example'}).first().dblclick();
+        await page.locator('#viewer .shortcut-open').waitFor();
+        assert.equal(await page.locator('#viewer .shortcut-open').getAttribute('href'),'https://example.org/physical-resource');
+        assert.equal(await page.locator('#viewer .shortcut-note').count(),1);
+        await page.locator('[data-action="close-viewer"]').click();
+        await page.locator('[data-item]').filter({hasText:'Unsafe'}).first().dblclick();
+        await page.locator('#viewer').waitFor();
+        assert.match(await page.locator('#viewer').innerText(),/Invalid .url shortcut/);
+        assert.equal(await page.locator('#viewer .shortcut-open').count(),0);
+        await page.locator('[data-action="close-viewer"]').click();
+        await page.locator('[data-item]').filter({hasText:'Notes'}).first().dblclick();
+        await page.locator('#viewer .viewer-truncated').waitFor();
+        assert.equal((await page.locator('#viewer .viewer-text').innerText()).length,200000);
+        await page.locator('[data-action="close-viewer"]').click();
+      }finally{
+        await page.evaluate(async name=>{
+          const root=await navigator.storage.getDirectory();
+          await root.removeEntry(name,{recursive:true});
+        },fixture.folderName);
+      }
+    });
+
+    process.stdout.write('Chromium smoke '+passed+'/9 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
   }finally{
     await browser?.close();
     await new Promise(resolveClose=>server.close(resolveClose));

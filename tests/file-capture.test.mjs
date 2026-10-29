@@ -66,3 +66,9 @@ test('case-only collision in capture refuses overwrite',async()=>{
   await assert.rejects(writeCapturedFile(d,plan),/case-only collision/);
   assert.equal(d.writes,0);
 });
+
+test('Windows shortcut metadata works but URL outside its section is rejected',()=>{
+  assert.equal(parseInternetShortcut('\uFEFF[InternetShortcut]\r\nURL=https://example.org/a\r\nIconFile=example.ico\r\n[Other]\r\nValue=1\r\n'),'https://example.org/a');
+  assert.equal(parseInternetShortcut('[InternetShortcut]\nIconFile=icon\n[Other]\nURL=https://example.org'),null);
+  assert.equal(parseInternetShortcut('[InternetShortcut]\nURL=https://example.org\n[Other]\nURL=https://other.org'),null);
+});

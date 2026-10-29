@@ -3,7 +3,8 @@ import {createDeviceReadinessUI} from './device-readiness.mjs';
 import {createLinkCaptureUI} from './link-capture.mjs';
 import {createShareInboxUI,removeIncomingShare,listIncomingShares} from './share-inbox.mjs';
 import {createCatalogLinksUI} from './catalog-links-ui.mjs';
-import {classifyPastedText,planFileCapture,writeCapturedFile,parseInternetShortcut,requestCapturedFileDownload} from './file-capture.mjs';
+import {classifyPastedText,planFileCapture,writeCapturedFile,requestCapturedFileDownload} from './file-capture.mjs';
+import {readPhysicalShortcut,readPhysicalTextPreview} from './file-preview.mjs';
 import {prepareCaptureIntake} from './capture-intake.mjs';
 import {shareCapturedPlan} from './file-share-out.mjs';
 import {collectPastedImageBlobs,prepareClipboardImages,readClipboardImages} from './clipboard-images.mjs';
@@ -32,7 +33,7 @@ import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagP
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
-  sidePreviewSerial:0,sidePreviewUrl:null,
+  sidePreviewSerial:0,sidePreviewUrl:null,viewerSerial:0,
   captureWriting:false,
   catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,catalogLinksView:false,activeViewId:null,views:[],viewSaving:false,sort:'name',groupBy:'none',tableColumns:[...DEFAULT_TABLE_COLUMNS],fileType:'all',fileStatus:'all',
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,
@@ -1082,8 +1083,8 @@ async function renderSidePreview(item){
     const file=await handle.getFile(),format=sidePreviewKind(item,file.size);
     let body;
     if(format==='shortcut'){
-      const url=parseInternetShortcut(await file.slice(0,8192).text());
-      body=url?'<div class="side-preview-symbol">'+fileSymbol(item)+'<a href="'+escapeHTML(url)+'" target="_blank" rel="noopener noreferrer" title="Open external link">'+escapeHTML(url)+'</a></div>':'<div class="side-preview-symbol">Invalid .url shortcut</div>';
+      const shortcut=await readPhysicalShortcut(file);
+      body=shortcut.status==='ok'?'<div class="side-preview-symbol">'+fileSymbol(item)+'<a href="'+escapeHTML(shortcut.url)+'" target="_blank" rel="noopener noreferrer" title="Open external link">'+escapeHTML(shortcut.url)+'</a></div>':'<div class="side-preview-symbol">'+escapeHTML(shortcut.reason)+'</div>';
     }else if(format==='text'){
       const text=await file.slice(0,120000).text();
       body='<pre class="side-preview-text">'+escapeHTML(text)+'</pre>';
@@ -1262,6 +1263,7 @@ async function saveResource(){
   }finally{state.resourceSaving=false;}
 }
 function closePreview(){
+  ++state.viewerSerial;
   $('#viewer')?.remove();
   if(state.previewUrl){URL.revokeObjectURL(state.previewUrl);state.previewUrl=null;}
   state.previewId=null;
@@ -1277,20 +1279,35 @@ async function showPreview(item){
   if(item.catalogResult&&item.kind==='directory')return revealCatalogResult(item);
   if(item.kind==='directory')return navigate(state.sourceId,[...state.parts,item.name]);
   closePreview();
+  const serial=state.viewerSerial;
   try{
     const handle=item.catalogResult?await catalogResultHandle(item):item.handle;
+    if(!handle||typeof handle.getFile!=='function')throw Error('Reconnect Folder to preview');
     const file=await handle.getFile();
-    const kind=itemKind(item);
-    const url=URL.createObjectURL(file);state.previewUrl=url;state.previewId=item.id;
-    let body='<div class="unsupported">'+fileSymbol(item)+'<p>Preview unavailable for this format</p><a download="'+escapeHTML(item.name)+'" href="'+url+'">Download file</a></div>';
-    if(kind==='image')body='<img class="viewer-image" src="'+url+'" alt="'+escapeHTML(item.name)+'"/>';
-    if(kind==='pdf')body='<iframe class="viewer-pdf" src="'+url+'#toolbar=0" title="PDF preview"></iframe>';
-    if(kind==='video')body='<video class="viewer-video" src="'+url+'" controls autoplay></video>';
-    if(/\.(txt|md|json|css|js|ts|csv|html)$/i.test(item.name))body='<pre class="viewer-text">'+escapeHTML((await file.text()).slice(0,200000))+'</pre>';
+    const kind=itemKind(item),format=sidePreviewKind(item,file.size);
+    let body='',useBlob=false;
+    if(format==='shortcut'){
+      const shortcut=await readPhysicalShortcut(file);
+      body=shortcut.status==='ok'?
+        '<section class="shortcut-viewer"><div class="shortcut-label">Internet Shortcut · ordinary .url file</div><p class="shortcut-address">'+escapeHTML(shortcut.url)+'</p><a class="shortcut-open" href="'+escapeHTML(shortcut.url)+'" target="_blank" rel="noopener noreferrer">Open link ↗</a><p class="shortcut-note">External website opens only when you select the link. Sourcebook does not fetch the page.</p></section>':
+        '<section class="shortcut-viewer"><p>Invalid .url shortcut</p><small>'+escapeHTML(shortcut.reason)+'</small></section>';
+    }else if(format==='text'){
+      const preview=await readPhysicalTextPreview(file);
+      body='<div class="viewer-text-wrap"><pre class="viewer-text">'+escapeHTML(preview.text)+'</pre>'+(preview.truncated?'<p class="viewer-truncated">Preview limited to 200 KB; original file unchanged.</p>':'')+'</div>';
+    }else useBlob=true;
+    if(serial!==state.viewerSerial)return;
+    if(useBlob){
+      const url=URL.createObjectURL(file);state.previewUrl=url;
+      body='<div class="unsupported">'+fileSymbol(item)+'<p>Preview unavailable for this format</p><a download="'+escapeHTML(item.name)+'" href="'+url+'">Download file</a></div>';
+      if(kind==='image')body='<img class="viewer-image" src="'+url+'" alt="'+escapeHTML(item.name)+'"/>';
+      if(kind==='pdf')body='<iframe class="viewer-pdf" src="'+url+'#toolbar=0" title="PDF preview"></iframe>';
+      if(kind==='video')body='<video class="viewer-video" src="'+url+'" controls autoplay></video>';
+    }
+    state.previewId=item.id;
     const panel=document.createElement('div');panel.id='viewer';panel.className='viewer';
     panel.innerHTML='<header><span>'+escapeHTML(cleanName(item.name))+'</span>'+button('Close','close','close-viewer')+'</header><main>'+body+'</main><footer>← → next file <span>Esc to close</span></footer>';
     document.body.append(panel);
-  }catch(e){toast(errorText(e),true);}
+  }catch(e){if(serial===state.viewerSerial)toast(errorText(e),true);}
 }
 function previewStep(offset){
   const files=state.items.filter(i=>i.kind==='file');

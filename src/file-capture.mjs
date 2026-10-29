@@ -39,10 +39,16 @@ export function planFileCapture(input,{now=new Date(),random=''}={}){
 export function parseInternetShortcut(text){
   if(typeof text!=='string'||text.length>8192)return null;
   const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/);
-  if(lines[0]?.trim()!=='[InternetShortcut]')return null;
-  const values=lines.filter(l=>/^URL=/i.test(l));
-  if(values.length!==1)return null;
-  try{return normalizeCaptureURL(values[0].slice(4));}catch{return null;}
+  if(!/^\[InternetShortcut\]$/i.test(lines[0]?.trim()||''))return null;
+  let url=null,section='shortcut';
+  for(const line of lines.slice(1)){
+    if(/^\s*\[[^\]]+\]\s*$/u.test(line)){section='other';continue;}
+    const match=/^\s*URL\s*=(.*)$/i.exec(line);
+    if(!match)continue;
+    if(section!=='shortcut'||url!==null)return null;
+    try{url=normalizeCaptureURL(match[1]);}catch{return null;}
+  }
+  return url;
 }
 export async function writeCapturedFile(directory,plan){
   if(!directory||directory.kind!=='directory'||typeof directory.getFileHandle!=='function')
