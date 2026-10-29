@@ -44,8 +44,17 @@ export function parseM0EvidenceReport(json){
   const captureProof=typeof capture.fixtureProof==='string'&&PROOF.test(capture.fixtureProof)?capture.fixtureProof:'';
   // Recompute from original fields: a claimed providerGate in imported JSON is not trusted.
   const providerGate=evaluateM0ProviderGate({features:input.capabilities,writeProbe:input.disposableWriteProbe,captureVerifyProbe:input.physicalCaptureVerifyProbe});
+  // Whitelist only coarse diagnostic booleans from imported reports; never retain
+  // paths, filenames, device IDs, notes or arbitrary probe payloads.
+  const folder=input.readOnlyFolderProbe||{},reopen=input.savedReadHandleProbe||{},offline=input.offlineCacheProbe||{};
+  const probes=Object.freeze({
+    folderRead:folder.status==='ok'&&folder.permission==='granted'&&folder.fileReadable===true,
+    handleRecheck:reopen.status==='ok'&&reopen.permission==='granted'&&reopen.enumerated===true,
+    cacheReady:offline.status==='cached'&&offline.controllerActive===true&&
+      offline.shellCached===true&&offline.appModuleCached===true
+  });
   return Object.freeze({
-    providerGate,
+    providerGate,probes,
     platform:env.platform,chromeVersion:env.chromeVersion,standalone:env.standalone,
     exportedAt:input.exportedAt,releaseCommit:COMMIT.test(input.releaseCommit||'')?input.releaseCommit.toLowerCase():'',
     results,portableVerified:p.status==='ok'&&p.portableVerified===true&&p.journalClear===true,
@@ -62,6 +71,21 @@ export function compareM0EvidenceReports(windows,android,now=new Date().toISOStr
   const warnings=[];
   for(const report of [windows,android])if(report.providerGate?.state!=='probe-ready')warnings.push(report.platform+' filesystem provider gate is '+(report.providerGate?.state||'unverified')+'. '+(report.providerGate?.nextAction||'Re-export device evidence.'));
 
+  // Self-reported Pass values alone cannot clear the review gate.
+  const missingLinks=rows.flatMap(row=>['Windows','Android'].filter(platform=>
+    row[platform.toLowerCase()]==='Pass'&&!row[platform.toLowerCase()+'Evidence']).map(platform=>platform+' '+row.id));
+  if(missingLinks.length)warnings.push('Missing external evidence links for '+missingLinks.join(', ')+'. A self-reported Pass is not independent verification.');
+  const probeSpecs=[
+    {id:'M0-02',key:'folderRead',label:'read-only physical Folder metadata'},
+    {id:'M0-04',key:'handleRecheck',label:'saved Folder handle recheck'},
+    {id:'M0-06',key:'cacheReady',label:'service-worker cached shell'}
+  ];
+  const probeRows=probeSpecs.map(spec=>({
+    id:spec.id,label:spec.label,windows:windows.probes?.[spec.key]===true,android:android.probes?.[spec.key]===true
+  }));
+  for(const row of probeRows)for(const platform of ['Windows','Android'])
+    if(!row[platform.toLowerCase()])warnings.push(platform+' '+row.id+' lacks '+row.label+' diagnostic. Re-run Device checks on the actual device.');
+  // A cache inspection is not an offline test; handle recheck is not restart proof.
   const sameCommit=!!windows.releaseCommit&&!!android.releaseCommit&&
     (windows.releaseCommit===android.releaseCommit||
       (windows.releaseCommit.startsWith(android.releaseCommit)||android.releaseCommit.startsWith(windows.releaseCommit)));
@@ -81,7 +105,7 @@ export function compareM0EvidenceReports(windows,android,now=new Date().toISOStr
   if(blockers.length)warnings.push(blockers.length+' M0 scenarios are not marked Pass on both devices.');
   if(!rows.find(r=>r.id==='M0-05')?.windowsEvidence||!rows.find(r=>r.id==='M0-05')?.androidEvidence)
     warnings.push('M0-05 needs explicit external evidence links on both devices; matching fixture fingerprints alone do not prove Syncthing transfer.');
-  return {rows,warnings,sameCommit,sameFixture,sameCaptureFixture,
+  return {rows,probeRows,warnings,sameCommit,sameFixture,sameCaptureFixture,
     readyForManualReview:warnings.length===0,
     accepted:false, // Never infer device acceptance from self-reported JSON.
     windowsExportedAt:windows.exportedAt,androidExportedAt:android.exportedAt};
