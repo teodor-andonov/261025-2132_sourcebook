@@ -1,5 +1,11 @@
-# Sourcebook PWA app icon
+# TaSourcebook icon
 
-Icon: Lucide `library-big` (v1.61.0). TA family: stroke 2, icon scale 60%, rounded tile radius 25%, foreground `#333333` on background `#E6E6E6`. Android maskable exports use a centred 54% glyph and square background. Launcher SVG and both regular/maskable PNG sizes are generated from `branding/icon-source.svg` through `.github/workflows/ta-icons.yml`. Existing manifest paths, file handling and PWA scope preserved.
+Canonical symbol: Lucide `library-big` 1.61.0 in `branding/icon-source.svg`.
+Launcher/favicons and the app identity inside the interface use this same symbol.
+Regular tile: stroke 2, 60% glyph, radius 25%, #333333 on #E6E6E6.
+Maskable tile: opaque square, centred 54% glyph; separate 192/512 PNGs.
+Asset generation: `.github/workflows/ta-icons.yml`.
 
-See https://github.com/teodor-andonov/ta-graphic-design-system/blob/main/APP_ICONS.md
+Shared visual rules: [TA app icons](https://github.com/teodor-andonov/261027_ta-guides/blob/main/guides/graphic-design/APP_ICONS.md).
+Runtime/install/update rules: [TA PWA guide](https://github.com/teodor-andonov/261027_ta-guides/blob/main/guides/pwa/README.md).
+See [PWA.md](PWA.md) for this app's integration and release notes.

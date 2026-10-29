@@ -333,6 +333,7 @@ const glyphs={
   video:'M3 3h18v18H3z M8 3v18 M16 3v18 M3 8h5 M16 8h5'
 };
 function icon(type,size=18){
+  if(type==='book')return '<img src="./assets/icon.svg" width="'+size+'" height="'+size+'" alt="" aria-hidden="true">';
   return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="'+(glyphs[type]||glyphs.file)+'"/></svg>';
 }
 function escapeHTML(text){return String(text??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -1459,8 +1460,10 @@ async function newFolder(){
   const name=prompt('Name of new folder:','New folder');
   if(!name)return;
   if(!validName(name))return toast('Invalid folder name',true);
+  state.resourceSaving=true;
   try{if(!await authorized(sourceHandle(),'readwrite'))throw Error('Write access is required to create a folder.');const dir=await nested(sourceHandle(),state.parts);await dir.getDirectoryHandle(name,{create:true});invalidateScan();await navigate(state.sourceId,state.parts);toast('Folder created');}
   catch(e){toast(errorText(e),true);}
+  finally{state.resourceSaving=false;}
 }
 // File input works on browsers where showOpenFilePicker is unavailable (including Android).
 // Selection and drag/drop only open a review dialog: writing requires explicit confirmation.
@@ -1907,7 +1910,7 @@ async function boot(){
   }catch(e){console.warn('Restore needs permission',e);}
   landing();
 }
-if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js',{type:'module'}).catch(console.warn));
+window.taPwaCanUpdate=()=>!state.captureWriting&&!state.bulkSaving&&!state.resourceSaving&&!state.viewSaving&&!state.backupBusy&&!state.scanBusy&&!state.loading&&!state.pendingTransaction&&!fileImportController&&!document.querySelector('#dialog');
 boot().then(async()=>{
   const url=new URL(location.href);
   if(url.searchParams.get('shared')!=='1')return;

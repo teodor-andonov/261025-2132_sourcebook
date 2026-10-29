@@ -56,7 +56,10 @@ test('app presents incoming shares for explicit review; no source-file mutations
   const capture=await readFile(new URL('../src/link-capture.mjs',import.meta.url),'utf8');
   const inbox=await readFile(new URL('../src/share-inbox.mjs',import.meta.url),'utf8');
   assert.match(app,/createShareInboxUI/);
-  assert.match(app,/type:'module'/);
+  const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
+  const updates=await readFile(new URL('../pwa-update.js',import.meta.url),'utf8');
+  assert.match(html,/pwa-update\.js" data-worker-type="module"/);
+  assert.match(updates,/type:script.dataset.workerType/);
   assert.match(capture,/onSaved/);
   assert.match(sw,/\.\/src\/share-inbox\.mjs/);
   assert.doesNotMatch(inbox,/showDirectoryPicker|createWritable|removeEntry|requestPermission/);
