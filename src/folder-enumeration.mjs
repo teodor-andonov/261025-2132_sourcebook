@@ -10,7 +10,8 @@ export async function enumerateFolderEntries(directory,{
   if(typeof sourceId!=='string'||!sourceId)throw TypeError('A Folder source ID is required');
   if(!Array.isArray(parts)||parts.some(p=>typeof p!=='string'||!p||p==='.'||p==='..'||/[\\/]/.test(p)))throw TypeError('Invalid Folder path');
   if(!Number.isSafeInteger(maxEntries)||maxEntries<1||maxEntries>FOLDER_ENUMERATION_LIMIT)throw RangeError('Invalid Folder entry limit');
-  if(!Number.isSafeInteger(batchSize)||batchSize<1||batchSize>maxEntries)throw RangeError('Invalid Folder batch size');
+  if(!Number.isSafeInteger(batchSize)||batchSize<1||batchSize>FOLDER_ENUMERATION_LIMIT)throw RangeError('Invalid Folder batch size');
+  const effectiveBatchSize=Math.min(batchSize,maxEntries);
   if(!Number.isFinite(progressIntervalMs)||progressIntervalMs<0)throw RangeError('Invalid progress interval');
   if([include,isCurrent,onProgress,now,yieldControl].some(fn=>typeof fn!=='function'))throw TypeError('Invalid Folder enumeration callback');
   const items=[];
@@ -28,7 +29,7 @@ export async function enumerateFolderEntries(directory,{
     }
     // Give other UI events, navigation and cancellation an opportunity to run.
     // Render no more frequently than the configured interval, even for huge Folders.
-    if(visited%batchSize===0){
+    if(visited%effectiveBatchSize===0){
       if(items.length&&now()-lastProgress>=progressIntervalMs){
         await onProgress([...items]);lastProgress=now();
       }
