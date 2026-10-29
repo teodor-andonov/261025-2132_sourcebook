@@ -1713,7 +1713,7 @@ document.addEventListener('keydown',event=>{
     if(event.key==='Backspace'&&!event.target.value&&state.tagDraft.length){state.tagDraft.pop();renderTagPills();return;}
     if(event.key==='Escape'){event.preventDefault();event.target.value='';showTagSuggestions();event.stopPropagation();return;}
   }
-  if(!state.catalog&&event.altKey&&event.shiftKey&&(event.key==='ArrowLeft'||event.key==='ArrowRight')&&!$('#dialog')&&!state.previewId){
+  if(!state.catalog&&event.altKey&&event.shiftKey&&(event.key==='ArrowLeft'||event.key==='ArrowRight')&&!$('#dialog')&&!state.previewId&&!event.target.closest('input,textarea,select,[contenteditable="true"]')){
     event.preventDefault();void switchAdjacentFolderTab(event.key==='ArrowLeft'?-1:1);return;
   }
   if(!state.catalog&&event.altKey&&!event.shiftKey&&(event.key==='ArrowLeft'||event.key==='ArrowRight')){event.preventDefault();folderHistoryStep(event.key==='ArrowLeft'?-1:1);return;}
