@@ -29,6 +29,7 @@ import {createOverlapReviewUI} from './overlap-review-ui.mjs';
 import {validateViews,sortViewsForSidebar} from './views.mjs';
 import {createViewsController} from './views-controller.mjs';
 import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTarget,closeFolderTab,folderTabPreferences,updateFolderTabPreferences,adjacentFolderTabId} from './workspace.mjs';
+import {enumerateFolderEntries,FOLDER_ENUMERATION_LIMIT} from './folder-enumeration.mjs';
 import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts,assertTagSnapshotUnchanged} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
@@ -39,7 +40,7 @@ const state={
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,
   search:'', view:localStorage.getItem('sb-view')||'gallery',
   size:Number(localStorage.getItem('sb-size'))||164,
-  inspector:window.innerWidth>760, sidebar:false, loading:false, request:0,
+  inspector:window.innerWidth>760, sidebar:false, loading:false, folderReadState:'complete', request:0,
   imageUrls:new Set(), thumbnailUrls:new Map(), observer:null, previewUrl:null, previewId:null, pageCount:150,
   tagDraftItem:null, tagDraft:[], tagSuggestions:[], tagSuggestionIndex:-1, selectionMode:false, bulkSaving:false,resourceSaving:false,
   scan:null,scanBusy:false,scanCommitting:false,scanGeneration:0,scanProgress:'',sourceIndex:null,indexFreshIds:new Set(),indexFreshSubtrees:[],scanRootId:'',scanFolderPath:'',indexProblem:'',pendingTransaction:null,catalogConflicts:null,conflictReport:null,backupBusy:false,backupRestorePlan:null,backupRestoreSource:null,overlapReport:null
@@ -726,24 +727,27 @@ async function navigate(id,parts,historyPosition=null,{preserveSearch=false}={})
   state.sourceId=id;state.parts=parts;if(!preserveSearch||state.catalog)state.search='';state.selected.clear();state.pageCount=150;
   state.tagDraftItem=null;state.tagFilter=null;state.selectionMode=false;
   const request=++state.request;
-  state.loading=true;state.items=[];forgetImages();render();
+  state.loading=true;state.folderReadState='reading';state.items=[];forgetImages();render();
   try{
     const h=sourceHandle();if(!h)throw Error('This source is disconnected on this device.');
     if(!await authorized(h)){state.handles.delete(id);throw Error('Permission expired; reconnect the source.');}
-    const folder=await nested(h,parts);const items=[];
-    for await(const [name,handle] of folder.entries()){
-      if(request!==state.request)return;
-      if(state.catalog&&handle.kind==='directory'&&name.endsWith('.sb'))continue;
-      items.push({id:id+':'+[...parts,name].join('/'),name,handle,kind:handle.kind});
-      if(items.length%100===0){state.items=sort(items);renderItems();}
-    }
-    if(request!==state.request)return;
-    state.items=sort(items);state.loading=false;
+    const folder=await nested(h,parts);
+    const result=await enumerateFolderEntries(folder,{
+      sourceId:id,parts,isCurrent:()=>request===state.request,
+      include:(name,handle)=>!(state.catalog&&handle.kind==='directory'&&name.endsWith('.sb')),
+      onProgress:items=>{if(request===state.request){state.items=items;renderItems();}}
+    });
+    if(request!==state.request||result.cancelled)return;
+    state.items=result.items;state.loading=false;
+    state.folderReadState=result.truncated?'limited':'complete';
     if(!state.catalog){state.sources=visitFolderTab(state.sources,id,parts,{historyPosition});updateActiveFolderTabPreferences();void rememberFolderTabs();}
     render();
-  }catch(e){if(request===state.request){state.loading=false;render();toast(errorText(e),true);}}
+    if(result.truncated)toast('Folder listing reached the '+FOLDER_ENUMERATION_LIMIT.toLocaleString()+'-entry safety limit. Results and search are partial; open a narrower Folder.',true);
+  }catch(e){if(request===state.request){
+    state.loading=false;state.folderReadState='failed';render();
+    toast('Folder listing incomplete: '+errorText(e),true);
+  }}
 }
-function sort(items){return [...items].sort((a,b)=>((a.kind==='directory'?-1:1)-(b.kind==='directory'?-1:1))||a.name.localeCompare(b.name,undefined,{numeric:true}));}
 function tagNavigationHTML(){
   const tree=flattenedTagTree(state.taxonomy);
   const pins=pinnedTagShortcuts(state.taxonomy).map(t=>
@@ -994,10 +998,12 @@ function renderItems(){
   host.style.setProperty('--size',state.size+'px');
   const items=visibleItems();
   const ambiguous=items.filter(item=>item.overlapConflict).length;
-  $('#item-count').textContent=items.length+(state.loading?'+':'')+' items'+(ambiguous?' · '+ambiguous+' overlap metadata entries':'');
+  const partial=!viewsUI.inResults()&&(state.folderReadState==='limited'||state.folderReadState==='failed');
+  const partialLabel=state.folderReadState==='limited'?' · partial (safety limit)':' · incomplete (read failed)';
+  $('#item-count').textContent=items.length+(state.loading?'+':'')+' items'+(partial?partialLabel:'')+(ambiguous?' · '+ambiguous+' overlap metadata entries':'');
   if(!viewsUI.inResults()&&!state.sourceId){host.innerHTML='<div class="empty">'+icon('folder',38)+'<h3>Your files, one click away</h3><p>Choose a folder to browse.</p><button class="primary" data-action="'+(state.catalog?'add-source':'open-folder')+'">Open folder</button></div>';return;}
   if(!viewsUI.inResults()&&!state.handles.has(state.sourceId)){host.innerHTML='<div class="empty">'+icon('alert',35)+'<h3>Reconnect your folder</h3><p>Renew this folder permission to continue.</p><button class="primary" data-action="reconnect">Reconnect source</button></div>';return;}
-  if(!items.length){host.innerHTML='<div class="empty">'+icon('folder',32)+'<h3>'+(state.loading?'Reading files…':state.search||state.tagFilter||viewsUI.inResults()?'No matches':'Nothing here yet')+'</h3></div>';return;}
+  if(!items.length){host.innerHTML='<div class="empty">'+icon('folder',32)+'<h3>'+(state.loading?'Reading files…':partial?'Folder listing incomplete':state.search||state.tagFilter||viewsUI.inResults()?'No matches':'Nothing here yet')+'</h3></div>';return;}
   const shown=items.slice(0,state.pageCount);
   const grouped=!!state.activeViewId&&state.groupBy!=='none';
   const groups=groupViewItems(shown,grouped?state.groupBy:'none');
@@ -1023,7 +1029,7 @@ function renderItems(){
   },{root:$('#scroller'),rootMargin:'240px'});
   state.observer=watcher;
   host.querySelectorAll('.resource:has(.thumbnail)').forEach(el=>watcher.observe(el));
-  $('#status').textContent=state.selected.size?state.selected.size+' selected':'Local-first · '+items.length+' resources';
+  $('#status').textContent=state.selected.size?state.selected.size+' selected'+(partial?' · incomplete listing':''):'Local-first · '+items.length+' resources'+(partial?' · incomplete listing':'');
 }
 async function thumbnail(node){
   const item=state.items.find(i=>i.id===node.dataset.item);
