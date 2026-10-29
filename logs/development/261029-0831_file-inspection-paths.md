@@ -23,3 +23,7 @@ At authoring, this is a **code candidate**, not a claimed device acceptance. PR 
 - Clipboard writing requires browser support, a secure context and an allowed user gesture; failure does not trigger Download or file writes.
 - Directory sizes are unavailable; no recursive enumeration is attempted. No physical Windows/Android test has been performed.
 - No screenshots, visual fixture captures, Mindmap changes or unrelated PWA deployments.
+
+## PR CI feedback (first run)
+- Node tests and syntax checks passed; Chromium's existing 15 scenarios passed, but the new scenario could not click the new toolbar action because the inspector's resize grip overlapped a horizontally overflowing contentbar. This was a **real layout reachability issue**, not a filesystem failure.
+- Fixed the shared contentbar to scroll horizontally with compact, non-shrinking controls so actions remain reachable on desktop and touch without changing Folder data. PR CI must rerun and pass before merge. No screenshots captured.
