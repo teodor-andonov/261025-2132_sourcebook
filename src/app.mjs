@@ -1039,6 +1039,7 @@ function renderItems(){
     host.classList.add('grouped');
     host.innerHTML=groups.map(group=>'<section class="resource-group"><h3 class="resource-group-title">'+escapeHTML(group.label)+' <span>'+group.items.length+'</span></h3><div class="group-contents '+state.view+'">'+group.items.map(resourceCard).join('')+'</div></section>').join('')+more;
   }else host.innerHTML=shown.map(resourceCard).join('')+more;
+  if(activeResourceId)state.keyboardFocusId=activeResourceId;
   syncResourceTabStops();
   if(activeResourceId){
     const replacement=[...host.querySelectorAll('.resource[data-item]')].find(node=>node.dataset.item===activeResourceId);
@@ -1743,6 +1744,10 @@ document.addEventListener('contextmenu',event=>{
   const rect=menu.getBoundingClientRect();
   menu.style.left=Math.max(8,Math.min(event.clientX,window.innerWidth-rect.width-8))+'px';
   menu.style.top=Math.max(8,Math.min(event.clientY,window.innerHeight-rect.height-8))+'px';
+});
+document.addEventListener('focusin',event=>{
+  const resource=event.target.closest('#items .resource[data-item]');
+  if(resource){state.keyboardFocusId=resource.dataset.item;syncResourceTabStops();}
 });
 document.addEventListener('dblclick',event=>{
   const tile=event.target.closest('[data-item]');if(!tile)return;
