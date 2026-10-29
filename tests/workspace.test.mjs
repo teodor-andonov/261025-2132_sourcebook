@@ -52,21 +52,22 @@ test('closing tab selects adjacent tab without mutating survivor or files',()=>{
 
 test('Folder Tab preferences are bounded, normalized and do not touch handles',()=>{
   const defaults=folderTabPreferences(null);
-  assert.deepEqual(defaults,{search:'',sort:'name',view:'gallery',size:164});
+  assert.deepEqual(defaults,{search:'',sort:'name',view:'gallery',size:164,fileType:'all',showHidden:true});
   assert.deepEqual(folderTabPreferences({search:'project',sort:'name-desc',view:'table',size:188.8}),
-    {search:'project',sort:'name-desc',view:'table',size:189});
+    {search:'project',sort:'name-desc',view:'table',size:189,fileType:'all',showHidden:true});
   assert.deepEqual(folderTabPreferences({search:'x'.repeat(257),sort:'delete',view:'unknown',size:1}),defaults);
   assert.equal(folderTabPreferences({search:'a\nb'}).search,'');
   let writes=0;
   const handle={...folder('A'),createWritable(){writes++;}};
-  const tab=createFolderTab(handle,'a',{search:'photo',sort:'type',view:'list',size:200});
+  const tab=createFolderTab(handle,'a',{search:'photo',sort:'type',view:'list',size:200,fileType:'image',showHidden:false});
+  assert.equal(tab.preferences.fileType,'image');assert.equal(tab.preferences.showHidden,false);
   assert.equal(tab.preferences.search,'photo');
   assert.equal(writes,0);
 });
 test('independent Folder Tab preferences survive reload and preserve other tabs',()=>{
   const a=createFolderTab(folder('A'),'a'),b=createFolderTab(folder('B'),'b');
-  let tabs=updateFolderTabPreferences([a,b],'a',{search:'alpha',view:'table',sort:'name-desc',size:210});
-  tabs=updateFolderTabPreferences(tabs,'b',{search:'beta',view:'list',sort:'type',size:130});
+  let tabs=updateFolderTabPreferences([a,b],'a',{search:'alpha',view:'table',sort:'name-desc',size:210,fileType:'text',showHidden:false});
+  tabs=updateFolderTabPreferences(tabs,'b',{search:'beta',view:'list',sort:'type',size:130,fileType:'url',showHidden:true});
   assert.equal(tabs[0].preferences.search,'alpha');
   assert.equal(tabs[1].preferences.search,'beta');
   assert.equal(a.preferences.search,'');
@@ -80,7 +81,7 @@ test('independent Folder Tab preferences survive reload and preserve other tabs'
 test('older or malformed persisted Folder Tab preferences fail safe without discarding paths',()=>{
   const a=createFolderTab(folder('A'),'a');
   const legacy={...a,preferences:undefined,history:[[],['nested']],position:1};
-  const invalid={...a,id:'b',preferences:{search:'\u0000',sort:'location',view:'grid',size:Infinity}};
+  const invalid={...a,id:'b',preferences:{search:'\u0000',sort:'location',view:'grid',size:Infinity,fileType:'delete',showHidden:'no'}};
   const restored=loadFolderTabs({tabs:[legacy,invalid],activeId:'a'});
   assert.deepEqual(restored.tabs[0].parts,['nested']);
   assert.deepEqual(restored.tabs[0].preferences,folderTabPreferences());
