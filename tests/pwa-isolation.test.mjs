@@ -37,3 +37,8 @@ test('Sourcebook activation does not delete Mindmap or unrelated caches',async()
   await pending;
   assert.deepEqual(deleted,['sourcebook-shell-prior']);
 });
+
+test('release artifact includes the root update client referenced by the app shell',async()=>{
+  const workflow=await readFile(new URL('../.github/workflows/pages.yml',import.meta.url),'utf8');
+  assert.match(workflow,/cp index\.html manifest\.webmanifest sw\.js pwa-update\.js _site\//);
+});
