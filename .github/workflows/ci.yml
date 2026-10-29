@@ -40,7 +40,8 @@ jobs:
 
   browser-smoke:
     name: Chromium M0 browser smoke
-    runs-on: ubuntu-latest
+    # Playwright 1.56.1 supports Ubuntu 24.04; latest now resolves to 26.04.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
