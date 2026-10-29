@@ -1178,8 +1178,49 @@ async function renderSidePreview(item){
     host.innerHTML='<div class="side-preview-empty">'+icon('alert',18)+'<span>'+escapeHTML(errorText(error))+'</span></div>';
   }
 }
+
+function fileInformationHTML(item){
+  if(!item||!['file','directory'].includes(item.kind))return '';
+  let path;
+  try{path=resourceDisplayPath(item,{folderParts:state.parts,rootName:currentSource()?.name||''});}
+  catch{return '<div class="micro-hint">Resource path unavailable; reconnect the Folder.</div>';}
+  const status=item.kind==='directory'?'Folder · browser does not report directory size':'Reading current file metadata…';
+  return '<details class="file-details" open><summary>File information</summary>'+
+    '<div class="detail"><div class="label">ROOT-LABELLED RELATIVE PATH</div><code class="resource-path">'+escapeHTML(path)+'</code></div>'+
+    '<div class="micro-hint">Not an absolute filesystem path.</div>'+
+    '<div id="file-live-info" class="micro-hint" role="status">'+status+'</div>'+
+    '<button type="button" class="secondary full" data-action="copy-resource-paths">'+icon('copy',14)+' Copy relative path</button></details>';
+}
+async function loadFileInformation(item,serial){
+  if(item?.kind!=='file')return;
+  try{
+    const handle=item.catalogResult?await catalogResultHandle(item):item.handle;
+    const info=await readResourceFileMetadata(handle);
+    const host=$('#file-live-info');
+    if(serial!==state.fileInfoSerial||!host?.isConnected||state.selected.size!==1||!state.selected.has(item.id))return;
+    const modified=new Date(info.lastModified).toLocaleString();
+    host.innerHTML='<div class="detail"><div class="label">SIZE</div>'+escapeHTML(formatFileSize(info.size))+'</div>'+
+      '<div class="detail"><div class="label">MODIFIED (PROVIDER)</div>'+escapeHTML(modified)+'</div>'+
+      '<div class="detail"><div class="label">MIME (PROVIDER)</div>'+escapeHTML(info.type||'Not reported')+'</div>';
+  }catch(error){
+    const host=$('#file-live-info');
+    if(serial!==state.fileInfoSerial||!host?.isConnected||state.selected.size!==1||!state.selected.has(item.id))return;
+    host.textContent='Current metadata unavailable: '+errorText(error)+'. No cached file attributes are assumed.';
+  }
+}
+async function copySelectedResourcePaths(){
+  try{
+    if(typeof navigator.clipboard?.writeText!=='function')throw Error('Clipboard writing is unavailable on this device');
+    const paths=selectedResourcePaths(visibleItems(),state.selected,{
+      folderParts:state.parts,rootName:currentSource()?.name||''
+    });
+    await navigator.clipboard.writeText(paths);
+    toast('Copied '+state.selected.size+' root-labelled relative path(s). No files changed.');
+  }catch(error){toast('Copy paths: '+errorText(error),true);}
+}
 function renderInspector(){
   const host=$('#inspector-data');if(!host)return;
+  const infoSerial=++state.fileInfoSerial;
   void renderSidePreview(state.selected.size===1?state.items.find(x=>state.selected.has(x.id)):null);
   if(viewsUI.inResults()){
     const selected=state.selected.size===1?state.items.find(item=>state.selected.has(item.id)):null;
