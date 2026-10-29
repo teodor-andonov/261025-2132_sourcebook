@@ -17,7 +17,8 @@ import {commitCatalogTransaction,inspectPendingCatalogTransaction,resumeCatalogT
 import {createCatalogBackup,inspectCatalogBackup} from './catalog-backup.mjs';
 import {planMissingResourceRestore,restoreMissingResourceRecords} from './catalog-restore.mjs';
 import {inspectCatalogConflictCopies,conflictCanonicalPath} from './catalog-conflicts.mjs';
-import {nextSelectionIndex,selectionRangeIds} from './navigation.mjs';
+import {nextSelectionIndex} from './navigation.mjs';
+import {changeVisibleSelection,pruneVisibleSelection,selectDisplayedItems,SELECTION_LIMIT} from './selection.mjs';
 import {catalogFolderTree,catalogFolderParts} from './catalog-folders.mjs';
 import {catalogTagResults,catalogQueryResults,sortCatalogResults,sortBrowserItems,catalogFileType} from './catalog-search.mjs';
 import {groupViewItems,viewTableMetadata,TABLE_COLUMNS,DEFAULT_TABLE_COLUMNS,normalizeTableColumns} from './view-layout.mjs';
@@ -38,7 +39,7 @@ const state={
   sidePreviewSerial:0,sidePreviewUrl:null,viewerSerial:0,
   captureWriting:false,
   catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,catalogLinksView:false,activeViewId:null,views:[],viewSaving:false,sort:'name',showHidden:true,groupBy:'none',tableColumns:[...DEFAULT_TABLE_COLUMNS],fileType:'all',fileStatus:'all',
-  sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,
+  sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,selectionAnchor:null,
   search:'', view:localStorage.getItem('sb-view')||'gallery',
   size:Number(localStorage.getItem('sb-size'))||164,
   inspector:window.innerWidth>760, sidebar:false, loading:false, folderReadState:'complete', request:0,
@@ -727,7 +728,7 @@ async function navigate(id,parts,historyPosition=null,{preserveSearch=false}={})
   if(state.bulkSaving||state.viewSaving||state.resourceSaving||state.backupBusy)return toast('Finish catalog editing or backup recovery before navigating.',true);
   if(state.catalogLinksView)state.fileType='all';
   state.catalogTagView=null;state.catalogLinksView=false;state.activeViewId=null;
-  state.sourceId=id;state.parts=parts;if(!preserveSearch||state.catalog)state.search='';state.selected.clear();state.pageCount=150;
+  state.sourceId=id;state.parts=parts;if(!preserveSearch||state.catalog)state.search='';state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;state.pageCount=150;
   state.tagDraftItem=null;state.tagFilter=null;state.selectionMode=false;
   const request=++state.request;
   state.loading=true;state.folderReadState='reading';state.items=[];forgetImages();render();
@@ -929,7 +930,7 @@ function render(){
   const header='<button class="catalog-chip" data-action="home">'+icon(plain?'folder':'database',16)+'<span>'+escapeHTML(plain?'Browse':state.catalog.name)+'</span>'+icon('chevron',13)+'</button>';
   const recoveryNotice=!plain&&state.pendingTransaction?'<div class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'Catalog recovery needs manual repair':'Interrupted catalog save · '+state.pendingTransaction.applied+'/'+state.pendingTransaction.total+' changes')+'</span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'':'<button class="secondary" data-action="recover-catalog" title="Resume catalog-only save">'+icon('refresh',14)+' Resume</button>')+'</div>':'';
   const conflictNotice=!plain&&(state.catalogConflicts?.count||state.catalogConflicts?.error)?'<div id="catalog-conflict-notice" class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.catalogConflicts.error?'Conflict scan needs attention':state.catalogConflicts.count+' Catalog sync conflict copy/copies')+'</span><button class="secondary" data-action="inspect-catalog-conflicts" title="Inspect sync conflict copies">Inspect</button></div>':'';
-  const selectionActions=plain||viewsUI.inResults()?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
+  const selectionActions=viewsUI.inResults()?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection (touch friendly)">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="select-shown" title="Select displayed items (maximum 250)" '+(state.selectionMode?'':'hidden')+'>'+icon('list',15)+' <span>All shown</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
   const fileActions=viewsUI.inResults()?'':(plain?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button>')+'<button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
   const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="edit-view-tags" title="Edit View tags">'+icon('tag',15)+' <span>Tags</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
   const typeControl=plain?'<select id="file-type" class="sort-control type-control" aria-label="File type">'+FOLDER_FILE_TYPES.map(([value,label])=>'<option value="'+value+'" '+(state.fileType===value?'selected':'')+'>'+label+'</option>').join('')+'</select>':'<select id="file-type" class="sort-control type-control" aria-label="File type"><option value="all" '+(state.fileType==='all'?'selected':'')+'>All types</option><option value="image" '+(state.fileType==='image'?'selected':'')+'>Images</option><option value="pdf" '+(state.fileType==='pdf'?'selected':'')+'>PDFs</option><option value="video" '+(state.fileType==='video'?'selected':'')+'>Videos</option><option value="folder" '+(state.fileType==='folder'?'selected':'')+'>Folders</option><option value="url" '+(state.fileType==='url'?'selected':'')+'>Links</option><option value="other" '+(state.fileType==='other'?'selected':'')+'>Other</option></select>';
@@ -1004,6 +1005,9 @@ function renderItems(){
   host.className=state.view+(viewsUI.inResults()?' catalog-results':'');
   host.style.setProperty('--size',state.size+'px');
   const items=visibleItems();
+  // Never retain hidden selections after a filter or listing change.
+  const kept=pruneVisibleSelection(items.map(item=>item.id),state.selected,state.selectionAnchor,state.lastSelected);
+  if(kept.changed){state.selected=kept.selected;state.selectionAnchor=kept.anchorId;state.lastSelected=kept.focusId;queueMicrotask(()=>renderInspector());}
   const ambiguous=items.filter(item=>item.overlapConflict).length;
   const partial=!viewsUI.inResults()&&(state.folderReadState==='limited'||state.folderReadState==='failed');
   const partialLabel=state.folderReadState==='limited'?' · partial (safety limit)':' · incomplete (read failed)';
@@ -1205,12 +1209,21 @@ function refreshSelectionUI(){
 }
 function select(item,event){
   if(state.bulkSaving)return;
-  if(event.shiftKey&&state.lastSelected){
-    state.selected=new Set(selectionRangeIds(visibleItems(),state.lastSelected,item.id));
-  }else if(event.ctrlKey||event.metaKey||state.selectionMode){if(state.selected.has(item.id))state.selected.delete(item.id);else state.selected.add(item.id);}
-  else{state.selected.clear();state.selected.add(item.id);}
-  state.lastSelected=item.id;
-  refreshSelectionUI();renderInspector();
+  try{
+    const next=changeVisibleSelection(visibleItems().map(entry=>entry.id),{
+      selected:state.selected,anchorId:state.selectionAnchor,focusId:state.lastSelected
+    },item.id,{range:!!event.shiftKey,additive:!!(event.ctrlKey||event.metaKey)&&!!event.shiftKey,
+      toggle:!!(event.ctrlKey||event.metaKey||state.selectionMode),limit:SELECTION_LIMIT});
+    state.selected=next.selected;state.selectionAnchor=next.anchorId;state.lastSelected=next.focusId;
+    refreshSelectionUI();renderInspector();
+  }catch(error){toast('Selection: '+errorText(error),true);}
+}
+function selectShownItems(){
+  const shown=visibleItems().slice(0,state.pageCount).map(item=>item.id);
+  const result=selectDisplayedItems(shown,SELECTION_LIMIT);
+  state.selected=result.selected;state.selectionAnchor=result.anchorId;state.lastSelected=result.focusId;
+  state.selectionMode=true;render();
+  if(result.truncated)toast('Selected the first '+SELECTION_LIMIT+' displayed items. Narrow the filter to select a different range.',true);
 }
 async function bulkTags(mode){
   if(!state.catalog||state.bulkSaving||state.resourceSaving||state.backupBusy||state.selected.size<2)return;
@@ -1548,16 +1561,16 @@ document.addEventListener('input',event=>{
     for(const label of document.querySelectorAll('[data-view-tag-option]'))label.hidden=!!q&&!label.dataset.viewTagOption.includes(q);
   }
   if(event.target.id==='accent-color')applyAccent(event.target.value);
-  if(event.target.id==='search-input'){state.search=event.target.value.slice(0,256);state.pageCount=150;state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;scheduleFolderTabPreferences();renderItems();renderInspector();}
+  if(event.target.id==='search-input'){state.search=event.target.value.slice(0,256);state.pageCount=150;state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;state.tagDraftItem=null;scheduleFolderTabPreferences();renderItems();renderInspector();}
   if(event.target.id==='sort-mode'){state.sort=event.target.value;scheduleFolderTabPreferences();renderItems();}
   if(event.target.id==='group-mode'){state.groupBy=event.target.value;state.pageCount=150;renderItems();}
   if(event.target.id==='file-status'){
     state.fileStatus=event.target.value;
-    state.selected.clear();state.lastSelected=null;state.pageCount=150;
+    state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;state.pageCount=150;
     if(state.activeViewId)viewsUI.requery();
   }
   if(event.target.id==='file-type'){
-    state.fileType=event.target.value;state.selected.clear();state.lastSelected=null;state.tagDraftItem=null;state.pageCount=150;
+    state.fileType=event.target.value;state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;state.tagDraftItem=null;state.pageCount=150;
     scheduleFolderTabPreferences();
     if(state.activeViewId)viewsUI.requery();else {renderItems();renderInspector();}
   }
@@ -1630,10 +1643,11 @@ document.addEventListener('click',async event=>{
     case 'side-open-preview':showPreview();break;
     case 'sidebar':state.sidebar=!state.sidebar;$('#sidebar')?.classList.toggle('open');break;
     case 'show-more':state.pageCount+=150;renderItems();break;
-    case 'toggle-dotfiles':if(!state.catalog){state.showHidden=!state.showHidden;state.selected.clear();state.lastSelected=null;state.pageCount=150;scheduleFolderTabPreferences();render();}break;
-    case 'clear-tag-filter':state.tagFilter=null;state.selected.clear();state.lastSelected=null;render();break;
+    case 'toggle-dotfiles':if(!state.catalog){state.showHidden=!state.showHidden;state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;state.pageCount=150;scheduleFolderTabPreferences();render();}break;
+    case 'clear-tag-filter':state.tagFilter=null;state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;render();break;
     case 'toggle-selection':state.selectionMode=!state.selectionMode;render();break;
-    case 'clear-selection':state.selected.clear();state.lastSelected=null;state.selectionMode=false;render();break;
+    case 'select-shown':selectShownItems();break;
+    case 'clear-selection':state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;state.selectionMode=false;render();break;
     case 'bulk-add':void bulkTags('add');break;
     case 'bulk-remove':void bulkTags('remove');break;
     case 'device-checks':deviceReadiness.open();break;
@@ -1733,14 +1747,16 @@ document.addEventListener('keydown',event=>{
     if(event.key==='Backspace'&&!event.target.value&&state.tagDraft.length){state.tagDraft.pop();renderTagPills();return;}
     if(event.key==='Escape'){event.preventDefault();event.target.value='';showTagSuggestions();event.stopPropagation();return;}
   }
-  if(!state.catalog&&event.altKey&&event.shiftKey&&(event.key==='ArrowLeft'||event.key==='ArrowRight')&&!$('#dialog')&&!state.previewId&&!event.target.closest('input,textarea,select,[contenteditable="true"]')){
+  // Dialogs own keyboard focus; never select the background grid.
+  if($('#dialog')){if(event.key==='Escape'){event.preventDefault();$('#dialog')?.remove();}return;}
+  if(!state.catalog&&event.altKey&&event.shiftKey&&(event.key==='ArrowLeft'||event.key==='ArrowRight')&&!state.previewId&&!event.target.closest('input,textarea,select,[contenteditable="true"]')){
     event.preventDefault();void switchAdjacentFolderTab(event.key==='ArrowLeft'?-1:1);return;
   }
   if(!state.catalog&&event.altKey&&!event.shiftKey&&(event.key==='ArrowLeft'||event.key==='ArrowRight')){event.preventDefault();folderHistoryStep(event.key==='ArrowLeft'?-1:1);return;}
-  if(event.key==='Escape'){closePreview();$('#dialog')?.remove();$('#folder-context')?.remove();return;}
+  if(event.key==='Escape'){if(state.previewId)closePreview();else if($('#folder-context'))$('#folder-context')?.remove();else if(state.selected.size&&!event.target.closest('input,textarea,select,[contenteditable="true"]')){state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;state.selectionMode=false;render();}return;}
   if(state.previewId){if(event.key==='ArrowRight')previewStep(1);if(event.key==='ArrowLeft')previewStep(-1);return;}
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('#search-input')?.focus();return;}
-  if(state.catalog&&(event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='a'&&!event.target.matches('input,textarea')){event.preventDefault();const items=visibleItems();state.selected=new Set(items.map(item=>item.id));state.lastSelected=items.at(-1)?.id||null;state.selectionMode=true;render();return;}
+  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='a'&&!event.target.closest('input,textarea,select,[contenteditable="true"]')&&state.sourceId){event.preventDefault();selectShownItems();return;}
   if(!state.catalog&&event.ctrlKey&&event.key==='Enter'){const selected=state.items.find(item=>item.id===state.lastSelected);if(selected?.kind==='directory'){event.preventDefault();openSelectedFolderTab().catch(e=>toast(errorText(e),true));}return;}
   // Preserve native keyboard handling for toolbar controls and table-sort buttons.
   if(event.target.matches('input,textarea,select')||event.target.closest('button:not(.resource)')||event.ctrlKey||event.metaKey||event.altKey)return;
@@ -1763,7 +1779,7 @@ document.addEventListener('keydown',event=>{
     return;
   }
   if(event.key===' '){
-    const row=event.target.closest('#items tr.resource[data-item]');
+    const row=event.target.closest('#items .resource[data-item]');
     if(row){
       event.preventDefault();
       const item=state.items.find(item=>item.id===row.dataset.item);
