@@ -1,3 +1,8 @@
+## 2026-10-29 01:27 Europe/Madrid — V0.0.56 candidate: file-backed shortcut preview
+- **Code:** Ordinary `.url` files in browser Folder Tabs and Catalog file results show a read-only full preview and a separately clicked HTTP(S) link. Side and full previews share bounded validation; invalid/oversized/ambiguous shortcut content never becomes a navigable link. Legacy Catalog-only URL records are unchanged. Text/Markdown previews read at most 200 KB using Blob.slice and display truncation. Async full preview has stale-request protection.
+- **Automated evidence:** Node shortcut validation/bounded-read tests plus ninth Chromium OPFS UI scenario. CI and publication are separate gates and must be checked after authoring. No screenshots.
+- **Limits:** Headless OPFS is not a user-selected external Folder, Pixel 8 SAF provider or Syncthing. Physical M0 remains open. [Development log](../logs/development/261029-0127_file-backed-shortcut-preview.md).
+
 ## 2026-10-29 00:22 Europe/Madrid — V0.0.55 candidate: cross-tab Catalog transaction serialization
 - **Code:** A separate origin-wide Web Lock wraps both journaled Catalog metadata commit and explicit recovery, including stale/conflict preflight, journal writes, metadata readback and cleanup. It protects cooperating same-origin tabs even if they have different handles to the same Catalog. An API-present lock denial fails closed; unsupported browsers retain previous single-handle and snapshot/journal safeguards.
 - **Automated evidence:** Node queue, stale-writer, recovery, denied-lock and fallback tests; an eighth native headless Chromium OPFS scenario with two tabs and a blocked journal write. CI, merge, Pages and branch cleanup must be verified independently after authoring.
