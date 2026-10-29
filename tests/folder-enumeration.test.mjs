@@ -38,7 +38,7 @@ test('exactly-at-limit Folder is complete; filtered entries do not consume capac
   const full=await enumerateFolderEntries(folder(10),{sourceId:'a',maxEntries:10,batchSize:5,yieldControl:immediate});
   assert.equal(full.truncated,false);
   const filtered=await enumerateFolderEntries(folder(12),{sourceId:'a',maxEntries:10,batchSize:5,yieldControl:immediate,
-    include:name=>!name.endsWith('0.md')&&!name.endsWith('1.md')});
+    include:name=>!['file-0.md','file-1.md'].includes(name)});
   assert.equal(filtered.items.length,10);
   assert.equal(filtered.truncated,false);
 });
