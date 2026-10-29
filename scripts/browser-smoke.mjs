@@ -669,6 +669,7 @@ async function main(){
           assert.equal(await rows.count(),4);
           assert.equal(await page.locator('#items .resource[tabindex="0"]').count(),1);
           await rows.first().focus();
+          assert.equal(await rows.first().getAttribute('tabindex'),'0','focused Resource owns the only Tab stop');
           await page.keyboard.press('End');
           assert.equal(await page.evaluate(()=>document.activeElement?.dataset.item),await rows.last().getAttribute('data-item'));
           await page.keyboard.press('Home');
