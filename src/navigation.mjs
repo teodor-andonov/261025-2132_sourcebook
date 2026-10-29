@@ -20,3 +20,13 @@ export function selectionRangeIds(visibleItems,anchorId,targetId){
   if(a<0)return [targetId];
   return ids.slice(Math.min(a,b),Math.max(a,b)+1);
 }
+
+export function resourceFocusId(ids,preferred=null){
+  if(!Array.isArray(ids)||ids.some(id=>typeof id!=='string'||!id))throw TypeError('Invalid resource IDs');
+  return ids.includes(preferred)?preferred:ids[0]||null;
+}
+export function nextResourceFocusId(ids,currentId,key,columns=1){
+  if(!resourceFocusId(ids,currentId))return null;
+  const target=nextSelectionIndex(ids.indexOf(currentId),key,ids.length,columns);
+  return target<0?null:ids[target];
+}

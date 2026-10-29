@@ -26,3 +26,20 @@ test('Shift selection uses only filtered visible items and falls back safely whe
   assert.deepEqual(selectionRangeIds(visible,'b','f'),['f']);
   assert.deepEqual(selectionRangeIds(visible,'a','hidden'),[]);
 });
+
+import {resourceFocusId,nextResourceFocusId} from '../src/navigation.mjs';
+test('roving focus has one visible fallback and ignores stale IDs',()=>{
+  assert.equal(resourceFocusId(['a','b'],'b'),'b');
+  assert.equal(resourceFocusId(['a','b'],'missing'),'a');
+  assert.equal(resourceFocusId([], 'a'),null);
+  assert.throws(()=>resourceFocusId(['a',null]),/Invalid resource IDs/);
+});
+test('keyboard movement stays inside the currently rendered page',()=>{
+  const ids=['a','b','c','d','e'];
+  assert.equal(nextResourceFocusId(ids,'b','ArrowDown',2),'d');
+  assert.equal(nextResourceFocusId(ids,'d','ArrowDown',2),'e');
+  assert.equal(nextResourceFocusId(ids,'c','Home',2),'a');
+  assert.equal(nextResourceFocusId(ids,'c','End',2),'e');
+  assert.equal(nextResourceFocusId(ids,'missing','ArrowRight',2),'a');
+  assert.equal(nextResourceFocusId([],null,'ArrowRight'),null);
+});
