@@ -700,7 +700,61 @@ async function main(){
         },fixture);
       }
     });
-    process.stdout.write('Chromium smoke '+passed+'/14 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
+
+    await scenario('Folder paging bounds DOM, supports keyboard jumps and page-local bulk selection',async(context,page)=>{
+      // Real OPFS files, synthetic picker permission; NOT external Folder or Android SAF.
+      await context.addInitScript(()=>{
+        window.showDirectoryPicker=async()=>{throw new DOMException('Fixture only','AbortError');};
+        const proto=window.FileSystemHandle?.prototype;
+        if(proto&&typeof proto.queryPermission!=='function'){
+          Object.defineProperty(proto,'queryPermission',{value:async()=> 'granted',configurable:true});
+          Object.defineProperty(proto,'requestPermission',{value:async()=> 'granted',configurable:true});
+        }
+      });
+      await controlled(page);
+      const fixture=await page.evaluate(async()=>{
+        const root=await navigator.storage.getDirectory(),name='sourcebook-opfs-pages-'+crypto.randomUUID();
+        const dir=await root.getDirectoryHandle(name,{create:true});
+        for(let i=0;i<325;i++)await dir.getFileHandle('file-'+String(i).padStart(3,'0')+'.md',{create:true});
+        window.showDirectoryPicker=async()=>dir;return name;
+      });
+      try{
+        await page.locator('[data-action="open-folder"]').first().click();
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='325 items');
+        assert.equal(await page.locator('#items .resource').count(),150);
+        assert.match(await page.locator('.resource-pager').innerText(),/1–150 of 325 · Page 1\/3/);
+        await page.locator('#items .resource').first().click();
+        await page.locator('[data-page-step="1"]').click();
+        assert.equal(await page.locator('#items .resource').count(),150);
+        assert.match(await page.locator('.resource-pager').innerText(),/151–300 of 325 · Page 2\/3/);
+        await page.locator('#items .resource').first().click({modifiers:['Shift']});
+        assert.match(await page.locator('#status').innerText(),/151 selected/);
+        await page.locator('[data-action="select-shown"]').click();
+        assert.match(await page.locator('#status').innerText(),/150 selected/);
+        await page.locator('#items .resource').first().focus();
+        await page.keyboard.press('End');
+        assert.equal(await page.locator('#items .resource').count(),25);
+        assert.match(await page.locator('.resource-pager').innerText(),/301–325 of 325 · Page 3\/3/);
+        assert.match(await page.evaluate(()=>document.activeElement?.dataset.item||''),/file-324/);
+        await page.locator('[data-page-step="-1"]').click();
+        assert.equal(await page.locator('#items .resource').count(),150);
+        await page.locator('#search-input').fill('file-324');
+        assert.equal(await page.locator('#items .resource').count(),1);
+        assert.equal(await page.locator('.resource-pager').count(),0);
+        const count=await page.evaluate(async name=>{
+          const root=await navigator.storage.getDirectory(),dir=await root.getDirectoryHandle(name);
+          let n=0;for await(const _ of dir.entries())n++;return n;
+        },fixture);
+        assert.equal(count,325,'all ordinary files remain untouched');
+      }finally{
+        await page.evaluate(async name=>{
+          const {removeLocal}=await import('./src/storage.mjs');
+          await removeLocal('folder-tabs-v1');await removeLocal('last-mode');
+          const root=await navigator.storage.getDirectory();await root.removeEntry(name,{recursive:true});
+        },fixture);
+      }
+    });
+    process.stdout.write('Chromium smoke '+passed+'/15 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
   }finally{
     await browser?.close();
     await new Promise(resolveClose=>server.close(resolveClose));
