@@ -755,7 +755,63 @@ async function main(){
         },fixture);
       }
     });
-    process.stdout.write('Chromium smoke '+passed+'/15 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
+
+    await scenario('read-only file information and multi-page path copying use ordinary Chromium files',async(context,page)=>{
+      // Native OPFS file handles with a synthetic picker permission adapter;
+      // not external Folder, Android SAF or Syncthing acceptance.
+      await context.addInitScript(()=>{
+        window.showDirectoryPicker=async()=>{throw new DOMException('Fixture only','AbortError');};
+        const proto=window.FileSystemHandle?.prototype;
+        if(proto&&typeof proto.queryPermission!=='function'){
+          Object.defineProperty(proto,'queryPermission',{value:async()=> 'granted',configurable:true});
+          Object.defineProperty(proto,'requestPermission',{value:async()=> 'granted',configurable:true});
+        }
+      });
+      await context.grantPermissions(['clipboard-read','clipboard-write']);
+      await controlled(page);
+      const fixture=await page.evaluate(async()=>{
+        const root=await navigator.storage.getDirectory(),name='sourcebook-opfs-info-'+crypto.randomUUID();
+        const dir=await root.getDirectoryHandle(name,{create:true});
+        for(const [filename,contents] of [['alpha.md','hello'],['beta.url','[InternetShortcut]\r\nURL=https://example.org\r\n']]){
+          const handle=await dir.getFileHandle(filename,{create:true});
+          const writer=await handle.createWritable();await writer.write(contents);await writer.close();
+        }
+        window.showDirectoryPicker=async()=>dir;return name;
+      });
+      try{
+        await page.locator('[data-action="open-folder"]').first().click();
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='2 items');
+        const alpha=page.locator('#items .resource').filter({hasText:'alpha.md'});
+        const beta=page.locator('#items .resource').filter({hasText:'beta.url'});
+        await alpha.click();
+        await page.waitForFunction(()=>document.querySelector('#file-live-info')?.textContent.includes('5 B'));
+        assert.match(await page.locator('#inspector-data').innerText(),/ROOT-LABELLED RELATIVE PATH/);
+        assert.match(await page.locator('#file-live-info').innerText(),/MODIFIED \(PROVIDER\)/);
+        await page.locator('#inspector-data [data-action="copy-resource-paths"]').click();
+        assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture+'/alpha.md');
+        await beta.click({modifiers:['Control']});
+        await page.locator('.contentbar [data-action="copy-resource-paths"]').click();
+        assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture+'/alpha.md\n'+fixture+'/beta.url');
+        await page.locator('#search-input').fill('beta');
+        assert.equal(await page.locator('#items .resource.selected').count(),0,'search changes clear stale selections');
+        await page.locator('#items .resource').first().click();
+        await page.locator('.contentbar [data-action="copy-resource-paths"]').click();
+        assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture+'/beta.url');
+        const actual=await page.evaluate(async name=>{
+          const dir=await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+          const files={};for await(const [filename,handle] of dir.entries())files[filename]=await (await handle.getFile()).text();
+          return files;
+        },fixture);
+        assert.deepEqual(actual,{'alpha.md':'hello','beta.url':'[InternetShortcut]\r\nURL=https://example.org\r\n'});
+      }finally{
+        await page.evaluate(async name=>{
+          const {removeLocal}=await import('./src/storage.mjs');
+          await removeLocal('folder-tabs-v1');await removeLocal('last-mode');
+          const root=await navigator.storage.getDirectory();await root.removeEntry(name,{recursive:true});
+        },fixture);
+      }
+    });
+    process.stdout.write('Chromium smoke '+passed+'/16 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
   }finally{
     await browser?.close();
     await new Promise(resolveClose=>server.close(resolveClose));

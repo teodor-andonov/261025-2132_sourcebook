@@ -33,11 +33,12 @@ import {plainRoot,createFolderTab,loadFolderTabs,visitFolderTab,folderHistoryTar
 import {enumerateFolderEntries,FOLDER_ENUMERATION_LIMIT} from './folder-enumeration.mjs';
 import {RESOURCE_PAGE_SIZE,pageWindow,pageForIndex} from './resource-paging.mjs';
 import {FOLDER_FILE_TYPES,filterFolderEntries} from './folder-filters.mjs';
+import {resourceDisplayPath,selectedResourcePaths,formatFileSize,readResourceFileMetadata} from './file-information.mjs';
 import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts,assertTagSnapshotUnchanged} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
 const state={
-  sidePreviewSerial:0,sidePreviewUrl:null,viewerSerial:0,
+  sidePreviewSerial:0,sidePreviewUrl:null,viewerSerial:0,fileInfoSerial:0,
   captureWriting:false,
   catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,catalogLinksView:false,activeViewId:null,views:[],viewSaving:false,sort:'name',showHidden:true,groupBy:'none',tableColumns:[...DEFAULT_TABLE_COLUMNS],fileType:'all',fileStatus:'all',
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,selectionAnchor:null,keyboardFocusId:null,
@@ -328,6 +329,7 @@ const glyphs={
   menu:'M4 6h16 M4 12h16 M4 18h16',
   link:'M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7 M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7',
   save:'M4 3h13l4 4v14H3V3z M7 3v7h10 M7 21v-8h10',
+  copy:'M8 7h12v14H8z M4 17H3V3h13v2',
   video:'M3 3h18v18H3z M8 3v18 M16 3v18 M3 8h5 M16 8h5'
 };
 function icon(type,size=18){
@@ -932,6 +934,7 @@ function render(){
   const recoveryNotice=!plain&&state.pendingTransaction?'<div class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'Catalog recovery needs manual repair':'Interrupted catalog save · '+state.pendingTransaction.applied+'/'+state.pendingTransaction.total+' changes')+'</span>'+(state.pendingTransaction.error||state.pendingTransaction.conflicts?.length?'':'<button class="secondary" data-action="recover-catalog" title="Resume catalog-only save">'+icon('refresh',14)+' Resume</button>')+'</div>':'';
   const conflictNotice=!plain&&(state.catalogConflicts?.count||state.catalogConflicts?.error)?'<div id="catalog-conflict-notice" class="catalog-recovery" role="status">'+icon('alert',15)+'<span>'+(state.catalogConflicts.error?'Conflict scan needs attention':state.catalogConflicts.count+' Catalog sync conflict copy/copies')+'</span><button class="secondary" data-action="inspect-catalog-conflicts" title="Inspect sync conflict copies">Inspect</button></div>':'';
   const selectionActions=viewsUI.inResults()?'':'<button class="text-button '+(state.selectionMode?'active':'')+'" data-action="toggle-selection" aria-pressed="'+state.selectionMode+'" title="Toggle multi-selection (touch friendly)">'+icon('check',15)+' <span>Select</span></button>'+'<button class="text-button" data-action="select-shown" title="Select displayed items (maximum 250)" '+(state.selectionMode?'':'hidden')+'>'+icon('list',15)+' <span>All shown</span></button>'+'<button class="text-button" data-action="clear-selection" title="Clear selection" '+(state.selected.size?'':'hidden')+'>'+icon('close',15)+' <span>Clear</span></button>';
+  const copyPathsAction='<button type="button" class="text-button" data-action="copy-resource-paths" title="Copy root-labelled relative paths, not absolute OS paths" '+(state.selected.size?'':'hidden')+'>'+icon('copy',15)+' <span>Copy paths</span></button>';
   const fileActions=viewsUI.inResults()?'':(plain?'':'<button class="text-button" data-action="create-folder">'+icon('plus')+' <span>Folder</span></button>')+'<button class="text-button" data-action="import">'+icon('upload')+' <span>Add files</span></button>';
   const viewActions=plain?'':state.activeViewId?'<button class="text-button" data-action="update-view" title="Update View">'+icon('save',15)+' <span>Update</span></button><button class="text-button" data-action="edit-view-tags" title="Edit View tags">'+icon('tag',15)+' <span>Tags</span></button><button class="text-button" data-action="rename-view" title="Rename View">'+icon('more',15)+' <span>Rename</span></button>':'<button class="text-button" data-action="save-view" title="Save View">'+icon('bookmark',15)+' <span>Save View</span></button>';
   const typeControl=plain?'<select id="file-type" class="sort-control type-control" aria-label="File type">'+FOLDER_FILE_TYPES.map(([value,label])=>'<option value="'+value+'" '+(state.fileType===value?'selected':'')+'>'+label+'</option>').join('')+'</select>':'<select id="file-type" class="sort-control type-control" aria-label="File type"><option value="all" '+(state.fileType==='all'?'selected':'')+'>All types</option><option value="image" '+(state.fileType==='image'?'selected':'')+'>Images</option><option value="pdf" '+(state.fileType==='pdf'?'selected':'')+'>PDFs</option><option value="video" '+(state.fileType==='video'?'selected':'')+'>Videos</option><option value="folder" '+(state.fileType==='folder'?'selected':'')+'>Folders</option><option value="url" '+(state.fileType==='url'?'selected':'')+'>Links</option><option value="other" '+(state.fileType==='other'?'selected':'')+'>Other</option></select>';
@@ -959,7 +962,7 @@ function render(){
     ?'<span class="tab-switch-controls" role="group" aria-label="Switch Folder Tabs"><button class="icon-button" data-action="tab-prev" title="Previous Folder Tab (Alt+Shift+Left)" aria-label="Previous Folder Tab">'+icon('back',14)+'</button><button class="icon-button" data-action="tab-next" title="Next Folder Tab (Alt+Shift+Right)" aria-label="Next Folder Tab">'+icon('forward',14)+'</button></span>'
     :'';
   clearSidePreview();
-  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+recoveryNotice+conflictNotice+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div id="sidebar-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize sidebar" aria-orientation="vertical"></div><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+tabSwitchControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" maxlength="256" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh') +button('Save URL or text as file','file','capture-file')+button('Review clipboard image','image','capture-clipboard-image')+'<div class="layout-buttons" role="group" aria-label="Layout">'+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+'</div>'+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+hiddenControl+statusControl+sortControl+groupControl+columnsButton+viewActions+scanControls+selectionActions+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<div id="inspector-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize side preview" aria-orientation="vertical"></div><aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="side-preview" class="side-preview" aria-label="Selected file preview"></div><div id="inspector-data"></div></aside>':'')+'</div>';
+  $('#app').innerHTML='<div class="shell"><aside id="sidebar" class="sidebar '+(state.sidebar?'open':'')+'"><div class="brand">'+icon('book',22)+'<strong>Sourcebook</strong></div>'+header+recoveryNotice+conflictNotice+rootSection+catalogSection+'<div class="sidebar-footer">'+(plain?'Local folder · read-only':'Local catalog')+'</div></aside><div id="sidebar-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize sidebar" aria-orientation="vertical"></div><div class="workspace"><header class="topbar">'+button('Navigation','menu','sidebar')+historyControls+tabSwitchControls+'<div class="breadcrumbs" id="breadcrumbs"></div><label class="search">'+icon('search',16)+'<input id="search-input" type="search" maxlength="256" placeholder="Search" value="'+escapeHTML(state.search)+'"/></label>'+button('Refresh','refresh','refresh') +button('Save URL or text as file','file','capture-file')+button('Review clipboard image','image','capture-clipboard-image')+'<div class="layout-buttons" role="group" aria-label="Layout">'+button('Gallery','grid','gallery',state.view==='gallery')+button('List','list','list',state.view==='list')+button('Table','table','table',state.view==='table')+'</div>'+button('Inspector','info','inspector',state.inspector)+button('Settings','more','settings')+'</header><div class="contentbar"><h2>'+escapeHTML(viewsUI.title()||state.parts.at(-1)||currentSource()?.name||'Files')+'</h2><span class="count" id="item-count"></span>'+(state.tagFilter?'<button class="filter-pill" data-action="clear-tag-filter" title="Clear tag filter">#'+escapeHTML(tagLeaf(state.tagFilter))+' '+icon('close',12)+'</button>':'')+'<div class="spacer"></div><label class="zoom" '+(state.view==='table'?'hidden':'')+'>'+icon('grid',15)+'<input id="density" type="range" min="110" max="280" value="'+state.size+'" aria-label="Thumbnail size"/></label>'+typeControl+hiddenControl+statusControl+sortControl+groupControl+columnsButton+viewActions+scanControls+selectionActions+copyPathsAction+fileActions+'</div><div id="scroller" class="scroller"><div id="items"></div></div><footer class="footer"><span id="status">Local-first</span><span>'+(plain?'Folder browser':'Sourcebook preview')+'</span></footer></div>'+(state.inspector?'<div id="inspector-resizer" class="pane-grip" role="separator" tabindex="0" aria-label="Resize side preview" aria-orientation="vertical"></div><aside class="inspector"><h3>'+(plain?'File info':'Properties')+'</h3><div id="side-preview" class="side-preview" aria-label="Selected file preview"></div><div id="inspector-data"></div></aside>':'')+'</div>';
   $('#breadcrumbs').innerHTML=viewsUI.inResults()?'<button data-action="exit-catalog-tag">'+icon('database',16)+' Catalog</button><span class="crumb">'+icon('chevron',13)+'</span><button>'+icon('tag',14)+' '+escapeHTML(viewsUI.title())+'</button>':'<button data-crumb="-1">'+icon('folder',16)+' '+escapeHTML(currentSource()?.name||'Files')+'</button>'+state.parts.map((part,i)=>'<span class="crumb">'+icon('chevron',13)+'</span><button data-crumb="'+i+'">'+escapeHTML(part)+'</button>').join('');
   renderItems();renderInspector();
 }
@@ -1175,8 +1178,49 @@ async function renderSidePreview(item){
     host.innerHTML='<div class="side-preview-empty">'+icon('alert',18)+'<span>'+escapeHTML(errorText(error))+'</span></div>';
   }
 }
+
+function fileInformationHTML(item){
+  if(!item||!['file','directory'].includes(item.kind))return '';
+  let path;
+  try{path=resourceDisplayPath(item,{folderParts:state.parts,rootName:currentSource()?.name||''});}
+  catch{return '<div class="micro-hint">Resource path unavailable; reconnect the Folder.</div>';}
+  const status=item.kind==='directory'?'Folder · browser does not report directory size':'Reading current file metadata…';
+  return '<details class="file-details" open><summary>File information</summary>'+
+    '<div class="detail"><div class="label">ROOT-LABELLED RELATIVE PATH</div><code class="resource-path">'+escapeHTML(path)+'</code></div>'+
+    '<div class="micro-hint">Not an absolute filesystem path.</div>'+
+    '<div id="file-live-info" class="micro-hint" role="status">'+status+'</div>'+
+    '<button type="button" class="secondary full" data-action="copy-resource-paths">'+icon('copy',14)+' Copy relative path</button></details>';
+}
+async function loadFileInformation(item,serial){
+  if(item?.kind!=='file')return;
+  try{
+    const handle=item.catalogResult?await catalogResultHandle(item):item.handle;
+    const info=await readResourceFileMetadata(handle);
+    const host=$('#file-live-info');
+    if(serial!==state.fileInfoSerial||!host?.isConnected||state.selected.size!==1||!state.selected.has(item.id))return;
+    const modified=new Date(info.lastModified).toLocaleString();
+    host.innerHTML='<div class="detail"><div class="label">SIZE</div>'+escapeHTML(formatFileSize(info.size))+'</div>'+
+      '<div class="detail"><div class="label">MODIFIED (PROVIDER)</div>'+escapeHTML(modified)+'</div>'+
+      '<div class="detail"><div class="label">MIME (PROVIDER)</div>'+escapeHTML(info.type||'Not reported')+'</div>';
+  }catch(error){
+    const host=$('#file-live-info');
+    if(serial!==state.fileInfoSerial||!host?.isConnected||state.selected.size!==1||!state.selected.has(item.id))return;
+    host.textContent='Current metadata unavailable: '+errorText(error)+'. No cached file attributes are assumed.';
+  }
+}
+async function copySelectedResourcePaths(){
+  try{
+    if(typeof navigator.clipboard?.writeText!=='function')throw Error('Clipboard writing is unavailable on this device');
+    const paths=selectedResourcePaths(visibleItems(),state.selected,{
+      folderParts:state.parts,rootName:currentSource()?.name||''
+    });
+    await navigator.clipboard.writeText(paths);
+    toast('Copied '+state.selected.size+' root-labelled relative path(s). No files changed.');
+  }catch(error){toast('Copy paths: '+errorText(error),true);}
+}
 function renderInspector(){
   const host=$('#inspector-data');if(!host)return;
+  const infoSerial=++state.fileInfoSerial;
   void renderSidePreview(state.selected.size===1?state.items.find(x=>state.selected.has(x.id)):null);
   if(viewsUI.inResults()){
     const selected=state.selected.size===1?state.items.find(item=>state.selected.has(item.id)):null;
@@ -1186,7 +1230,8 @@ function renderInspector(){
       host.innerHTML='<h4>'+escapeHTML(selected.name)+'</h4><div class="detail"><div class="label">URL</div><div class="micro-hint">'+escapeHTML(selected.url)+'</div></div><div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div><div class="detail"><div class="label">NOTES</div><div class="micro-hint">'+escapeHTML(selected.record?.notes||'—')+'</div></div><a class="secondary full" target="_blank" rel="noopener noreferrer" href="'+escapeHTML(selected.url)+'">'+icon('link',15)+' Open link</a><button class="secondary full" data-action="edit-catalog-link">'+icon('tag',15)+' Edit metadata</button>';
       return;
     }
-    host.innerHTML='<h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.overlapConflict?'<div class="micro-hint" role="status">Verified overlapping Folders report competing metadata or inconsistent source state. Both entries remain visible; review each registered Folder before editing. No records were merged.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+(selected.staleIndex?'<div class="micro-hint">Cached index snapshot · refresh this Folder to verify its contents.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div>'+(selected.overlapConflict?'<button class="secondary full" data-action="review-overlap-records">'+icon('search',15)+' Review overlapping records</button>':'')+'<button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>';
+    host.innerHTML='<h4>'+escapeHTML(cleanName(selected.name))+'</h4><div class="detail"><div class="label">LOCATION</div><div class="micro-hint">'+escapeHTML(selected.location)+'</div></div>'+(selected.missing?'<div class="micro-hint">Not found during the last completed folder scan. Check the path before editing metadata.</div>':'')+(selected.changedKind?'<div class="micro-hint">Source type differs from catalog metadata. Resolve before editing.</div>':'')+(selected.overlapConflict?'<div class="micro-hint" role="status">Verified overlapping Folders report competing metadata or inconsistent source state. Both entries remain visible; review each registered Folder before editing. No records were merged.</div>':'')+(selected.unobjectified?'<div class="micro-hint">Not cataloged. Reveal in folder to add tags.</div>':'')+(selected.staleIndex?'<div class="micro-hint">Cached index snapshot · refresh this Folder to verify its contents.</div>':'')+'<div class="detail"><div class="label">TAGS</div>'+tags.map(t=>'<span class="tag-pill" title="'+escapeHTML(t)+'">#'+escapeHTML(tagLeaf(t))+'</span>').join(' ')+'</div>'+(selected.overlapConflict?'<button class="secondary full" data-action="review-overlap-records">'+icon('search',15)+' Review overlapping records</button>':'')+'<button class="secondary full" data-action="reveal-catalog-result">'+icon('folder',16)+' Show in folder</button>'+fileInformationHTML(selected);
+    void loadFileInformation(selected,infoSerial);
     return;
   }
   if(state.selected.size!==1){
@@ -1202,14 +1247,15 @@ function renderInspector(){
   const item=state.items.find(i=>state.selected.has(i.id));if(!item)return;
   const record=itemRecord(item);
   if(!state.catalog){
-    host.innerHTML='<h4>'+escapeHTML(cleanName(item.name))+'</h4>'+(item.kind==='directory'?'<button class="secondary full" data-action="open-selected-tab">'+icon('plus',15)+' Open in new tab</button>':'')+'<details class="file-details" open><summary>File information</summary><code>'+escapeHTML(item.name)+'</code></details>';
+    host.innerHTML='<h4>'+escapeHTML(cleanName(item.name))+'</h4>'+(item.kind==='directory'?'<button class="secondary full" data-action="open-selected-tab">'+icon('plus',15)+' Open in new tab</button>':'')+fileInformationHTML(item);
+    void loadFileInformation(item,infoSerial);
     return;
   }
   if(state.tagDraftItem!==item.id){
     state.tagDraftItem=item.id;state.tagDraft=recordTagPaths(record,state.taxonomy);
   }
-  host.innerHTML='<h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">TAGS</div><div class="tag-editor" id="tag-editor"><div class="tag-pills" id="tag-pills"></div><input id="tag-input" aria-label="Add tag" placeholder="# Add tag…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="tag-suggestions" aria-expanded="false"/></div><div class="tag-suggestions" id="tag-suggestions" role="listbox" aria-label="Existing tags" hidden></div><div class="micro-hint">Nest tags with /, e.g. Architecture / Facades</div></div><div class="detail"><div class="label">NOTES</div><textarea rows="3" id="notes" placeholder="Optional note">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save',16)+' Save</button><details class="file-details"><summary>File information</summary><code>'+escapeHTML(item.name)+'</code>'+(record?'<div class="micro-hint">ID: '+escapeHTML(record.id)+'</div>':'')+'</details>';
-  renderTagPills();
+  host.innerHTML='<h4>'+escapeHTML(cleanName(item.name))+'</h4><div class="detail"><div class="label">TAGS</div><div class="tag-editor" id="tag-editor"><div class="tag-pills" id="tag-pills"></div><input id="tag-input" aria-label="Add tag" placeholder="# Add tag…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="tag-suggestions" aria-expanded="false"/></div><div class="tag-suggestions" id="tag-suggestions" role="listbox" aria-label="Existing tags" hidden></div><div class="micro-hint">Nest tags with /, e.g. Architecture / Facades</div></div><div class="detail"><div class="label">NOTES</div><textarea rows="3" id="notes" placeholder="Optional note">'+escapeHTML(record?.notes||'')+'</textarea></div><button class="primary full" data-action="save-resource">'+icon('save',16)+' Save</button><details class="file-details"><summary>Catalog record</summary><code>'+escapeHTML(item.name)+'</code>'+(record?'<div class="micro-hint">ID: '+escapeHTML(record.id)+'</div>':'')+'</details>'+fileInformationHTML(item);
+  renderTagPills();void loadFileInformation(item,infoSerial);
 }
 function syncResourceTabStops(){
   const nodes=[...document.querySelectorAll('#items .resource[data-item]')];
@@ -1224,6 +1270,7 @@ function refreshSelectionUI(){
     node.setAttribute('aria-selected',String(selected));
   }
   const clear=$('[data-action="clear-selection"]');if(clear)clear.hidden=!state.selected.size;
+  const copy=$('.contentbar [data-action="copy-resource-paths"]');if(copy)copy.hidden=!state.selected.size;
   const status=$('#status');
   if(status){
     const partial=!viewsUI.inResults()&&['limited','failed'].includes(state.folderReadState);
@@ -1683,6 +1730,7 @@ document.addEventListener('click',async event=>{
     case 'clear-tag-filter':state.tagFilter=null;state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;render();break;
     case 'toggle-selection':state.selectionMode=!state.selectionMode;render();break;
     case 'select-shown':selectShownItems();break;
+    case 'copy-resource-paths':void copySelectedResourcePaths();break;
     case 'clear-selection':state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;state.selectionMode=false;render();break;
     case 'bulk-add':void bulkTags('add');break;
     case 'bulk-remove':void bulkTags('remove');break;
