@@ -793,7 +793,8 @@ async function main(){
         await page.locator('.contentbar [data-action="copy-resource-paths"]').click();
         assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture+'/alpha.md\n'+fixture+'/beta.url');
         await page.locator('#search-input').fill('beta');
-        assert.equal(await page.locator('#items .resource.selected').count(),1);
+        assert.equal(await page.locator('#items .resource.selected').count(),0,'search changes clear stale selections');
+        await page.locator('#items .resource').first().click();
         await page.locator('.contentbar [data-action="copy-resource-paths"]').click();
         assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture+'/beta.url');
         const actual=await page.evaluate(async name=>{
