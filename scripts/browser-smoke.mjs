@@ -416,7 +416,79 @@ async function main(){
       }
     });
 
-    process.stdout.write('Chromium smoke '+passed+'/9 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
+    await scenario('independent Folder Tabs retain search, sort, layout and native OPFS handles across reload',async(context,page)=>{
+      // Test-only picker and permission shim; this is NOT external Folder/Android SAF access.
+      await context.addInitScript(()=>{
+        window.showDirectoryPicker=async()=>{throw new DOMException('Synthetic picker unavailable','AbortError');};
+        const proto=window.FileSystemHandle?.prototype;
+        if(proto&&typeof proto.queryPermission!=='function'){
+          Object.defineProperty(proto,'queryPermission',{value:async()=> 'granted',configurable:true});
+          Object.defineProperty(proto,'requestPermission',{value:async()=> 'granted',configurable:true});
+        }
+      });
+      await controlled(page);
+      const parentName=await page.evaluate(async()=>{
+        const root=await navigator.storage.getDirectory();
+        const parentName='sourcebook-opfs-tabs-'+crypto.randomUUID();
+        const parent=await root.getDirectoryHandle(parentName,{create:true});
+        const a=await parent.getDirectoryHandle('Folder A',{create:true});
+        const b=await parent.getDirectoryHandle('Folder B',{create:true});
+        for(const [dir,names] of [[a,['alpha.md','apple.md']],[b,['beta.md','banana.md']]]){
+          for(const name of names){
+            const handle=await dir.getFileHandle(name,{create:true});
+            const writer=await handle.createWritable();await writer.write(name);await writer.close();
+          }
+        }
+        const queue=[a,b];
+        window.showDirectoryPicker=async()=>queue.shift();
+        return parentName;
+      });
+      try{
+        await page.locator('[data-action="open-folder"]').first().click();
+        await page.locator('[data-source]').first().waitFor();
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='2 items');
+        await page.locator('#search-input').fill('alpha');
+        await page.locator('[data-action="table"]').click();
+        await page.locator('#sort-mode').selectOption('name-desc');
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='1 items');
+        await page.locator('[data-action="open-folder"]').first().click();
+        await page.waitForFunction(()=>document.querySelectorAll('[data-source]').length===2);
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='2 items');
+        await page.locator('#search-input').fill('beta');
+        await page.locator('[data-action="list"]').click();
+        await page.locator('#sort-mode').selectOption('type');
+        await page.locator('[data-action="tab-prev"]').click();
+        await page.waitForFunction(()=>document.querySelector('#search-input')?.value==='alpha');
+        assert.equal(await page.locator('#sort-mode').inputValue(),'name-desc');
+        assert.equal(await page.locator('#items.table').count(),1);
+        await page.waitForFunction(()=>document.querySelector('#item-count')?.textContent==='1 items');
+        await page.keyboard.press('Alt+Shift+ArrowRight');
+        await page.waitForFunction(()=>document.querySelector('#search-input')?.value==='beta');
+        assert.equal(await page.locator('#sort-mode').inputValue(),'type');
+        assert.equal(await page.locator('#items.list').count(),1);
+        await page.waitForFunction(async()=>{
+          const {getLocal}=await import('./src/storage.mjs');
+          const saved=await getLocal('folder-tabs-v1');
+          return saved?.tabs?.length===2&&saved.tabs[0].preferences?.search==='alpha'&&
+            saved.tabs[1].preferences?.search==='beta'&&saved.activeId===saved.tabs[1].id;
+        });
+        await page.reload({waitUntil:'load'});
+        await page.waitForFunction(()=>document.querySelectorAll('[data-source]').length===2&&document.querySelector('#search-input')?.value==='beta');
+        assert.equal(await page.locator('#items.list').count(),1);
+        await page.locator('[data-source]').first().click();
+        await page.waitForFunction(()=>document.querySelector('#search-input')?.value==='alpha');
+        assert.equal(await page.locator('#items.table').count(),1);
+      }finally{
+        await page.evaluate(async name=>{
+          const {removeLocal}=await import('./src/storage.mjs');
+          await removeLocal('folder-tabs-v1');await removeLocal('last-mode');
+          const root=await navigator.storage.getDirectory();
+          await root.removeEntry(name,{recursive:true});
+        },parentName);
+      }
+    });
+
+    process.stdout.write('Chromium smoke '+passed+'/10 passed. Real Chromium OPFS is origin-private; external Folder, Windows/Pixel 8 and Syncthing M0 acceptance OPEN.\n');
   }finally{
     await browser?.close();
     await new Promise(resolveClose=>server.close(resolveClose));

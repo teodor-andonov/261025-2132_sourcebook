@@ -1,6 +1,28 @@
 // Physical folder tabs are device-local browser state; never catalog records.
 // All helpers are pure and never mutate a FileSystemHandle or ordinary files.
 export const PLAIN_ROOT_ID='plain-root';
+export const FOLDER_TAB_DEFAULTS=Object.freeze({search:'',sort:'name',view:'gallery',size:164});
+const FOLDER_SORTS=new Set(['name','name-desc','type']);
+const FOLDER_VIEWS=new Set(['gallery','list','table']);
+// Device-local tab presentation state only; no source-file writes or selections.
+export function folderTabPreferences(value){
+  const v=value&&typeof value==='object'?value:{};
+  return {
+    search:typeof v.search==='string'&&v.search.length<=256&&!/[\x00-\x1f\x7f]/.test(v.search)?v.search:'',
+    sort:FOLDER_SORTS.has(v.sort)?v.sort:FOLDER_TAB_DEFAULTS.sort,
+    view:FOLDER_VIEWS.has(v.view)?v.view:FOLDER_TAB_DEFAULTS.view,
+    size:Number.isFinite(v.size)&&v.size>=110&&v.size<=280?Math.round(v.size):FOLDER_TAB_DEFAULTS.size
+  };
+}
+export function updateFolderTabPreferences(tabs,id,changes){
+  if(!tabs.some(tab=>tab.id===id))throw Error('Unknown folder tab');
+  return tabs.map(tab=>tab.id===id?{...tab,preferences:folderTabPreferences({...tab.preferences,...changes})}:tab);
+}
+export function adjacentFolderTabId(tabs,id,delta){
+  const index=tabs.findIndex(tab=>tab.id===id);
+  if(index<0||tabs.length<2||!Number.isInteger(delta)||delta===0)return null;
+  return tabs[((index+delta)%tabs.length+tabs.length)%tabs.length].id;
+}
 export function plainRoot(handle){
   if(!handle||handle.kind!=='directory'||typeof handle.entries!=='function')throw TypeError('A readable directory is required');
   return {id:PLAIN_ROOT_ID,name:String(handle.name||'Folder')};
@@ -8,17 +30,17 @@ export function plainRoot(handle){
 function validParts(parts){
   return Array.isArray(parts)&&parts.length<=128&&parts.every(part=>typeof part==='string'&&part.length>0&&part!=='.'&&part!=='..'&&!part.includes('/')&&!part.includes('\\'));
 }
-export function createFolderTab(handle,id){
+export function createFolderTab(handle,id,preferences={}){
   const root=plainRoot(handle);
   if(typeof id!=='string'||!id||id.length>128)throw Error('Invalid folder tab ID');
-  return {...root,id,handle,parts:[],history:[[]],position:0};
+  return {...root,id,handle,parts:[],history:[[]],position:0,preferences:folderTabPreferences(preferences)};
 }
 export function loadFolderTabs(saved){
   const seen=new Set(),tabs=[];
   for(const item of Array.isArray(saved?.tabs)?saved.tabs:[]){
     try{
       if(!item||typeof item.id!=='string'||seen.has(item.id))continue;
-      const root=createFolderTab(item.handle,item.id);
+      const root=createFolderTab(item.handle,item.id,item.preferences);
       const history=Array.isArray(item.history)&&item.history.length>0&&item.history.length<=500&&item.history.every(validParts)?item.history.map(p=>[...p]):[[]];
       const position=Number.isInteger(item.position)&&item.position>=0&&item.position<history.length?item.position:0;
       const parts=history[position];
