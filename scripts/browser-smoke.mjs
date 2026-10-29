@@ -772,7 +772,7 @@ async function main(){
       const fixture=await page.evaluate(async()=>{
         const root=await navigator.storage.getDirectory(),name='sourcebook-opfs-info-'+crypto.randomUUID();
         const dir=await root.getDirectoryHandle(name,{create:true});
-        for(const [filename,contents] of [['alpha.md','hello'],['beta.url','[InternetShortcut]\\r\\nURL=https://example.org\\r\\n']]){
+        for(const [filename,contents] of [['alpha.md','hello'],['beta.url','[InternetShortcut]\r\nURL=https://example.org\r\n']]){
           const handle=await dir.getFileHandle(filename,{create:true});
           const writer=await handle.createWritable();await writer.write(contents);await writer.close();
         }
@@ -786,12 +786,12 @@ async function main(){
         await alpha.click();
         await page.waitForFunction(()=>document.querySelector('#file-live-info')?.textContent.includes('5 B'));
         assert.match(await page.locator('#inspector-data').innerText(),/ROOT-LABELLED RELATIVE PATH/);
-        assert.match(await page.locator('#file-live-info').innerText(),/MODIFIED \\(PROVIDER\\)/);
+        assert.match(await page.locator('#file-live-info').innerText(),/MODIFIED \(PROVIDER\)/);
         await page.locator('#inspector-data [data-action="copy-resource-paths"]').click();
         assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture+'/alpha.md');
         await beta.click({modifiers:['Control']});
         await page.locator('.contentbar [data-action="copy-resource-paths"]').click();
-        assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture+'/alpha.md\\n'+fixture+'/beta.url');
+        assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture+'/alpha.md\n'+fixture+'/beta.url');
         await page.locator('#search-input').fill('beta');
         assert.equal(await page.locator('#items .resource.selected').count(),1);
         await page.locator('.contentbar [data-action="copy-resource-paths"]').click();
@@ -801,7 +801,7 @@ async function main(){
           const files={};for await(const [filename,handle] of dir.entries())files[filename]=await (await handle.getFile()).text();
           return files;
         },fixture);
-        assert.deepEqual(actual,{'alpha.md':'hello','beta.url':'[InternetShortcut]\\r\\nURL=https://example.org\\r\\n'});
+        assert.deepEqual(actual,{'alpha.md':'hello','beta.url':'[InternetShortcut]\r\nURL=https://example.org\r\n'});
       }finally{
         await page.evaluate(async name=>{
           const {removeLocal}=await import('./src/storage.mjs');
