@@ -224,7 +224,7 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
       '<button class="secondary" type="button" data-m0-offline>Inspect cached shell</button><p role="status" data-m0-offline-result>'+escapeHTML(offlineSummary())+'</p></div>'+
       '<label class="m0-commit">Published commit (optional, verify in Actions)<input data-m0-commit maxlength="40" value="'+escapeHTML(record.releaseCommit)+'" placeholder="7–40 hex characters"></label>'+
       '<div class="m0-checks">'+rows+'</div><p class="m0-warning">Do not enter private paths, filenames, file contents, device IDs or secrets in notes.</p>'+
-      '<div class="m0-probe"><strong>Compare Windows + Android evidence</strong><p>Export a report on EACH real device after manually testing M0. Load both JSON files here to compare results, release commits and hashed disposable fixture identity. Imported files stay in memory only. A match never automatically accepts M0.</p>'+
+      '<div class="m0-probe"><strong>Compare Windows + Android evidence</strong><p>Export a report on EACH real device after manually testing M0. Load both JSON files here to compare Pass evidence links, Folder/handle/cache diagnostics, release commits and hashed disposable fixture identity. Imported files stay in memory only. A match never automatically accepts M0.</p>'+
       '<div class="m0-probe-actions"><label>Windows JSON<input type="file" accept=".json,application/json" data-m0-report="Windows"></label><label>Android JSON<input type="file" accept=".json,application/json" data-m0-report="Android"></label></div>'+
       '<div role="status" data-m0-comparison>Choose both exported reports. No data is uploaded.</div></div>'+
       '<div class="dialog-actions"><button class="secondary" type="button" data-m0-reset>Clear local results</button><button class="secondary" type="button" data-m0-export>Export JSON</button><button class="primary" type="button" data-action="dismiss">Done</button></div></div>');
@@ -262,11 +262,14 @@ export function createDeviceReadinessUI({openDialog,escapeHTML,toast,env=globalT
           }
           const result=compareM0EvidenceReports(imported.Windows,imported.Android);
           const rows=result.rows.map(row=>'<tr><th>'+row.id+'</th><td>'+escapeHTML(row.windows)+(row.windowsEvidence?' · evidence':'')+'</td><td>'+escapeHTML(row.android)+(row.androidEvidence?' · evidence':'')+'</td></tr>').join('');
+          const probes=result.probeRows.map(row=>'<tr><th>'+row.id+' · '+escapeHTML(row.label)+'</th><td>'+(row.windows?'Recorded':'Missing')+'</td><td>'+(row.android?'Recorded':'Missing')+'</td></tr>').join('');
           comparison.innerHTML='<p><strong>Same published commit:</strong> '+(result.sameCommit?'Yes':'Not verified')+
             ' · <strong>Same verified .sb fixture:</strong> '+(result.sameFixture?'Hash matches':'Not verified')+
             ' · <strong>Same .url/.md fixture:</strong> '+(result.sameCaptureFixture?'Hash matches':'Not verified')+
             ' · <strong>Acceptance:</strong> Manual review required</p>'+
             '<table class="m0-evidence-table"><thead><tr><th>Case</th><th>Windows</th><th>Android</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+            '<p><strong>Supporting diagnostics (not acceptance):</strong></p>'+
+            '<table class="m0-evidence-table"><thead><tr><th>Probe</th><th>Windows</th><th>Android</th></tr></thead><tbody>'+probes+'</tbody></table>'+
             (result.warnings.length?'<p>'+result.warnings.map(w=>escapeHTML(w)).join('<br>')+'</p>':
               '<p>Evidence is internally consistent for manual review. This is NOT physical-device acceptance.</p>');
         }catch(error){comparison.textContent='Report rejected: '+String(error?.message||'Invalid report').slice(0,180);}
