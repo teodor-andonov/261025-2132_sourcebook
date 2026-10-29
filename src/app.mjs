@@ -37,6 +37,7 @@ import {resourceDisplayPath,selectedResourcePaths,formatFileSize,readResourceFil
 import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts,assertTagSnapshotUnchanged} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
+let taPwaOperations=0;
 const state={
   sidePreviewSerial:0,sidePreviewUrl:null,viewerSerial:0,fileInfoSerial:0,
   captureWriting:false,
@@ -1460,10 +1461,10 @@ async function newFolder(){
   const name=prompt('Name of new folder:','New folder');
   if(!name)return;
   if(!validName(name))return toast('Invalid folder name',true);
-  state.resourceSaving=true;
+  taPwaOperations++;
   try{if(!await authorized(sourceHandle(),'readwrite'))throw Error('Write access is required to create a folder.');const dir=await nested(sourceHandle(),state.parts);await dir.getDirectoryHandle(name,{create:true});invalidateScan();await navigate(state.sourceId,state.parts);toast('Folder created');}
   catch(e){toast(errorText(e),true);}
-  finally{state.resourceSaving=false;}
+  finally{taPwaOperations--;}
 }
 // File input works on browsers where showOpenFilePicker is unavailable (including Android).
 // Selection and drag/drop only open a review dialog: writing requires explicit confirmation.
@@ -1910,7 +1911,7 @@ async function boot(){
   }catch(e){console.warn('Restore needs permission',e);}
   landing();
 }
-window.taPwaCanUpdate=()=>!state.captureWriting&&!state.bulkSaving&&!state.resourceSaving&&!state.viewSaving&&!state.backupBusy&&!state.scanBusy&&!state.loading&&!state.pendingTransaction&&!fileImportController&&!document.querySelector('#dialog');
+window.taPwaCanUpdate=()=>!taPwaOperations&&!state.captureWriting&&!state.bulkSaving&&!state.resourceSaving&&!state.viewSaving&&!state.backupBusy&&!state.scanBusy&&!state.loading&&!state.pendingTransaction&&!fileImportController&&!document.querySelector('#dialog');
 boot().then(async()=>{
   const url=new URL(location.href);
   if(url.searchParams.get('shared')!=='1')return;
