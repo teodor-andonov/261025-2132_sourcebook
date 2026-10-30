@@ -5,6 +5,8 @@ import {createShareInboxUI,removeIncomingShare,listIncomingShares} from './share
 import {createCatalogLinksUI} from './catalog-links-ui.mjs';
 import {classifyPastedText,planFileCapture,writeCapturedFile,requestCapturedFileDownload} from './file-capture.mjs';
 import {readPhysicalShortcut,readPhysicalTextPreview} from './file-preview.mjs';
+import {createThemeController} from './theme.mjs';
+import {mountImageViewer} from './image-viewer.mjs';
 import {prepareCaptureIntake} from './capture-intake.mjs';
 import {shareCapturedPlan} from './file-share-out.mjs';
 import {collectPastedImageBlobs,prepareClipboardImages,readClipboardImages} from './clipboard-images.mjs';
@@ -37,9 +39,17 @@ import {resourceDisplayPath,selectedResourcePaths,formatFileSize,readResourceFil
 import {mergeTagInput,ensureTagPath,recordTagPaths,flattenedTagTree,includesTagPath,matchesResourceSearch,suggestTagPaths,nextTagSuggestionIndex,toggleTagPin,pinnedTagShortcuts,assertTagSnapshotUnchanged} from './tags.mjs';
 
 const $=(query,root=document)=>root.querySelector(query);
+const appearance=createThemeController({root:document.documentElement,
+  storage:(()=>{try{return localStorage;}catch{return null;}})(),
+  media:window.matchMedia('(prefers-color-scheme: dark)')});
+function appearanceMarkup(){
+  return '<h2>Settings</h2><p>Appearance and local preferences.</p><label class="setting-row">Appearance<select id="theme-mode" aria-label="Appearance">'+
+    ['system','light','dark'].map(mode=>'<option value="'+mode+'" '+(appearance.mode===mode?'selected':'')+'>'+({system:'System',light:'Light',dark:'Dark'}[mode])+'</option>').join('')+'</select></label>';
+}
 let taPwaOperations=0;
 const state={
   sidePreviewSerial:0,sidePreviewUrl:null,viewerSerial:0,fileInfoSerial:0,
+  viewerReturnFocus:null,viewerOriginId:null,viewerAppWasInert:false,viewerCleanup:null,
   captureWriting:false,
   catalog:null, catalogHandle:null, sources:[], handles:new Map(), records:new Map(), taxonomy:[], tagFilter:null, catalogTagView:null,catalogLinksView:false,activeViewId:null,views:[],viewSaving:false,sort:'name',showHidden:true,groupBy:'none',tableColumns:[...DEFAULT_TABLE_COLUMNS],fileType:'all',fileStatus:'all',
   sourceId:null,parts:[],items:[],selected:new Set(),lastSelected:null,selectionAnchor:null,keyboardFocusId:null,
@@ -485,7 +495,7 @@ function landing(){
   const canPick=typeof window.showDirectoryPicker==='function';
   const folderActions=canPick?'<button class="primary" data-action="open-folder">'+icon('folder')+' Open folder</button><button class="secondary" data-action="open-catalog">'+icon('database')+' Open catalog</button><button class="secondary" data-action="create-catalog">'+icon('plus')+' New catalog</button>':'<p class="micro-hint" role="status">Folder access is unavailable in this browser. You can still review incoming shares, capture URLs/text, Download or send ordinary files to another app. None of these alternatives verifies a Folder write.</p>';
   const importActions=canPick?'<button class="secondary" data-action="import">'+icon('upload')+' Add ordinary files</button><button class="secondary" data-action="capture-clipboard-image">'+icon('image')+' Clipboard image</button>':'';
-  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>TaSourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions">'+folderActions+'<button class="secondary" data-action="capture-file">'+icon('file')+' Save file from URL/text</button>'+importActions+'<button class="secondary" data-action="capture-links">'+icon('link')+' Review staged links</button><button class="secondary" data-action="incoming-shares">'+icon('link')+' Incoming shares</button></div><div id="recent-area"></div><button class="secondary" data-action="device-checks" title="Check browser capabilities and record device acceptance">Device checks</button><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
+  $('#app').innerHTML='<main class="landing"><div class="landing-content"><div class="landing-logo">'+icon('book',35)+'</div><h1>TaSourcebook</h1><p>Your files, beautifully organized.</p><div class="landing-actions">'+folderActions+'<button class="secondary" data-action="capture-file">'+icon('file')+' Save file from URL/text</button>'+importActions+'<button class="secondary" data-action="capture-links">'+icon('link')+' Review staged links</button><button class="secondary" data-action="incoming-shares">'+icon('link')+' Incoming shares</button></div><div id="recent-area"></div><button class="secondary" data-action="settings">Settings</button><button class="secondary" data-action="device-checks" title="Check browser capabilities and record device acceptance">Device checks</button><span class="landing-foot">Local-first. No imports required. Your files stay yours.</span></div></main>';
   getLocal('recent').then(value=>{
     if(canPick&&value&&$('#recent-area'))$('#recent-area').innerHTML='<div class="eyebrow">RECENT CATALOG</div><button class="recent-item" data-action="recent">'+icon('database')+'<span>'+escapeHTML(value.name)+'</span>'+icon('chevron',15)+'</button>';
   }).catch(console.warn);
@@ -1404,10 +1414,19 @@ async function saveResource(){
   }finally{state.resourceSaving=false;}
 }
 function closePreview(){
+  const wasOpen=!!$('#viewer');
   ++state.viewerSerial;
+  state.viewerCleanup?.();state.viewerCleanup=null;
   $('#viewer')?.remove();
   if(state.previewUrl){URL.revokeObjectURL(state.previewUrl);state.previewUrl=null;}
   state.previewId=null;
+  if(wasOpen){
+    if($('#app'))$('#app').inert=state.viewerAppWasInert;
+    const origin=state.viewerReturnFocus?.isConnected?state.viewerReturnFocus:
+      [...document.querySelectorAll('#items .resource[data-item]')].find(node=>node.dataset.item===state.viewerOriginId);
+    origin?.focus({preventScroll:true});
+  }
+  state.viewerReturnFocus=null;state.viewerOriginId=null;
 }
 async function showPreview(item){
   if(!item){item=state.items.find(i=>state.selected.has(i.id));}
@@ -1419,12 +1438,35 @@ async function showPreview(item){
   }
   if(item.catalogResult&&item.kind==='directory')return revealCatalogResult(item);
   if(item.kind==='directory')return navigate(state.sourceId,[...state.parts,item.name]);
-  closePreview();
-  const serial=state.viewerSerial;
+  let panel=$('#viewer');
+  if(!panel){
+    state.viewerReturnFocus=document.activeElement;state.viewerOriginId=item.id;
+    state.viewerAppWasInert=$('#app')?.inert||false;
+    if($('#app'))$('#app').inert=true;
+    panel=document.createElement('div');panel.id='viewer';panel.className='viewer';
+    panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');
+    panel.setAttribute('aria-labelledby','viewer-title');
+    panel.innerHTML='<header><h2 id="viewer-title"></h2><nav aria-label="Preview navigation">'+button('Previous file','back','viewer-prev')+'<span id="viewer-position" role="status"></span>'+button('Next file','forward','viewer-next')+button('Close','close','close-viewer')+'</nav></header><main aria-busy="true"></main><footer>← → previous / next file <span>Esc to close</span></footer>';
+    document.body.append(panel);
+    panel.querySelector('[data-action="close-viewer"]').focus({preventScroll:true});
+  }
+  const serial=++state.viewerSerial;
+  state.viewerCleanup?.();state.viewerCleanup=null;
+  if(state.previewUrl){URL.revokeObjectURL(state.previewUrl);state.previewUrl=null;}
+  state.previewId=item.id;
+  const files=visibleItems().filter(entry=>entry.kind==='file');
+  const index=files.findIndex(entry=>entry.id===item.id);
+  panel.querySelector('#viewer-title').textContent=cleanName(item.name);
+  panel.querySelector('#viewer-position').textContent=index<0?'':(index+1)+' of '+files.length;
+  for(const control of panel.querySelectorAll('[data-action="viewer-prev"],[data-action="viewer-next"]'))control.disabled=files.length<2||index<0;
+  const content=panel.querySelector('main');content.setAttribute('aria-busy','true');
+  content.innerHTML='<p role="status">Loading preview…</p>';
   try{
     const handle=item.catalogResult?await catalogResultHandle(item):item.handle;
+    if(serial!==state.viewerSerial)return;
     if(!handle||typeof handle.getFile!=='function')throw Error('Reconnect Folder to preview');
     const file=await handle.getFile();
+    if(serial!==state.viewerSerial)return;
     const kind=itemKind(item),format=sidePreviewKind(item,file.size);
     let body='',useBlob=false;
     if(format==='shortcut'){
@@ -1443,15 +1485,19 @@ async function showPreview(item){
       if(kind==='image')body='<img class="viewer-image" src="'+url+'" alt="'+escapeHTML(item.name)+'"/>';
       if(kind==='pdf')body='<iframe class="viewer-pdf" src="'+url+'#toolbar=0" title="PDF preview"></iframe>';
       if(kind==='video')body='<video class="viewer-video" src="'+url+'" controls autoplay></video>';
+      if(format==='audio')body='<div class="audio-viewer">'+fileSymbol(item)+'<p>'+escapeHTML(cleanName(item.name))+'</p><audio controls preload="metadata" src="'+url+'"></audio></div>';
     }
-    state.previewId=item.id;
-    const panel=document.createElement('div');panel.id='viewer';panel.className='viewer';
-    panel.innerHTML='<header><span>'+escapeHTML(cleanName(item.name))+'</span>'+button('Close','close','close-viewer')+'</header><main>'+body+'</main><footer>← → next file <span>Esc to close</span></footer>';
-    document.body.append(panel);
-  }catch(e){if(serial===state.viewerSerial)toast(errorText(e),true);}
+    content.innerHTML=body;content.setAttribute('aria-busy','false');
+    if(useBlob&&kind==='image')state.viewerCleanup=mountImageViewer(content,{url:state.previewUrl,name:item.name});
+  }catch(e){
+    if(serial===state.viewerSerial){
+      content.innerHTML='<div class="unsupported" role="status"><p>Could not load preview</p><small>'+escapeHTML(errorText(e))+'</small></div>';
+      content.setAttribute('aria-busy','false');
+    }
+  }
 }
 function previewStep(offset){
-  const files=state.items.filter(i=>i.kind==='file');
+  const files=visibleItems().filter(i=>i.kind==='file');
   const i=files.findIndex(f=>f.id===state.previewId);
   if(i>=0&&files.length)showPreview(files[(i+offset+files.length)%files.length]);
 }
@@ -1638,6 +1684,7 @@ document.addEventListener('input',event=>{
     for(const label of document.querySelectorAll('[data-view-tag-option]'))label.hidden=!!q&&!label.dataset.viewTagOption.includes(q);
   }
   if(event.target.id==='accent-color')applyAccent(event.target.value);
+  if(event.target.id==='theme-mode')appearance.set(event.target.value);
   if(event.target.id==='search-input'){state.search=event.target.value.slice(0,256);state.pageCount=RESOURCE_PAGE_SIZE;state.pageOffset=0;state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;state.tagDraftItem=null;scheduleFolderTabPreferences();renderItems();renderInspector();}
   if(event.target.id==='sort-mode'){state.sort=event.target.value;scheduleFolderTabPreferences();renderItems();}
   if(event.target.id==='group-mode'){state.groupBy=event.target.value;state.pageCount=RESOURCE_PAGE_SIZE;state.pageOffset=0;renderItems();}
@@ -1654,7 +1701,8 @@ document.addEventListener('input',event=>{
   if(event.target.id==='density'){state.size=Number(event.target.value);localStorage.setItem('sb-size',state.size);scheduleFolderTabPreferences();$('#items')?.style.setProperty('--size',state.size+'px');}
 });
 document.addEventListener('click',async event=>{
-  $('#folder-context')?.remove();
+  const contextTarget=event.target.closest('[data-context-item]')?.dataset.contextItem;
+  dismissResourceMenu({restoreFocus:!!contextTarget});
   const suggestion=event.target.closest('[data-tag-suggestion]');
   if(suggestion){chooseTagSuggestion(Number(suggestion.dataset.tagSuggestion));$('#tag-input')?.focus();return;}
   const viewButton=event.target.closest('[data-open-view]');if(viewButton){viewsUI.open(viewButton.dataset.openView);return;}
@@ -1747,11 +1795,16 @@ document.addEventListener('click',async event=>{
     case 'show-catalog-links':showCatalogLinks();break;
     case 'edit-catalog-link':{const item=state.items.find(x=>state.selected.has(x.id));if(item?.kind==='url')catalogLinksUI.openEdit(item.record.id);break;}
     case 'incoming-shares':void shareInbox.open().catch(error=>toast('Incoming shares: '+errorText(error),true));break;
-    case 'settings':openDialog('<h2>Settings</h2><p>Minimal interface. One highlight color.</p><label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button> <button type="button" class="secondary" data-action="inspect-catalog-conflicts">Inspect conflicts</button> <button type="button" class="secondary" data-action="review-overlap-records">Review overlaps</button> <button type="button" class="secondary" data-action="catalog-links">Catalog links</button></div>':'')+'<div class="backup-tools"><strong>File-backed capture</strong><p>Save URL shortcuts (.url) or pasted text (.md) in a chosen physical Folder. Staged links are temporary.</p><button type="button" class="secondary" data-action="capture-file">Save URL/text as file</button> <button type="button" class="secondary" data-action="import">Add ordinary files</button> <button type="button" class="secondary" data-action="capture-clipboard-image">Clipboard image</button> <button type="button" class="secondary" data-action="capture-links">Staging inbox</button> <button type="button" class="secondary" data-action="incoming-shares">Incoming shares</button></div><div class="backup-tools"><strong>Device acceptance</strong><p>Browser capabilities, disposable Folder permission tests and manual M0 record.</p><button type="button" class="secondary" data-action="device-checks">Device checks</button></div><div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
+    case 'settings':openDialog(appearanceMarkup()+'<label class="setting-row">Highlight color<input id="accent-color" aria-label="Highlight color" type="color" value="'+(localStorage.getItem('sb-accent')||'#5276bd')+'"/></label>'+(state.catalog?'<div class="backup-tools"><strong>Catalog metadata</strong><p>Local JSON backups; no source files or previews included.</p><button type="button" class="secondary" data-action="export-catalog-backup">Export backup</button> <button type="button" class="secondary" data-action="inspect-catalog-backup">Inspect / restore</button> <button type="button" class="secondary" data-action="inspect-catalog-conflicts">Inspect conflicts</button> <button type="button" class="secondary" data-action="review-overlap-records">Review overlaps</button> <button type="button" class="secondary" data-action="catalog-links">Catalog links</button></div>':'')+'<div class="backup-tools"><strong>File-backed capture</strong><p>Save URL shortcuts (.url) or pasted text (.md) in a chosen physical Folder. Staged links are temporary.</p><button type="button" class="secondary" data-action="capture-file">Save URL/text as file</button> <button type="button" class="secondary" data-action="import">Add ordinary files</button> <button type="button" class="secondary" data-action="capture-clipboard-image">Clipboard image</button> <button type="button" class="secondary" data-action="capture-links">Staging inbox</button> <button type="button" class="secondary" data-action="incoming-shares">Incoming shares</button></div><div class="backup-tools"><strong>Device acceptance</strong><p>Browser capabilities, disposable Folder permission tests and manual M0 record.</p><button type="button" class="secondary" data-action="device-checks">Device checks</button></div><div class="dialog-actions"><button type="button" class="secondary" data-action="reset-accent">Default blue</button><button type="button" class="primary" data-action="dismiss">Done</button></div>');break;
     case 'reset-accent':applyAccent('#5276bd');if($('#accent-color'))$('#accent-color').value='#5276bd';break;
     case 'save-resource':saveResource();break;
     case 'preview':showPreview();break;
     case 'close-viewer':closePreview();break;
+    case 'viewer-prev':previewStep(-1);break;
+    case 'viewer-next':previewStep(1);break;
+    case 'context-preview':{const item=state.items.find(entry=>entry.id===contextTarget);if(item)void showPreview(item);break;}
+    case 'context-reveal':{const item=state.items.find(entry=>entry.id===contextTarget);if(item)void revealCatalogResult(item).catch(error=>toast(errorText(error),true));break;}
+    case 'context-tab':{const item=state.items.find(entry=>entry.id===contextTarget);if(!state.catalog&&item?.kind==='directory')void setPlainFolder(item.handle).catch(error=>toast(errorText(error),true));break;}
     case 'create-folder':newFolder();break;
     case 'import':importFiles();break;
   }
@@ -1799,22 +1852,38 @@ document.addEventListener('drop',event=>{
     openFileCapture({intake});
   }catch(error){toast('Drop: '+errorText(error),true);}
 });
-document.addEventListener('contextmenu',event=>{
-  if(state.catalog)return;
-  const tile=event.target.closest('[data-item]');
-  const item=tile&&state.items.find(x=>x.id===tile.dataset.item);
-  if(item?.kind!=='directory')return;
-  event.preventDefault();$('#folder-context')?.remove();
-  select(item,{shiftKey:false,ctrlKey:false,metaKey:false});
+let resourceMenuOrigin=null;
+function dismissResourceMenu({restoreFocus=false}={}){
+  $('#folder-context')?.remove();
+  if(restoreFocus&&resourceMenuOrigin?.isConnected)resourceMenuOrigin.focus({preventScroll:true});
+  resourceMenuOrigin=null;
+}
+function openResourceMenu(item,tile,x,y){
+  dismissResourceMenu();
+  if(!state.selected.has(item.id)&&!select(item,{shiftKey:false,ctrlKey:false,metaKey:false}))return;
+  resourceMenuOrigin=tile;
   const menu=document.createElement('div');
   menu.id='folder-context';menu.className='folder-context';
-  menu.setAttribute('role','menu');
-  menu.innerHTML='<button role="menuitem" data-action="open-selected-tab">'+icon('plus',15)+' Open in new tab</button>';
+  menu.setAttribute('role','menu');menu.setAttribute('aria-label','Actions for '+cleanName(item.name));
+  function action(label,id,type){return '<button type="button" role="menuitem" tabindex="-1" data-action="'+id+'" data-context-item="'+escapeHTML(item.id)+'">'+icon(type,15)+' '+label+'</button>';}
+  menu.innerHTML=action(item.kind==='url'?'Open link':item.catalogResult&&item.kind==='directory'?'Show in Folder':item.kind==='directory'?'Open Folder':'Preview','context-preview','view')+
+    (!state.catalog&&item.kind==='directory'?action('Open in new tab','context-tab','plus'):'')+
+    (item.catalogResult&&item.kind==='file'?action('Show in Folder','context-reveal','folder'):'')+
+    (item.kind!=='url'?action(state.selected.size>1?'Copy '+state.selected.size+' relative paths':'Copy relative path','copy-resource-paths','link'):'');
   document.body.append(menu);
   const rect=menu.getBoundingClientRect();
-  menu.style.left=Math.max(8,Math.min(event.clientX,window.innerWidth-rect.width-8))+'px';
-  menu.style.top=Math.max(8,Math.min(event.clientY,window.innerHeight-rect.height-8))+'px';
+  menu.style.left=Math.max(8,Math.min(x,window.innerWidth-rect.width-8))+'px';
+  menu.style.top=Math.max(8,Math.min(y,window.innerHeight-rect.height-8))+'px';
+  const first=menu.querySelector('button');first.tabIndex=0;first.focus({preventScroll:true});
+}
+document.addEventListener('contextmenu',event=>{
+  const tile=event.target.closest('#items .resource[data-item]');
+  const item=tile&&state.items.find(entry=>entry.id===tile.dataset.item);
+  if(!item||$('#viewer')||$('#dialog'))return;
+  event.preventDefault();const rect=tile.getBoundingClientRect();
+  openResourceMenu(item,tile,event.clientX||rect.left+20,event.clientY||rect.top+20);
 });
+window.addEventListener('resize',()=>dismissResourceMenu());
 document.addEventListener('focusin',event=>{
   const resource=event.target.closest('#items .resource[data-item]');
   if(resource){state.keyboardFocusId=resource.dataset.item;syncResourceTabStops();}
@@ -1825,6 +1894,17 @@ document.addEventListener('dblclick',event=>{
   if(item)showPreview(item);
 });
 document.addEventListener('keydown',event=>{
+  const menu=$('#folder-context');
+  if(menu){
+    const buttons=[...menu.querySelectorAll('[role="menuitem"]')],index=buttons.indexOf(document.activeElement);
+    if(event.key==='Escape'){event.preventDefault();dismissResourceMenu({restoreFocus:true});return;}
+    if(event.key==='Tab'){dismissResourceMenu({restoreFocus:true});return;}
+    if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){
+      event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length;
+      buttons.forEach((button,i)=>{button.tabIndex=i===next?0:-1;});buttons[next]?.focus();
+    }
+    return;
+  }
   if(event.target.id==='tag-input'){
     if(event.key==='ArrowDown'||event.key==='ArrowUp'){
       if(moveTagSuggestion(event.key==='ArrowDown'?1:-1))event.preventDefault();
@@ -1841,12 +1921,32 @@ document.addEventListener('keydown',event=>{
   }
   // Dialogs own keyboard focus; never select the background grid.
   if($('#dialog')){if(event.key==='Escape'){event.preventDefault();$('#dialog')?.remove();}return;}
+  const viewer=$('#viewer');
+  if(viewer){
+    if(event.key==='Escape'){event.preventDefault();closePreview();return;}
+    if(event.key==='Tab'){
+      const controls=[...viewer.querySelectorAll('button:not([disabled]),a[href],video[controls],audio[controls],iframe,[tabindex="0"]')];
+      const first=controls[0],last=controls.at(-1),active=document.activeElement;
+      if(event.shiftKey&&(active===first||!viewer.contains(active))){event.preventDefault();last?.focus();}
+      else if(!event.shiftKey&&(active===last||!viewer.contains(active))){event.preventDefault();first?.focus();}
+      return;
+    }
+    if(!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.shiftKey&&
+      !event.target.closest('input,textarea,select,[contenteditable="true"],video,audio,iframe')&&
+      (event.key==='ArrowRight'||event.key==='ArrowLeft')){
+      event.preventDefault();previewStep(event.key==='ArrowRight'?1:-1);
+    }
+    return;
+  }
+  if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10'){
+    const tile=event.target.closest('#items .resource[data-item]'),item=tile&&state.items.find(entry=>entry.id===tile.dataset.item);
+    if(item){event.preventDefault();const rect=tile.getBoundingClientRect();openResourceMenu(item,tile,rect.left+20,rect.top+20);return;}
+  }
   if(!state.catalog&&event.altKey&&event.shiftKey&&(event.key==='ArrowLeft'||event.key==='ArrowRight')&&!state.previewId&&!event.target.closest('input,textarea,select,[contenteditable="true"]')){
     event.preventDefault();void switchAdjacentFolderTab(event.key==='ArrowLeft'?-1:1);return;
   }
   if(!state.catalog&&event.altKey&&!event.shiftKey&&(event.key==='ArrowLeft'||event.key==='ArrowRight')){event.preventDefault();folderHistoryStep(event.key==='ArrowLeft'?-1:1);return;}
   if(event.key==='Escape'){if(state.previewId)closePreview();else if($('#folder-context'))$('#folder-context')?.remove();else if(state.selected.size&&!event.target.closest('input,textarea,select,[contenteditable="true"]')){state.selected.clear();state.lastSelected=null;state.selectionAnchor=null;state.selectionMode=false;render();}return;}
-  if(state.previewId){if(event.key==='ArrowRight')previewStep(1);if(event.key==='ArrowLeft')previewStep(-1);return;}
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('#search-input')?.focus();return;}
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='a'&&!event.target.closest('input,textarea,select,[contenteditable="true"]')&&state.sourceId){event.preventDefault();selectShownItems();return;}
   if(!state.catalog&&event.ctrlKey&&event.key==='Enter'){const selected=state.items.find(item=>item.id===state.lastSelected);if(selected?.kind==='directory'){event.preventDefault();openSelectedFolderTab().catch(e=>toast(errorText(e),true));}return;}
